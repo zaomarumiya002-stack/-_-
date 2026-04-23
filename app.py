@@ -1,3 +1,4 @@
+# --- START OF FILE app.py ---
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -83,16 +84,14 @@ with st.sidebar:
     page = st.radio(
         "メニュー",
         ["🏠 ダッシュボード", "📦 入荷記録", "🧪 仕込み記録",
-         "🔍 原料トレース", "📊 月別集計", "⚙️ マスター設定"],
+         "🔍 原料トレース", "📊 集計・分析", "⚙️ マスター設定"],
         label_visibility="collapsed"
     )
     st.markdown("---")
     st.caption(f"更新: {datetime.now().strftime('%Y/%m/%d %H:%M')}")
 
-# 接続エラー時の案内
 if not SHEETS_OK:
-    st.error(f"Google Sheets への接続に失敗しました。`.streamlit/secrets.toml` を確認してください。\n\n`{SHEETS_ERROR}`")
-    st.info("📖 **セットアップ手順は README.md を参照してください**")
+    st.error(f"Google Sheets への接続に失敗しました。\n\n`{SHEETS_ERROR}`")
     st.stop()
 
 # ─── データ読み込み（キャッシュ） ───────────────────────────────
@@ -169,7 +168,7 @@ if page == "🏠 ダッシュボード":
         if brewing:
             df = pd.DataFrame(brewing[-10:][::-1])
             show = df.reindex(columns=["no","brew_date","product_name","maker","lot_no","brew_amount","material_kg"])
-            show.columns = ["No","仕込日","品名","メーカー","ロットNo","仕込量(kg)","精粉(kg)"]
+            show.columns = ["No","仕込日","品名","メーカー","主ロットNo","仕込量(kg)","精粉(kg)"]
             st.dataframe(show, use_container_width=True, hide_index=True, height=300)
         else:
             st.info("仕込み記録がまだありません")
@@ -181,7 +180,7 @@ elif page == "📦 入荷記録":
     st.markdown("""
     <div class="main-header">
       <h1>📦 原料入荷記録</h1>
-      <p>入荷時の外観検査・担当者記録を行います。記録は即座に Google Sheets へ保存されます。</p>
+      <p>入荷時の外観検査・担当者記録を行います</p>
     </div>""", unsafe_allow_html=True)
 
     tab1, tab2 = st.tabs(["➕ 新規入荷登録", "📋 入荷一覧・帳票出力"])
@@ -263,7 +262,7 @@ elif page == "📦 入荷記録":
             elif has_ng and not abnormal_detail:
                 st.error("異常内容・措置方法を記入してください")
             else:
-                with st.spinner("💾 Google Sheets へ保存中..."):
+                with st.spinner("💾 保存中..."):
                     record = {
                         "arrival_no": new_no, "arrival_date": str(arrival_date),
                         "maker": maker, "lot_no": lot_no, "material_type": material_type,
@@ -276,7 +275,7 @@ elif page == "📦 入荷記録":
                         "registered_at": datetime.now().isoformat()
                     }
                     append_arrival(record)
-                st.success(f"✅ **{new_no}** を Google Sheets へ保存しました！")
+                st.success(f"✅ **{new_no}** を保存しました！")
                 refresh()
 
     with tab2:
@@ -339,12 +338,10 @@ elif page == "🧪 仕込み記録":
         active_lots = sorted(set(a["lot_no"] for a in arrivals if a.get("lot_no")), reverse=True)
         c4,c5 = st.columns(2)
         with c4:
-            lot_no_b = st.selectbox("ロットNo ＊（入荷記録から選択）",
-                                    ["─ 選択してください ─"] + active_lots)
+            lot_no_b = st.selectbox("主原料（精粉）ロットNo ＊", ["─ 選択してください ─"] + active_lots)
         with c5:
-            brew_amount = st.number_input("仕込量 (kg)", min_value=0.0, step=50.0)
+            brew_amount = st.number_input("仕込量 (kg)", min_value=0.0, value=None, step=10.0, format="%.2f")
 
-        # 選択ロットの入荷情報を表示
         if lot_no_b != "─ 選択してください ─":
             matched = next((a for a in arrivals if a.get("lot_no") == lot_no_b), None)
             if matched:
@@ -356,14 +353,16 @@ elif page == "🧪 仕込み記録":
 
         c6,c7,c8 = st.columns(3)
         with c6:
-            material_kg = st.number_input("こんにゃく精粉 (kg)", min_value=0.0, step=0.1, format="%.2f")
-            seaweed_kg  = st.number_input("海藻粉 (kg)",         min_value=0.0, step=0.1, format="%.2f")
+            material_kg = st.number_input("こんにゃく精粉 (kg)", min_value=0.0, value=None, step=0.01, format="%.2f")
+            seaweed_kg  = st.number_input("海藻粉 (kg)",         min_value=0.0, value=None, step=0.01, format="%.2f")
+            seaweed_lot = st.text_input("海藻粉ロットNo（任意）", placeholder="例: S-001")
         with c7:
-            starch_kg   = st.number_input("加工デンプン (kg)",   min_value=0.0, step=0.1, format="%.2f")
+            starch_kg   = st.number_input("加工デンプン (kg)",   min_value=0.0, value=None, step=0.01, format="%.2f")
             starch_type = st.selectbox("デンプン種別", ["─","ゆり8","VA70","その他"])
+            starch_lot  = st.text_input("加工デンプンロットNo（任意）", placeholder="例: ST-999")
         with c8:
-            lime_kg      = st.number_input("石灰 (kg)",    min_value=0.0, step=0.1, format="%.2f")
-            lime_water_l = st.number_input("石灰水 (ℓ)",  min_value=0.0, step=10.0, format="%.1f")
+            lime_kg      = st.number_input("石灰 (kg)",    min_value=0.0, value=None, step=0.01, format="%.2f")
+            lime_water_l = st.number_input("石灰水 (ℓ)",  min_value=0.0, value=None, step=0.1, format="%.1f")
 
         notes_b = st.text_area("備考・メモ", placeholder="特記事項があれば入力")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -372,17 +371,21 @@ elif page == "🧪 仕込み記録":
             if not product_name:
                 st.error("品名を入力してください")
             elif lot_no_b == "─ 選択してください ─":
-                st.error("ロットNoを選択してください")
+                st.error("主原料のロットNoを選択してください")
             else:
-                with st.spinner("💾 Google Sheets へ保存中..."):
+                with st.spinner("💾 保存中..."):
                     record = {
                         "no": next_brewing_no(brewing),
                         "brew_date": str(brew_date), "product_name": product_name,
                         "maker": brew_maker, "lot_no": lot_no_b,
-                        "brew_amount": brew_amount, "material_kg": material_kg,
-                        "seaweed_kg": seaweed_kg, "starch_kg": starch_kg,
+                        "seaweed_lot": seaweed_lot, "starch_lot": starch_lot,
+                        "brew_amount": brew_amount if brew_amount is not None else 0.0,
+                        "material_kg": material_kg if material_kg is not None else 0.0,
+                        "seaweed_kg": seaweed_kg if seaweed_kg is not None else 0.0,
+                        "starch_kg": starch_kg if starch_kg is not None else 0.0,
                         "starch_type": starch_type if starch_type != "─" else "",
-                        "lime_kg": lime_kg, "lime_water_l": lime_water_l,
+                        "lime_kg": lime_kg if lime_kg is not None else 0.0,
+                        "lime_water_l": lime_water_l if lime_water_l is not None else 0.0,
                         "notes": notes_b, "registered_at": datetime.now().isoformat()
                     }
                     append_brewing(record)
@@ -395,18 +398,25 @@ elif page == "🧪 仕込み記録":
         fc1,fc2,fc3 = st.columns(3)
         with fc1: f_from = st.date_input("期間（開始）", value=None, key="bf_from")
         with fc2: f_to   = st.date_input("期間（終了）", value=None, key="bf_to")
-        with fc3: f_lot_b = st.text_input("ロットNo検索", key="bf_lot")
+        with fc3: f_lot_b = st.text_input("ロットNo検索", key="bf_lot", placeholder="精粉/海藻/デンプン")
 
         filtered_b = brewing
         if f_from:  filtered_b = [b for b in filtered_b if b.get("brew_date","") >= str(f_from)]
         if f_to:    filtered_b = [b for b in filtered_b if b.get("brew_date","") <= str(f_to)]
-        if f_lot_b: filtered_b = [b for b in filtered_b if f_lot_b.lower() in str(b.get("lot_no","")).lower()]
+        if f_lot_b:
+            # 主原料、海藻、デンプンいずれかのロットにヒットすれば表示
+            filtered_b = [b for b in filtered_b if (
+                f_lot_b.lower() in str(b.get("lot_no","")).lower() or
+                f_lot_b.lower() in str(b.get("seaweed_lot","")).lower() or
+                f_lot_b.lower() in str(b.get("starch_lot","")).lower()
+            )]
 
         if filtered_b:
             df = pd.DataFrame(filtered_b)
             show_cols = {
                 "no":"No","brew_date":"仕込日","product_name":"品名","maker":"メーカー",
-                "lot_no":"ロットNo","brew_amount":"仕込量(kg)","material_kg":"精粉(kg)",
+                "lot_no":"主ロットNo", "seaweed_lot":"海藻ロット", "starch_lot":"デンプンロット",
+                "brew_amount":"仕込量(kg)","material_kg":"精粉(kg)",
                 "seaweed_kg":"海藻粉(kg)","starch_kg":"加工デンプン(kg)",
                 "lime_kg":"石灰(kg)","lime_water_l":"石灰水(ℓ)"
             }
@@ -432,7 +442,7 @@ elif page == "🔍 原料トレース":
     st.markdown("""
     <div class="main-header">
       <h1>🔍 原料トレース</h1>
-      <p>ロットNo・メーカー・入荷Noで入荷〜仕込みの全使用履歴を追跡します</p>
+      <p>主原料・海藻粉・加工デンプンの全使用履歴を追跡します</p>
     </div>""", unsafe_allow_html=True)
 
     st.markdown('<div class="form-card">', unsafe_allow_html=True)
@@ -441,7 +451,7 @@ elif page == "🔍 原料トレース":
     c1,c2 = st.columns(2)
     keyword = ""; date_from = date_to = None
     if search_type == "ロットNo":
-        with c1: keyword = st.text_input("ロットNo", placeholder="例: 1-109")
+        with c1: keyword = st.text_input("ロットNo（精粉/海藻/デンプン）", placeholder="例: 1-109")
     elif search_type == "メーカー":
         with c1: keyword = st.selectbox("メーカー", makers)
     elif search_type == "入荷No":
@@ -454,18 +464,21 @@ elif page == "🔍 原料トレース":
     if st.button("🔍 トレース検索実行", type="primary"):
         results = []
         for b in brewing:
-            lot = b.get("lot_no","")
+            lot = str(b.get("lot_no",""))
+            s_lot = str(b.get("seaweed_lot",""))
+            st_lot = str(b.get("starch_lot",""))
             bd  = b.get("brew_date","")
             matched = False
 
             if search_type == "ロットNo" and keyword:
-                matched = keyword.lower() in lot.lower()
+                kw = keyword.lower()
+                matched = (kw in lot.lower() or kw in s_lot.lower() or kw in st_lot.lower())
             elif search_type == "メーカー" and keyword:
                 maker_lots = {a["lot_no"] for a in arrivals if a.get("maker") == keyword}
                 matched = lot in maker_lots
             elif search_type == "入荷No" and keyword:
                 arr_lot = next((a["lot_no"] for a in arrivals if a.get("arrival_no") == keyword), None)
-                matched = arr_lot == lot
+                matched = (arr_lot == lot)
             elif search_type == "日付範囲" and date_from and date_to:
                 matched = str(date_from) <= bd <= str(date_to)
 
@@ -475,12 +488,16 @@ elif page == "🔍 原料トレース":
                     "入荷No":      arr["arrival_no"] if arr else "-",
                     "メーカー":    arr["maker"] if arr else b.get("maker","-"),
                     "入荷日":      arr["arrival_date"] if arr else "-",
-                    "ロットNo":    lot,
+                    "主ロットNo":  lot,
+                    "海藻ロット":  s_lot or "-",
+                    "デンプンロット": st_lot or "-",
                     "袋数":        arr["bags"] if arr else "-",
                     "外観":        arr["appearance"] if arr else "-",
                     "使用日":      bd,
                     "品名":        b.get("product_name",""),
                     "精粉(kg)":   b.get("material_kg",0),
+                    "海藻(kg)":   b.get("seaweed_kg",0),
+                    "デンプン(kg)": b.get("starch_kg",0),
                     "仕込量(kg)": b.get("brew_amount",0),
                     "仕込みNo":    b.get("no",""),
                 })
@@ -502,54 +519,72 @@ elif page == "🔍 原料トレース":
             st.warning("該当するトレース情報が見つかりませんでした")
 
 # ════════════════════════════════════════════════════════════════
-# 月別集計
+# 集計・分析
 # ════════════════════════════════════════════════════════════════
-elif page == "📊 月別集計":
+elif page == "📊 集計・分析":
     st.markdown("""
     <div class="main-header">
-      <h1>📊 月別集計・分析</h1>
-      <p>原料使用量の月別トレンド</p>
+      <h1>📊 集計・分析</h1>
+      <p>原料使用量・仕込み回数のトレンドや平均を分析します</p>
     </div>""", unsafe_allow_html=True)
+
+    period_type = st.radio("集計単位", ["日別", "月別", "年間"], horizontal=True)
 
     if not brewing:
         st.info("仕込み記録がまだありません")
     else:
         df = pd.DataFrame(brewing)
         df["brew_date"] = pd.to_datetime(df["brew_date"], errors="coerce")
-        df["year_month"] = df["brew_date"].dt.to_period("M").astype(str)
+        
+        if period_type == "日別":
+            df["period"] = df["brew_date"].dt.date.astype(str)
+        elif period_type == "月別":
+            df["period"] = df["brew_date"].dt.to_period("M").astype(str)
+        else:
+            df["period"] = df["brew_date"].dt.to_period("Y").astype(str)
 
-        for col in ["brew_amount","material_kg","seaweed_kg","lime_kg"]:
+        for col in ["brew_amount","material_kg","seaweed_kg","starch_kg","lime_kg"]:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-        monthly = df.groupby("year_month").agg(
-            件数=("no","count"),
-            仕込量=("brew_amount","sum"),
-            精粉=("material_kg","sum"),
-            海藻粉=("seaweed_kg","sum"),
-            石灰=("lime_kg","sum"),
+        grouped = df.groupby("period").agg(
+            仕込み件数=("no", "count"),
+            仕込量計=("brew_amount", "sum"),
+            仕込量平均=("brew_amount", "mean"),
+            精粉計=("material_kg", "sum"),
+            精粉平均=("material_kg", "mean"),
+            海藻粉計=("seaweed_kg", "sum"),
+            海藻粉平均=("seaweed_kg", "mean"),
+            デンプン計=("starch_kg", "sum"),
+            デンプン平均=("starch_kg", "mean"),
+            石灰計=("lime_kg", "sum")
         ).reset_index()
 
+        for col in grouped.columns:
+            if "計" in col or "平均" in col:
+                grouped[col] = grouped[col].round(2)
+
+        grouped.rename(columns={"period": f"期間（{period_type}）"}, inplace=True)
+
         fig = go.Figure()
-        fig.add_bar(x=monthly["year_month"], y=monthly["仕込量"], name="仕込量合計(kg)", marker_color="#1565c0")
-        fig.add_bar(x=monthly["year_month"], y=monthly["精粉"],   name="精粉(kg)",      marker_color="#43a047")
-        fig.add_bar(x=monthly["year_month"], y=monthly["海藻粉"], name="海藻粉(kg)",    marker_color="#e53935")
+        fig.add_bar(x=grouped.iloc[:,0], y=grouped["仕込量計"], name="仕込量合計(kg)", marker_color="#1565c0")
+        fig.add_bar(x=grouped.iloc[:,0], y=grouped["精粉計"],   name="精粉計(kg)",    marker_color="#43a047")
+        fig.add_bar(x=grouped.iloc[:,0], y=grouped["海藻粉計"], name="海藻粉計(kg)",  marker_color="#e53935")
+        fig.add_bar(x=grouped.iloc[:,0], y=grouped["デンプン計"], name="デンプン計(kg)", marker_color="#fb8c00")
         fig.update_layout(
-            barmode="group", height=380, plot_bgcolor="#f8faff", paper_bgcolor="#fff",
-            font=dict(family="Noto Sans JP"), xaxis_title="年月", yaxis_title="量 (kg)",
+            barmode="group", height=400, plot_bgcolor="#f8faff", paper_bgcolor="#fff",
+            font=dict(family="Noto Sans JP"), xaxis_title=f"期間（{period_type}）", yaxis_title="量 (kg)",
             legend=dict(orientation="h", y=-0.2)
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        monthly_disp = monthly.copy()
-        monthly_disp.columns = ["年月","件数","仕込量(kg)","精粉(kg)","海藻粉(kg)","石灰(kg)"]
-        st.dataframe(monthly_disp, use_container_width=True, hide_index=True)
+        st.dataframe(grouped, use_container_width=True, hide_index=True)
 
-        if st.button("📄 月別集計帳票を出力（Excel）"):
-            from report_generator import generate_monthly_report
-            path = generate_monthly_report(monthly_disp.to_dict("records"), brewing)
+        if st.button(f"📄 {period_type}集計帳票を出力（Excel）"):
+            from report_generator import generate_summary_report
+            path = generate_summary_report(grouped.to_dict("records"), brewing, period_type)
             with open(path,"rb") as f:
                 st.download_button("⬇️ Excelをダウンロード", f,
-                    file_name=f"月別集計_{date.today()}.xlsx",
+                    file_name=f"{period_type}集計_{date.today()}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # ════════════════════════════════════════════════════════════════
@@ -586,3 +621,4 @@ elif page == "⚙️ マスター設定":
                 cached_makers.clear()
             st.success(f"✅ メーカーマスター（{len(new_makers)}件）を保存しました")
             st.rerun()
+# --- END OF FILE app.py ---
