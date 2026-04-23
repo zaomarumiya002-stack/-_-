@@ -1,3 +1,4 @@
+# --- START OF FILE report_generator.py ---
 """帳票生成モジュール（Excel出力）"""
 from pathlib import Path
 from datetime import date, datetime
@@ -63,7 +64,7 @@ def generate_arrival_report(arrivals: list) -> Path:
     ws = wb.active
     ws.title = "入荷記録"
     ws.sheet_view.showGridLines = False
-    ws.column_dimensions["A"].width = 3  # margin
+    ws.column_dimensions["A"].width = 3
 
     title_block(ws, "📦 原料入荷記録帳票", f"対象件数: {len(arrivals)}件")
 
@@ -80,7 +81,6 @@ def generate_arrival_report(arrivals: list) -> Path:
     for ci, (h, w) in enumerate(headers, start=2):
         header_style(ws, HR, ci, h, w)
 
-    # 検査項目の判定表示
     def check_val(v):
         if v and "OK" in v: return "✓ OK"
         if v and "NG" in v: return "✗ NG"
@@ -134,8 +134,9 @@ def generate_brewing_report(brewing: list) -> Path:
 
     headers = [
         ("No", 6), ("仕込日", 12), ("品名", 20), ("メーカー", 12),
-        ("ロットNo", 12), ("仕込量(kg)", 10), ("精粉(kg)", 9),
-        ("海藻粉(kg)", 9), ("加工デンプン(kg)", 12), ("デンプン種別", 10),
+        ("主ロットNo", 12), ("海藻ロット", 12), ("デンプンロット", 14),
+        ("仕込量(kg)", 10), ("精粉(kg)", 9), ("海藻粉(kg)", 9),
+        ("加工デンプン(kg)", 14), ("デンプン種別", 10),
         ("石灰(kg)", 9), ("石灰水(ℓ)", 9), ("備考", 18)
     ]
 
@@ -144,7 +145,7 @@ def generate_brewing_report(brewing: list) -> Path:
     for ci, (h, w) in enumerate(headers, start=2):
         header_style(ws, HR, ci, h, w)
 
-    total_brew = total_mat = total_sea = total_lime = 0.0
+    total_brew = total_mat = total_sea = total_starch = total_lime = 0.0
 
     for ri, b in enumerate(reversed(brewing), start=HR+1):
         bg = BLUE_LIGHT if ri % 2 == 0 else None
@@ -152,8 +153,9 @@ def generate_brewing_report(brewing: list) -> Path:
         bv = b.get("brew_amount", 0) or 0
         mv = b.get("material_kg", 0) or 0
         sv = b.get("seaweed_kg", 0) or 0
+        stv = b.get("starch_kg", 0) or 0
         lv = b.get("lime_kg", 0) or 0
-        total_brew += bv; total_mat += mv; total_sea += sv; total_lime += lv
+        total_brew += bv; total_mat += mv; total_sea += sv; total_starch += stv; total_lime += lv
 
         row_data = [
             (b.get("no",""), "center"),
@@ -161,10 +163,12 @@ def generate_brewing_report(brewing: list) -> Path:
             (b.get("product_name",""), "left"),
             (b.get("maker",""), "left"),
             (b.get("lot_no",""), "center"),
+            (b.get("seaweed_lot","") or "-", "center"),
+            (b.get("starch_lot","") or "-", "center"),
             (bv, "right"),
             (mv, "right"),
             (sv, "right"),
-            (b.get("starch_kg",0) or 0, "right"),
+            (stv, "right"),
             (b.get("starch_type","") or "-", "center"),
             (lv, "right"),
             (b.get("lime_water_l",0) or 0, "right"),
@@ -184,8 +188,9 @@ def generate_brewing_report(brewing: list) -> Path:
         cell.border = thin_border()
         cell.alignment = Alignment(horizontal="right", vertical="center")
     ws.cell(row=total_row, column=2, value="合計").alignment = Alignment(horizontal="center", vertical="center")
-    ws.cell(row=total_row, column=2).font = Font(name="メイリオ", bold=True, size=9)
-    for col, val in [(7, total_brew), (8, total_mat), (9, total_sea), (12, total_lime)]:
+    
+    # 9:仕込量, 10:精粉, 11:海藻粉, 12:加工デンプン, 14:石灰
+    for col, val in [(9, total_brew), (10, total_mat), (11, total_sea), (12, total_starch), (14, total_lime)]:
         c = ws.cell(row=total_row, column=col, value=val)
         c.font = Font(name="メイリオ", bold=True, size=9)
         c.number_format = "#,##0.00"
@@ -209,8 +214,9 @@ def generate_trace_report(results: list, search_type: str, keyword: str) -> Path
     title_block(ws, "🔍 原料トレース帳票", f"検索条件: {search_type} = {keyword}　件数: {len(results)}件")
 
     headers_list = list(results[0].keys()) if results else []
-    widths = {"入荷No":12,"メーカー":14,"入荷日":12,"ロットNo":12,"袋数":8,
-              "使用日(仕込日)":14,"品名":20,"使用量(kg)":12,"仕込量(kg)":12,"No":6}
+    widths = {"入荷No":12,"メーカー":14,"入荷日":12,"主ロットNo":12,
+              "海藻ロット":12,"デンプンロット":14,"袋数":8,"外観":10,
+              "使用日":12,"品名":20,"精粉(kg)":10,"海藻(kg)":10,"デンプン(kg)":10,"仕込量(kg)":10,"仕込みNo":10}
 
     HR = 4
     ws.row_dimensions[HR].height = 28
@@ -222,7 +228,7 @@ def generate_trace_report(results: list, search_type: str, keyword: str) -> Path
         ws.row_dimensions[ri].height = 20
         for ci, key in enumerate(headers_list, start=2):
             val = row.get(key, "")
-            align = "right" if isinstance(val, (int, float)) else "center" if ci <= 6 else "left"
+            align = "right" if isinstance(val, (int, float)) else "left" if ci > 8 else "center"
             nf = "#,##0.00" if isinstance(val, float) else None
             data_style(ws, ri, ci, val, align, num_format=nf, bg=bg)
 
@@ -231,30 +237,30 @@ def generate_trace_report(results: list, search_type: str, keyword: str) -> Path
     return path
 
 
-# ─── 月別集計帳票 ────────────────────────────────────────────────
-def generate_monthly_report(monthly: list, brewing_all: list) -> Path:
+# ─── 集計帳票（日別・月別・年間） ──────────────────────────────────
+def generate_summary_report(summary: list, brewing_all: list, period_type: str) -> Path:
     wb = openpyxl.Workbook()
 
-    # シート1: 月別集計
+    # シート1: 集計表
     ws = wb.active
-    ws.title = "月別集計"
+    ws.title = f"{period_type}集計"
     ws.sheet_view.showGridLines = False
     ws.column_dimensions["A"].width = 3
 
-    title_block(ws, "📊 月別原料使用量集計帳票")
+    title_block(ws, f"📊 {period_type} 原料使用量集計帳票")
 
-    headers = [("年月",12),("仕込み件数",12),("仕込量合計(kg)",14),
-               ("精粉(kg)",12),("海藻粉(kg)",12),("石灰(kg)",12)]
+    headers_list = list(summary[0].keys()) if summary else []
     HR = 4
     ws.row_dimensions[HR].height = 28
-    for ci, (h, w) in enumerate(headers, start=2):
+    for ci, h in enumerate(headers_list, start=2):
+        w = 12 if "平均" in h or "計" in h else 14
         header_style(ws, HR, ci, h, w)
 
-    for ri, row in enumerate(monthly, start=HR+1):
+    for ri, row in enumerate(summary, start=HR+1):
         bg = BLUE_LIGHT if ri % 2 == 0 else None
         ws.row_dimensions[ri].height = 20
-        vals = list(row.values())
-        for ci, val in enumerate(vals, start=2):
+        for ci, key in enumerate(headers_list, start=2):
+            val = row.get(key, "")
             align = "center" if ci == 2 else "right"
             nf = "#,##0.00" if isinstance(val, float) else None
             data_style(ws, ri, ci, val, align, num_format=nf, bg=bg)
@@ -266,13 +272,14 @@ def generate_monthly_report(monthly: list, brewing_all: list) -> Path:
     title_block(ws2, "仕込み記録 全明細")
     generate_brewing_detail(ws2, brewing_all)
 
-    path = OUTPUT_DIR / f"月別集計_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    path = OUTPUT_DIR / f"{period_type}集計_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     wb.save(path)
     return path
 
 def generate_brewing_detail(ws, brewing):
-    headers = [("No",6),("仕込日",12),("品名",20),("メーカー",12),("ロットNo",12),
-               ("仕込量(kg)",10),("精粉(kg)",9),("海藻粉(kg)",9),("石灰(kg)",9)]
+    headers = [("No",6),("仕込日",12),("品名",20),("メーカー",12),("主ロットNo",12),
+               ("海藻ロット",12),("デンプンロット",14),
+               ("仕込量(kg)",10),("精粉(kg)",9),("海藻粉(kg)",9),("デンプン(kg)",12),("石灰(kg)",9)]
     HR = 4
     ws.row_dimensions[HR].height = 28
     for ci, (h, w) in enumerate(headers, start=2):
@@ -281,9 +288,11 @@ def generate_brewing_detail(ws, brewing):
         bg = BLUE_LIGHT if ri % 2 == 0 else None
         ws.row_dimensions[ri].height = 18
         vals = [b.get("no",""), b.get("brew_date",""), b.get("product_name",""),
-                b.get("maker",""), b.get("lot_no",""), b.get("brew_amount",0),
-                b.get("material_kg",0), b.get("seaweed_kg",0), b.get("lime_kg",0)]
+                b.get("maker",""), b.get("lot_no",""), b.get("seaweed_lot",""), b.get("starch_lot",""),
+                b.get("brew_amount",0), b.get("material_kg",0), b.get("seaweed_kg",0), 
+                b.get("starch_kg",0), b.get("lime_kg",0)]
         for ci, val in enumerate(vals, start=2):
-            align = "right" if isinstance(val, (int, float)) else "center" if ci <= 6 else "left"
+            align = "right" if isinstance(val, (int, float)) else "center" if ci <= 8 else "left"
             nf = "#,##0.00" if isinstance(val, float) else None
             data_style(ws, ri, ci, val, align, num_format=nf, bg=bg)
+# --- END OF FILE report_generator.py ---
