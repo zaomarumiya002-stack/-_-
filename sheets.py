@@ -1,3 +1,4 @@
+# --- START OF FILE sheets.py ---
 """Google Sheets 接続・読み書きモジュール"""
 import streamlit as st
 import gspread
@@ -27,13 +28,13 @@ ARRIVAL_COLS = [
 
 BREWING_COLS = [
     "no", "brew_date", "product_name", "maker", "lot_no",
+    "seaweed_lot", "starch_lot",  # ← 新規追加
     "brew_amount", "material_kg", "seaweed_kg", "starch_kg",
     "starch_type", "lime_kg", "lime_water_l", "notes", "registered_at"
 ]
 
 @st.cache_resource(ttl=0)
 def get_client():
-    """サービスアカウントで認証してgspreadクライアントを返す"""
     creds = Credentials.from_service_account_info(
         st.secrets["gcp_service_account"],
         scopes=SCOPES
@@ -45,7 +46,6 @@ def get_spreadsheet():
     return client.open_by_key(st.secrets["spreadsheet"]["sheet_id"])
 
 def ensure_sheet(ss, name: str, headers: list):
-    """シートが存在しなければ作成してヘッダーを書く"""
     try:
         ws = ss.worksheet(name)
     except gspread.WorksheetNotFound:
@@ -115,7 +115,7 @@ def load_materials() -> list[str]:
     try:
         ss = get_spreadsheet()
         ws = ensure_sheet(ss, SHEET_MATERIALS, ["material_name"])
-        vals = ws.col_values(1)[1:]  # skip header
+        vals = ws.col_values(1)[1:] 
         return vals if vals else DEFAULT_MATERIALS
     except:
         return DEFAULT_MATERIALS
@@ -163,3 +163,4 @@ def next_brewing_no(brewing: list) -> int:
         return 1
     nos = [int(b.get("no", 0)) for b in brewing if b.get("no")]
     return max(nos) + 1 if nos else 1
+# --- END OF FILE sheets.py ---
