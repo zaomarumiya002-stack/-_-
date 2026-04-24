@@ -13,11 +13,15 @@ SHEET_MAKERS      = "メーカーマスター"
 SHEET_INSPECTORS  = "担当者マスター"
 SHEET_ORDER_PTS   = "発注点マスター"
 SHEET_ADJUSTMENTS = "在庫調整記録"
+SHEET_SUPPLIES    = "資材マスター"
+SHEET_SUPPLY_LOGS = "資材入出庫記録"
 
+# 末尾に check_name_std を追加（既存データを壊さないため）
 ARRIVAL_COLS = [
     "arrival_no", "arrival_date", "maker", "lot_no", "material_type",
     "bags", "bags_per_kg", "total_kg", "transport_temp", "appearance", "odor", "packaging",
-    "color_check", "contamination", "moisture", "expiry_check", "abnormal_detail", "inspector", "remarks", "registered_at"
+    "color_check", "contamination", "moisture", "expiry_check", "abnormal_detail", "inspector", "remarks", "registered_at",
+    "check_name_std"
 ]
 BREWING_COLS = [
     "no", "brew_date", "product_name", "maker", "lot_no",
@@ -25,8 +29,9 @@ BREWING_COLS = [
     "starch_type", "lime_kg", "lime_water_l", "notes", "registered_at",
     "seaweed_lot", "starch_lot", "other_additives"
 ]
-# kg から bags に変更
 ADJUSTMENT_COLS = ["adj_date", "arrival_no", "lot_no", "material_type", "diff_bags", "reason", "registered_at"]
+SUPPLY_COLS = ["supply_id", "name", "category", "image_url", "initial_stock"]
+SUPPLY_LOG_COLS = ["date", "supply_id", "action_type", "amount", "inspector", "note", "registered_at"]
 
 @st.cache_resource(ttl=0)
 def get_client():
@@ -61,8 +66,7 @@ def append_arrival(record):
 def load_brewing():
     try:
         df = _sheet_to_df(ensure_sheet(get_spreadsheet(), SHEET_BREWING, BREWING_COLS), BREWING_COLS)
-        num_cols = ["no", "brew_amount", "material_kg", "seaweed_kg", "starch_kg", "lime_kg", "lime_water_l"]
-        for col in num_cols:
+        for col in ["no", "brew_amount", "material_kg", "seaweed_kg", "starch_kg", "lime_kg", "lime_water_l"]:
             if col in df.columns: df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
         return df.to_dict("records")
     except: return []
@@ -78,7 +82,21 @@ def load_adjustments():
 def append_adjustment(record):
     ensure_sheet(get_spreadsheet(), SHEET_ADJUSTMENTS, ADJUSTMENT_COLS).append_row([str(record.get(c, "")) for c in ADJUSTMENT_COLS], value_input_option="USER_ENTERED")
 
-# マスターの読み書き
+def load_supplies():
+    try: return _sheet_to_df(ensure_sheet(get_spreadsheet(), SHEET_SUPPLIES, SUPPLY_COLS), SUPPLY_COLS).to_dict("records")
+    except: return []
+def save_supplies(data):
+    ws = ensure_sheet(get_spreadsheet(), SHEET_SUPPLIES, SUPPLY_COLS)
+    ws.clear(); ws.append_row(SUPPLY_COLS)
+    for d in data: ws.append_row([str(d.get(c, "")) for c in SUPPLY_COLS])
+
+def load_supply_logs():
+    try: return _sheet_to_df(ensure_sheet(get_spreadsheet(), SHEET_SUPPLY_LOGS, SUPPLY_LOG_COLS), SUPPLY_LOG_COLS).to_dict("records")
+    except: return []
+def append_supply_log(record):
+    ensure_sheet(get_spreadsheet(), SHEET_SUPPLY_LOGS, SUPPLY_LOG_COLS).append_row([str(record.get(c, "")) for c in SUPPLY_LOG_COLS], value_input_option="USER_ENTERED")
+
+# マスター関連
 def load_master_list(sheet_name, default_list):
     try:
         vals = ensure_sheet(get_spreadsheet(), sheet_name, ["name"]).col_values(1)[1:]
