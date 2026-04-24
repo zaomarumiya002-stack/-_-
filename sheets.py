@@ -25,7 +25,8 @@ BREWING_COLS = [
     "starch_type", "lime_kg", "lime_water_l", "notes", "registered_at",
     "seaweed_lot", "starch_lot", "other_additives"
 ]
-ADJUSTMENT_COLS = ["adj_date", "arrival_no", "lot_no", "material_type", "diff_kg", "reason", "registered_at"]
+# kg から bags に変更
+ADJUSTMENT_COLS = ["adj_date", "arrival_no", "lot_no", "material_type", "diff_bags", "reason", "registered_at"]
 
 @st.cache_resource(ttl=0)
 def get_client():
@@ -71,7 +72,7 @@ def append_brewing(record):
 def load_adjustments():
     try:
         df = _sheet_to_df(ensure_sheet(get_spreadsheet(), SHEET_ADJUSTMENTS, ADJUSTMENT_COLS), ADJUSTMENT_COLS)
-        df["diff_kg"] = pd.to_numeric(df["diff_kg"], errors="coerce").fillna(0)
+        df["diff_bags"] = pd.to_numeric(df["diff_bags"], errors="coerce").fillna(0)
         return df.to_dict("records")
     except: return []
 def append_adjustment(record):
@@ -85,8 +86,7 @@ def load_master_list(sheet_name, default_list):
     except: return default_list
 def save_master_list(sheet_name, data):
     ws = ensure_sheet(get_spreadsheet(), sheet_name, ["name"])
-    ws.clear()
-    ws.append_row(["name"])
+    ws.clear(); ws.append_row(["name"])
     for d in data: ws.append_row([d])
 
 def load_materials(): return load_master_list(SHEET_MATERIALS, ["こんにゃく精粉（国産）", "海藻粉", "加工デンプン", "石灰", "食塩"])
