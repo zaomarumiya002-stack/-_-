@@ -16,7 +16,6 @@ SHEET_ADJUSTMENTS = "在庫調整記録"
 SHEET_SUPPLIES    = "資材マスター"
 SHEET_SUPPLY_LOGS = "資材入出庫記録"
 
-# 末尾に check_name_std を追加（既存データを壊さないため）
 ARRIVAL_COLS = [
     "arrival_no", "arrival_date", "maker", "lot_no", "material_type",
     "bags", "bags_per_kg", "total_kg", "transport_temp", "appearance", "odor", "packaging",
@@ -35,7 +34,12 @@ SUPPLY_LOG_COLS = ["date", "supply_id", "action_type", "amount", "inspector", "n
 
 @st.cache_resource(ttl=0)
 def get_client():
-    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=SCOPES)
+    # 秘密鍵の改行崩れ（\n）を自動修正して読み込む
+    info = dict(st.secrets["gcp_service_account"])
+    if "private_key" in info:
+        info["private_key"] = info["private_key"].replace("\\n", "\n")
+        
+    creds = Credentials.from_service_account_info(info, scopes=SCOPES)
     return gspread.authorize(creds)
 
 def get_spreadsheet():
