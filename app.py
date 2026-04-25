@@ -53,6 +53,8 @@ def fetch_all():
 
 @st.cache_data(ttl=60)
 def calc_inventory(arrivals_list, brewing_list, adj_list):
+    if not arrivals_list: return {}
+    
     inv = {a["arrival_no"]: {
         "arrival_no": a["arrival_no"], "lot_no": a["lot_no"], "maker": a["maker"],
         "material_type": a["material_type"], "bags_per_kg": float(a.get("bags_per_kg") or 20.0),
@@ -86,6 +88,8 @@ def calc_inventory(arrivals_list, brewing_list, adj_list):
 
 @st.cache_data(ttl=60)
 def calc_supply_inventory(sup_list, log_list):
+    if not sup_list: return []
+    
     inv = {s["supply_id"]: {
         "image_url": s.get("image_url", "https://cdn-icons-png.flaticon.com/512/1243/1243324.png"),
         "name": s["name"], "category": s.get("category", ""), 
@@ -233,22 +237,38 @@ elif page == "🧪 仕込み記録":
 elif page == "🏭 原料在庫管理":
     st.markdown('<div class="main-header"><h1>🏭 原料在庫管理</h1><p>自動計算された現在庫（袋単位）と棚卸し調整</p></div>', unsafe_allow_html=True)
     t1, t2 = st.tabs(["📋 現在庫一覧", "⚖️ 在庫ズレ調整"])
+    
     with t1:
-        inv_df = pd.DataFrame(list(inventory_data.values()))[["arrival_no", "material_type", "lot_no", "total_in_bags", "total_out_bags", "adj_bags", "current_bags"]]
-        inv_df.columns = ["入荷No", "原料種別", "ロットNo", "入荷(袋)", "使用(袋)", "調整(袋)", "現在庫(袋)"]
-        st.dataframe(inv_df, column_config={"入荷(袋)": st.column_config.NumberColumn(format="%.1f"), "使用(袋)": st.column_config.NumberColumn(format="%.1f"), "調整(袋)": st.column_config.NumberColumn(format="%.1f"), "現在庫(袋)": st.column_config.NumberColumn(format="%.1f")}, use_container_width=True, height=400)
+        if not inventory_data:
+            st.info("📦 入荷記録がまだ登録されていないため、表示する在庫データがありません。")
+        else:
+            inv_df = pd.DataFrame(list(inventory_data.values()))[["arrival_no", "material_type", "lot_no", "total_in_bags", "total_out_bags", "adj_bags", "current_bags"]]
+            inv_df.columns = ["入荷No", "原料種別", "ロットNo", "入荷(袋)", "使用(袋)", "調整(袋)", "現在庫(袋)"]
+            st.dataframe(inv_df, column_config={"入荷(袋)": st.column_config.NumberColumn(format="%.1f"), "使用(袋)": st.column_config.NumberColumn(format="%.1f"), "調整(袋)": st.column_config.NumberColumn(format="%.1f"), "現在庫(袋)": st.column_config.NumberColumn(format="%.1f")}, use_container_width=True, height=400)
+            
+            st.markdown("### 📊 原料種別 合計在庫")
+            if type_totals:
+                tot_df = pd.DataFrame(list(type_totals.items()), columns=["原料種別", "現在庫合計(袋)"])
+                tot_df["発注点(袋)"] = tot_df["原料種別"].map(lambda x: order_points.get(x, 0))
+                tot_df["状態"] = tot_df.apply(lambda r: "⚠️ 発注必要" if r["現在庫合計(袋)"] < r["発注点(袋)"] else "✅ 正常", axis=1)
+                st.dataframe(tot_df, use_container_width=True)
+
     with t2:
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
-        target_arr = st.selectbox("対象ロット", [f"{v['arrival_no']} ({v['material_type']} / ロット:{v['lot_no']} / 現在庫:{v['current_bags']:.1f}袋)" for v in inventory_data.values()])
-        if target_arr:
-            arr_id = target_arr.split(" ")[0]
-            real_val = st.number_input("実在庫 (袋)", value=float(inventory_data[arr_id]["current_bags"]), step=1.0)
-            diff = real_val - inventory_data[arr_id]["current_bags"]
-            st.write(f"👉 調整量: **{diff:+.1f} 袋**")
-            reason = st.text_input("調整理由")
-            if st.button("⚖️ 在庫を調整する", type="primary"):
-                append_adjustment({"adj_date": str(date.today()), "arrival_no": arr_id, "lot_no": inventory_data[arr_id]["lot_no"], "material_type": inventory_data[arr_id]["material_type"], "diff_bags": diff, "reason": reason, "registered_at": datetime.now().isoformat()})
-                st.cache_data.clear(); st.rerun()
+        st.info("棚卸し等で判明した実在庫を【袋数】で入力すると、差分が自動計算されて調整記録に残ります。")
+        if not inventory_data:
+            st.warning("調整できる在庫データがありません。")
+        else:
+            target_arr = st.selectbox("対象ロット", [f"{v['arrival_no']} ({v['material_type']} / ロット:{v['lot_no']} / 現在庫:{v['current_bags']:.1f}袋)" for v in inventory_data.values()])
+            if target_arr:
+                arr_id = target_arr.split(" ")[0]
+                real_val = st.number_input("実在庫 (袋)", value=float(inventory_data[arr_id]["current_bags"]), step=1.0)
+                diff = real_val - inventory_data[arr_id]["current_bags"]
+                st.write(f"👉 調整量: **{diff:+.1f} 袋**")
+                reason = st.text_input("調整理由")
+                if st.button("⚖️ 在庫を調整する", type="primary"):
+                    append_adjustment({"adj_date": str(date.today()), "arrival_no": arr_id, "lot_no": inventory_data[arr_id]["lot_no"], "material_type": inventory_data[arr_id]["material_type"], "diff_bags": diff, "reason": reason, "registered_at": datetime.now().isoformat()})
+                    st.cache_data.clear(); st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════════
