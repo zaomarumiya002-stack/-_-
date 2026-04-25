@@ -34,10 +34,19 @@ SUPPLY_LOG_COLS = ["date", "supply_id", "action_type", "amount", "inspector", "n
 
 @st.cache_resource(ttl=0)
 def get_client():
-    # 秘密鍵の改行崩れ（\n）を自動修正して読み込む
     info = dict(st.secrets["gcp_service_account"])
+    
+    # 🔑 秘密鍵のフォーマット強制補正
     if "private_key" in info:
-        info["private_key"] = info["private_key"].replace("\\n", "\n")
+        pk = info["private_key"]
+        # 1. バックスラッシュ+n を実際の改行に変換
+        pk = pk.replace("\\n", "\n")
+        # 2. 改行が消えて繋がってしまった場合、ヘッダーとフッターで強制的に改行を入れる
+        pk = pk.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
+        pk = pk.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----\n")
+        # 3. 余分な連続改行を整える
+        pk = pk.replace("\n\n\n", "\n").replace("\n\n", "\n")
+        info["private_key"] = pk
         
     creds = Credentials.from_service_account_info(info, scopes=SCOPES)
     return gspread.authorize(creds)
