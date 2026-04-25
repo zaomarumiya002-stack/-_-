@@ -72,19 +72,24 @@ def _read(sheet_name: str, cols: list) -> list[dict]:
     try:
         ss = _ss()
         ws = _ws(ss, sheet_name, cols)
-        records = ws.get_all_records(expected_headers=cols, default_blank="")
+        
+        # 🌟 修正ポイント: expected_headers 制約を外し、列が足りなくてもエラーにせず読み込む
+        records = ws.get_all_records(default_blank="")
         if not records: return []
         
-        # 自己修復: 列名が足りない場合は補完
+        # 自己修復: 足りない列名があればシート1行目に書き足し、データにも空欄を補完する
         df = pd.DataFrame(records)
         missing_cols = [c for c in cols if c not in df.columns]
         if missing_cols:
             ws.update(range_name="A1", values=[cols])
             for c in missing_cols: df[c] = ""
+            
         for c in cols:
             if c not in df.columns: df[c] = ""
+            
         return df[cols].to_dict("records")
     except Exception as e:
+        print(f"Error reading {sheet_name}: {e}")
         return []
 
 def _append(sheet_name: str, cols: list, record: dict):
@@ -94,7 +99,6 @@ def _append(sheet_name: str, cols: list, record: dict):
     ws.append_row(row, value_input_option="USER_ENTERED")
 
 def _update_row(sheet_name: str, cols: list, key_col: str, key_val: str, record: dict):
-    # 高速化: findを使わず一括取得で検索
     ss = _ss()
     ws = _ws(ss, sheet_name, cols)
     col_idx = cols.index(key_col) + 1
