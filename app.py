@@ -109,12 +109,22 @@ def calc_inventory(arr_t, brew_t, adj_t):
 @st.cache_data(ttl=60)
 def calc_supply_inv(sup_t, log_t):
     if not sup_t: return []
-    inv = {str(s.get("資材ID")): {**s, "initial": float(s.get("初期在庫") or 0), "in_out": 0.0} for s in sup_t if s.get("資材ID")}
+    # キーを日本語名に合わせて修正
+    inv = {str(s.get("資材ID")): {
+        "資材ID": str(s.get("資材ID", "")),
+        "資材名": str(s.get("資材名", "")),
+        "カテゴリ": str(s.get("カテゴリ", "")),
+        "画像URL": str(s.get("画像URL", "https://cdn-icons-png.flaticon.com/512/1243/1243324.png")),
+        "initial": float(s.get("初期在庫") or 0), 
+        "in_out": 0.0
+    } for s in sup_t if s.get("資材ID")}
+    
     for lg in log_t:
         sid = str(lg.get("資材ID", ""))
         if sid in inv:
             amt = float(lg.get("数量") or 0)
             inv[sid]["in_out"] += amt if "入荷" in lg.get("処理", "") else -amt
+            
     res = []
     for sid, v in inv.items():
         v["現在庫"] = v["initial"] + v["in_out"]
@@ -326,9 +336,11 @@ elif page == "🧹 資材在庫":
             append_supply_log({"登録日": str(date.today()), "資材ID": target_id, "処理": "入荷" if "➕" in act_sel else "使用", "数量": amt_val, "作業者": ins_sel, "登録日時": datetime.now().isoformat()})
             st.success("記録しました！"); refresh()
     st.markdown('</div>', unsafe_allow_html=True)
+    
+    # 🌟 エラー修正: 英語キー(image_url) から日本語キー(画像URL) に変更
     if supply_inventory:
-        df_sup = pd.DataFrame(supply_inventory)[["image_url", "資材名", "カテゴリ", "現在庫"]]
-        st.dataframe(df_sup, column_config={"image_url": st.column_config.ImageColumn("画像"), "現在庫": st.column_config.NumberColumn("現在庫", format="%d")}, use_container_width=True, hide_index=True, height=500)
+        df_sup = pd.DataFrame(supply_inventory)[["画像URL", "資材名", "カテゴリ", "現在庫"]]
+        st.dataframe(df_sup, column_config={"画像URL": st.column_config.ImageColumn("画像"), "現在庫": st.column_config.NumberColumn("現在庫", format="%d")}, use_container_width=True, hide_index=True, height=500)
 
 # ════════════════════════════════════════════════════════════════
 elif page == "🔍 双方向トレース":
