@@ -72,13 +72,15 @@ except Exception as e:
 @st.cache_data(ttl=60)
 def calc_inventory(arr_t, brew_t, adj_t):
     if not arr_t: return {}
-    inv = {a["入荷No"]: {
-        "入荷No": a["入荷No"], "ロットNo": a["ロットNo"], "メーカー": a["メーカー"],
-        "原料種別": a["原料種別"], "1袋重量": float(a.get("1袋重量(kg)") or 20.0),
+    # 安全にキーを取得（KeyError対策）
+    inv = {str(a.get("入荷No")): {
+        "入荷No": str(a.get("入荷No", "")), "ロットNo": str(a.get("ロットNo", "")), "メーカー": str(a.get("メーカー", "")),
+        "原料種別": str(a.get("原料種別", "")), "1袋重量": float(a.get("1袋重量(kg)") or 20.0),
         "入荷袋数": float(a.get("袋数") or 0), "使用量(kg)": 0.0, "調整袋数": 0.0
-    } for a in arr_t}
+    } for a in arr_t if a.get("入荷No")}
     
-    lot_to_arr = {str(a.get("ロットNo", "")).strip(): a["入荷No"] for a in arr_t if str(a.get("ロットNo", "")).strip()}
+    lot_to_arr = {str(a.get("ロットNo", "")).strip(): str(a.get("入荷No", "")) for a in arr_t if str(a.get("ロットNo", "")).strip() and a.get("入荷No")}
+    
     def _deduct(lot_str, kg):
         lot_str = str(lot_str).strip()
         if not lot_str or lot_str == "─": return
@@ -95,7 +97,7 @@ def calc_inventory(arr_t, brew_t, adj_t):
             except: pass
 
     for adj in adj_t:
-        ano = adj.get("入荷No")
+        ano = str(adj.get("入荷No", ""))
         if ano in inv: inv[ano]["調整袋数"] += float(adj.get("調整袋数") or 0)
         
     for v in inv.values():
@@ -108,9 +110,9 @@ def calc_inventory(arr_t, brew_t, adj_t):
 @st.cache_data(ttl=60)
 def calc_supply_inv(sup_t, log_t):
     if not sup_t: return []
-    inv = {s["資材ID"]: {**s, "initial": float(s.get("初期在庫") or 0), "in_out": 0.0} for s in sup_t if s.get("資材ID")}
+    inv = {str(s.get("資材ID")): {**s, "initial": float(s.get("初期在庫") or 0), "in_out": 0.0} for s in sup_t if s.get("資材ID")}
     for lg in log_t:
-        sid = lg.get("資材ID")
+        sid = str(lg.get("資材ID", ""))
         if sid in inv:
             amt = float(lg.get("数量") or 0)
             inv[sid]["in_out"] += amt if "入荷" in lg.get("処理", "") else -amt
@@ -125,7 +127,7 @@ supply_inventory = calc_supply_inv(supplies, supply_logs)
 
 type_totals = {}
 for v in inventory_data.values(): type_totals[v["原料種別"]] = type_totals.get(v["原料種別"], 0) + v["現在庫(袋)"]
-alerts = [f"⚠️ {m}：在庫 {c:,.1f}袋 ＜ 発注点 {order_points[m]:,.1f}袋" for m, c in type_totals.items() if m in order_points and c < order_points[m]]
+alerts = [f"⚠️ {m}：在庫 {c:,.1f}袋 ＜ 発注点 {order_points.get(m, 0):,.1f}袋" for m, c in type_totals.items() if m in order_points and c < order_points[m]]
 
 # ════════════════════════════════════════════════════════════════
 if page == "🏠 ダッシュボード":
@@ -190,13 +192,13 @@ elif page == "📦 入荷記録":
         if not arrivals: st.info("データなし")
         else:
             st.markdown('<div class="form-card">', unsafe_allow_html=True)
-            edit_target = st.selectbox("編集する入荷Noを選択", [a["入荷No"] for a in reversed(arrivals)], key="edit_arr_sel")
+            edit_target = st.selectbox("編集する入荷Noを選択", [a.get("入荷No") for a in reversed(arrivals) if a.get("入荷No")], key="edit_arr_sel")
             if edit_target:
-                td = next((a for a in arrivals if a["入荷No"] == edit_target), None)
+                td = next((a for a in arrivals if a.get("入荷No") == edit_target), None)
                 e_date = st.text_input("入荷日", value=td.get("入荷日",""), key="ea_date")
                 e_maker = st.text_input("メーカー", value=td.get("メーカー",""), key="ea_maker")
                 e_lot = st.text_input("ロットNo", value=td.get("ロットNo",""), key="ea_lot")
-                e_mat = st.selectbox("原料種別", materials, index=materials.index(td["原料種別"]) if td.get("原料種別") in materials else 0, key="ea_mat")
+                e_mat = st.selectbox("原料種別", materials, index=materials.index(td.get("原料種別")) if td.get("原料種別") in materials else 0, key="ea_mat")
                 e_bags = st.number_input("袋数", value=int(td.get("袋数") or 0), key="ea_bags")
                 if st.button("💾 変更を上書き保存", type="primary", key="ea_save"):
                     td.update({"入荷日": e_date, "メーカー": e_maker, "ロットNo": e_lot, "原料種別": e_mat, "袋数": e_bags})
@@ -209,7 +211,7 @@ elif page == "🧪 仕込み記録":
     t1, t2, t3 = st.tabs(["➕ 新規登録", "📋 履歴一覧", "✏️ 既存データ編集"])
     
     def get_lots_by_type(mat_type):
-        lts = [a["ロットNo"] for a in arrivals if mat_type in a.get("原料種別","") and str(a.get("ロットNo")).strip()]
+        lts = [a.get("ロットNo") for a in arrivals if mat_type in a.get("原料種別","") and str(a.get("ロットNo","")).strip()]
         return ["─"] + sorted(list(set(lts)), reverse=True)
     
     with t1:
@@ -240,7 +242,7 @@ elif page == "🧪 仕込み記録":
         for i, row in enumerate(st.session_state.other_rows):
             oc1, oc2, oc3, oc4 = st.columns([3,3,2,1])
             sel_mat = oc1.selectbox("原料名", materials, key=f"mat_{i}", index=materials.index(row["name"]) if row["name"] in materials else 0)
-            avail_lots = ["─"] + sorted(list(set([a["ロットNo"] for a in arrivals if a.get("原料種別") == sel_mat and str(a.get("ロットNo")).strip()])), reverse=True)
+            avail_lots = ["─"] + sorted(list(set([a.get("ロットNo") for a in arrivals if a.get("原料種別") == sel_mat and str(a.get("ロットNo","")).strip()])), reverse=True)
             sel_lot = oc2.selectbox("ロットNo", avail_lots, key=f"lot_{i}")
             sel_kg = oc3.number_input("使用量(kg)", min_value=0.0, format="%.2f", key=f"kg_{i}", value=float(row["kg"]) if row["kg"] else None)
             if oc4.button("❌", key=f"del_{i}"): st.session_state.other_rows.pop(i); st.rerun()
@@ -270,10 +272,10 @@ elif page == "🧪 仕込み記録":
         if not brewing: st.info("データなし")
         else:
             st.markdown('<div class="form-card">', unsafe_allow_html=True)
-            edit_target_b = st.selectbox("編集する仕込Noを選択", [f"{b['仕込No']} - {b['品名']}" for b in reversed(brewing)], key="edit_brw_sel")
+            edit_target_b = st.selectbox("編集する仕込Noを選択", [f"{b.get('仕込No')} - {b.get('品名')}" for b in reversed(brewing) if b.get("仕込No")], key="edit_brw_sel")
             if edit_target_b:
                 t_no = edit_target_b.split(" - ")[0]
-                td = next((b for b in brewing if str(b["仕込No"]) == str(t_no)), None)
+                td = next((b for b in brewing if str(b.get("仕込No")) == str(t_no)), None)
                 eb_name = st.text_input("品名", value=td.get("品名",""), key="eb_name")
                 eb_lot = st.text_input("主原料ロットNo", value=td.get("主原料ロット",""), key="eb_lot")
                 eb_amt = st.number_input("仕込量(kg)", value=float(td.get("仕込量(kg)") or 0), key="eb_amt")
@@ -315,13 +317,13 @@ elif page == "🧹 資材在庫":
     if not supplies: st.warning("資材マスターが未登録です")
     else:
         sc1, sc2 = st.columns([2, 1])
-        sup_sel = sc1.selectbox("資材を選択", [s["資材名"] for s in supplies], key="sup_sel")
+        sup_sel = sc1.selectbox("資材を選択", [s.get("資材名") for s in supplies if s.get("資材名")], key="sup_sel")
         act_sel = sc2.selectbox("処理", ["➖ 使用する (出庫)", "➕ 補充する (入荷)"], key="sup_act")
         sc3, sc4 = st.columns([2, 1])
         amt_val = sc3.number_input("数量（個/セット）", min_value=1, step=1, key="sup_amt")
         ins_sel = sc4.selectbox("作業者", inspectors, key="sup_ins")
         if st.button("✅ 記録を保存", type="primary", use_container_width=True, key="sup_btn"):
-            target_id = next(s["資材ID"] for s in supplies if s["資材名"] == sup_sel)
+            target_id = next((s["資材ID"] for s in supplies if s.get("資材名") == sup_sel), None)
             append_supply_log({"登録日": str(date.today()), "資材ID": target_id, "処理": "入荷" if "➕" in act_sel else "使用", "数量": amt_val, "作業者": ins_sel, "登録日時": datetime.now().isoformat()})
             st.success("記録しました！"); refresh()
     st.markdown('</div>', unsafe_allow_html=True)
@@ -367,7 +369,7 @@ elif page == "🔍 双方向トレース":
         kw_prod = bc2.text_input("品名（一部でも可）", placeholder="例: つきこん", key="kw_prod")
         if st.button("⬅️ 遡及実行", type="primary", key="btn_bwd"):
             target_brews = brewing
-            if kw_date: target_brews = [b for b in target_brews if b.get("仕込日") == str(kw_date)]
+            if kw_date: target_brews = [b for b in target_brews if b.get("仕込日") == str(kw_date).replace("-","/")]
             if kw_prod: target_brews = [b for b in target_brews if kw_prod.lower() in str(b.get("品名","")).lower()]
 
             if not target_brews: st.warning("該当する仕込み記録が見つかりません。")
@@ -400,7 +402,6 @@ elif page == "📊 生産分析":
         df[c] = df[c].astype(str).str.replace(",", "").str.replace(" ", "")
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
         
-    # こんにゃく粉を「袋」に換算（基準: 1袋=20kg）
     df["こんにゃく精粉(袋)"] = (df["こんにゃく精粉(kg)"] / 20.0).round(1)
     
     pt = st.radio("集計単位", ["日別", "月別", "年間"], horizontal=True, key="pt_sel")
@@ -445,27 +446,18 @@ elif page == "📊 生産分析":
         fig1.add_trace(go.Bar(x=grp["period"], y=grp["こんにゃく精粉_袋"], name="こんにゃく精粉(袋)", marker_color="#43a047"))
         fig1.add_trace(go.Bar(x=grp["period"], y=grp["製品仕込量"], name="製品仕込量(kg)", marker_color="#1565c0", yaxis="y2"))
         fig1.add_trace(go.Scatter(x=grp["period"], y=grp["歩留まり(倍)"], name="歩留まり(倍)", yaxis="y3", mode="lines+markers", line=dict(color="#f57f17", width=3)))
-        
-        fig1.update_layout(
-            barmode="group", height=450, plot_bgcolor="#f8faff",
-            yaxis=dict(title="こんにゃく精粉 (袋)"),
-            yaxis2=dict(title="製品仕込量 (kg)", overlaying="y", side="right", showgrid=False),
-            yaxis3=dict(title="歩留まり(倍)", overlaying="y", side="right", position=0.95, showgrid=False),
-            legend=dict(orientation="h", y=-0.15)
-        )
+        fig1.update_layout(barmode="group", height=450, plot_bgcolor="#f8faff", yaxis=dict(title="こんにゃく精粉 (袋)"), yaxis2=dict(title="製品仕込量 (kg)", overlaying="y", side="right", showgrid=False), yaxis3=dict(title="歩留まり(倍)", overlaying="y", side="right", position=0.95, showgrid=False), legend=dict(orientation="h", y=-0.15))
         st.plotly_chart(fig1, use_container_width=True)
         
     with tab2:
         st.markdown('<div class="section-title">添加物 使用量内訳 (kg)</div>', unsafe_allow_html=True)
         base_additives = ["海藻粉", "加工デンプン", "石灰"]
         other_additives = [c for c in grp.columns if c not in ["period", "仕込回数", "製品仕込量", "歩留まり(倍)", "こんにゃく精粉_袋", "こんにゃく精粉_kg"] + base_additives]
-        
         fig2 = go.Figure()
         colors = ["#e53935", "#fb8c00", "#8e24aa", "#3949ab", "#1e88e5", "#039be5", "#00acc1", "#00897b", "#00838f"]
         for i, mat in enumerate(base_additives + other_additives):
             if mat in grp.columns:
                 fig2.add_trace(go.Bar(x=grp["period"], y=grp[mat], name=mat, marker_color=colors[i % len(colors)]))
-                
         fig2.update_layout(barmode="stack", height=450, plot_bgcolor="#f8faff", yaxis=dict(title="使用量 (kg)"), legend=dict(orientation="h", y=-0.15))
         st.plotly_chart(fig2, use_container_width=True)
         
@@ -477,7 +469,6 @@ elif page == "📊 生産分析":
             if mat in grp.columns:
                 ratio_df[f"{mat} 比率(%)"] = (grp[mat] / grp["こんにゃく精粉_kg"].replace(0, float("nan")) * 100).round(2)
         st.dataframe(ratio_df, use_container_width=True)
-        
         st.markdown("##### 実数データ")
         format_dict = {c: "{:.1f}" for c in grp.columns if c not in ["period", "仕込回数"]}
         st.dataframe(grp.style.format(format_dict), use_container_width=True)
@@ -523,7 +514,7 @@ elif page == "⚙️ マスター設定":
                     img_val = "https://cdn-icons-png.flaticon.com/512/1243/1243324.png"
                     if n_file and HAS_PIL:
                         img = Image.open(n_file)
-                        img.thumbnail((150, 150))
+                        img.thumbnail((200, 200))
                         buf = BytesIO()
                         img.save(buf, format="PNG")
                         img_val = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"
@@ -541,13 +532,17 @@ elif page == "⚙️ マスター設定":
 
         st.markdown("#### 登録済み資材の一覧・削除")
         if supplies:
-            del_sup = st.selectbox("削除する資材を選択", ["─"] + [s["資材名"] for s in supplies])
+            del_sup = st.selectbox("削除する資材を選択", ["─"] + [s.get("資材名","") for s in supplies])
             if st.button("🗑 選択した資材を削除"):
                 if del_sup != "─":
-                    save_supplies([s for s in supplies if s["資材名"] != del_sup])
+                    save_supplies([s for s in supplies if s.get("資材名") != del_sup])
                     st.success("削除しました")
                     refresh()
                     
             df_s = pd.DataFrame(supplies)[["画像URL", "資材名", "カテゴリ", "初期在庫"]]
-            st.dataframe(df_s, column_config={"画像URL": st.column_config.ImageColumn("画像")}, use_container_width=True, hide_index=True)
+            st.dataframe(
+                df_s,
+                column_config={"画像URL": st.column_config.ImageColumn("画像")},
+                use_container_width=True, hide_index=True
+            )
 # --- END OF FILE app.py ---
