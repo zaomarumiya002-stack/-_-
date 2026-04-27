@@ -60,7 +60,6 @@ with st.sidebar:
     if st.button("🔄 データ手動更新", use_container_width=True): refresh()
     st.caption(f"最終読込: {datetime.now().strftime('%H:%M')}")
 
-# 🌟 高速化: キャッシュの持続時間を3600秒(1時間)に。変更時はrefresh()でリセット。
 @st.cache_data(ttl=3600)
 def fetch_all(): 
     return (load_arrivals(), load_brewing(), load_adjustments(), load_supplies(), load_supply_logs(), 
@@ -72,7 +71,6 @@ except Exception as e:
     st.error(f"🚨 データ取得エラー\n\n```\n{traceback.format_exc()}\n```")
     st.stop()
 
-# 🌟 高速化: 関数の引数をなくすことでハッシュ計算をスキップし、ページ切り替えを一瞬にする
 @st.cache_data(ttl=3600)
 def get_inventory():
     if not arrivals: return {}
@@ -113,10 +111,15 @@ def get_inventory():
 @st.cache_data(ttl=3600)
 def get_supply_inv():
     if not supplies: return []
+    # 🌟 日本語キーに統一して修正
     inv = {str(s.get("資材ID")): {
-        "資材ID": str(s.get("資材ID", "")), "資材名": str(s.get("資材名", "")), "カテゴリ": str(s.get("カテゴリ", "")),
+        "資材ID": str(s.get("資材ID", "")), 
+        "資材名": str(s.get("資材名", "")), 
+        "カテゴリ": str(s.get("カテゴリ", "")),
         "画像URL": str(s.get("画像URL", "https://cdn-icons-png.flaticon.com/512/1243/1243324.png")),
-        "initial": float(s.get("初期在庫") or 0), "order_point": float(s.get("発注点") or 0), "in_out": 0.0
+        "initial": float(s.get("初期在庫") or 0), 
+        "発注点": float(s.get("発注点") or 0), 
+        "in_out": 0.0
     } for s in supplies if s.get("資材ID")}
     
     for lg in supply_logs:
@@ -137,7 +140,8 @@ supply_inventory = get_supply_inv()
 type_totals = {}
 for v in inventory_data.values(): type_totals[v["原料種別"]] = type_totals.get(v["原料種別"], 0) + v["現在庫(袋)"]
 raw_alerts = [f"⚠️ 【原料アラート】 {m} の在庫（{c:,.1f}袋）が発注点（{order_points.get(m, 0):,.1f}袋）を下回っています！" for m, c in type_totals.items() if m in order_points and c < order_points[m]]
-sup_alerts = [f"📦 【資材アラート】 {s['資材名']} の在庫（{s['現在庫']:.0f}個）が発注点（{s['order_point']:.0f}個）を下回っています！" for s in supply_inventory if s["order_point"] > 0 and s["現在庫"] < s["order_point"]]
+# 🌟 日本語の「発注点」キーを使用するように修正
+sup_alerts = [f"📦 【資材アラート】 {s['資材名']} の在庫（{s['現在庫']:.0f}個）が発注点（{s['発注点']:.0f}個）を下回っています！" for s in supply_inventory if s.get("発注点", 0) > 0 and s["現在庫"] < s["発注点"]]
 
 # ════════════════════════════════════════════════════════════════
 if page == "🏠 ダッシュボード":
@@ -304,7 +308,8 @@ elif page == "🏭 原料在庫":
         if not inventory_data: st.info("データなし")
         else:
             inv_df = pd.DataFrame(list(inventory_data.values()))[["入荷No", "原料種別", "ロットNo", "入荷袋数", "使用袋数", "調整袋数", "現在庫(袋)"]]
-            st.dataframe(inv_df, column_config={"入荷袋数": st.column_config.NumberColumn("入荷(袋)", format="%.1f"), "使用袋数": st.column_config.NumberColumn("使用(袋)", format="%.1f"), "調整袋数": st.column_config.NumberColumn("調整(袋)", format="%.1f"), "現在庫(袋)": st.column_config.NumberColumn("現在庫(袋)", format="%.1f")}, use_container_width=True, height=400)
+            inv_df.columns = ["入荷No", "原料種別", "ロットNo", "入荷(袋)", "使用(袋)", "調整(袋)", "現在庫(袋)"]
+            st.dataframe(inv_df, column_config={"入荷(袋)": st.column_config.NumberColumn(format="%.1f"), "使用(袋)": st.column_config.NumberColumn(format="%.1f"), "調整(袋)": st.column_config.NumberColumn(format="%.1f"), "現在庫(袋)": st.column_config.NumberColumn(format="%.1f")}, use_container_width=True, height=400)
     with t2:
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
         if inventory_data:
@@ -324,7 +329,7 @@ elif page == "🏭 原料在庫":
 elif page == "🧹 資材在庫":
     st.markdown('<div class="main-header"><div><h1>🧹 資材・衛生備品 管理</h1><p>スマホ対応：写真を見ながら簡単に入出庫記録ができます</p></div></div>', unsafe_allow_html=True)
     
-    # アラート枠（発注点割れを上部に表示）
+    # アラート枠
     if sup_alerts:
         for al in sup_alerts: st.markdown(f'<div class="alert-warning">{al}</div>', unsafe_allow_html=True)
         
@@ -343,13 +348,14 @@ elif page == "🧹 資材在庫":
             st.success("記録しました！"); refresh()
     st.markdown('</div>', unsafe_allow_html=True)
     
+    # 🌟 エラー修正: 英語キー(image_url, order_point) から日本語キー(画像URL, 発注点) に修正
     if supply_inventory:
-        df_sup = pd.DataFrame(supply_inventory)[["image_url", "資材名", "カテゴリ", "現在庫", "order_point"]]
-        df_sup["状態"] = df_sup.apply(lambda r: "🔴発注" if r["order_point"] > 0 and r["現在庫"] < r["order_point"] else "✅正常", axis=1)
+        df_sup = pd.DataFrame(supply_inventory)[["画像URL", "資材名", "カテゴリ", "現在庫", "発注点"]]
+        df_sup["状態"] = df_sup.apply(lambda r: "🔴発注" if r["発注点"] > 0 and r["現在庫"] < r["発注点"] else "✅正常", axis=1)
         st.dataframe(df_sup, column_config={
-            "image_url": st.column_config.ImageColumn("画像"), 
+            "画像URL": st.column_config.ImageColumn("画像"), 
             "現在庫": st.column_config.NumberColumn("現在庫", format="%d"),
-            "order_point": st.column_config.NumberColumn("発注点", format="%d")
+            "発注点": st.column_config.NumberColumn("発注点", format="%d")
         }, use_container_width=True, hide_index=True, height=500)
 
 # ════════════════════════════════════════════════════════════════
@@ -374,7 +380,7 @@ elif page == "🔍 双方向トレース":
                     if kw_l in str(b.get(l_key,"")).lower(): is_match = True
                 if b.get("その他添加物"):
                     try:
-                        for o in json.loads(b["その他添加物"]):
+                        for o in json.loads(b.get("その他添加物")):
                             if kw_l in str(o.get("lot","")).lower(): is_match = True
                     except: pass
                 if is_match:
@@ -402,7 +408,7 @@ elif page == "🔍 双方向トレース":
                         if tb.get(k) and tb.get(k) != "─": used_lots.append({"役割": n, "ロットNo": tb.get(k)})
                     if tb.get("その他添加物"):
                         try:
-                            for o in json.loads(tb["その他添加物"]):
+                            for o in json.loads(tb.get("その他添加物")):
                                 if o.get("lot") and o.get("lot") != "─": used_lots.append({"役割": o.get("name","添加物"), "ロットNo": o.get("lot")})
                         except: pass
                     st.dataframe(pd.DataFrame(used_lots), use_container_width=True, hide_index=True)
