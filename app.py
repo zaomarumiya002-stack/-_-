@@ -198,7 +198,7 @@ elif page == "🧪 仕込み記録":
     t1, t2, t3 = st.tabs(["➕ 新規登録", "📋 履歴一覧", "✏️ 既存データ編集"])
     
     def get_lots_by_type(mat_type):
-        lts = [a["lot_no"] for a in arrivals if mat_type in a["material_type"] and str(a.get("lot_no")).strip()]
+        lts = [a["lot_no"] for a in arrivals if mat_type in a.get("material_type","") and str(a.get("lot_no")).strip()]
         return ["─"] + sorted(list(set(lts)), reverse=True)
     
     with t1:
@@ -229,7 +229,7 @@ elif page == "🧪 仕込み記録":
         for i, row in enumerate(st.session_state.other_rows):
             oc1, oc2, oc3, oc4 = st.columns([3,3,2,1])
             sel_mat = oc1.selectbox("原料名", materials, key=f"mat_{i}", index=materials.index(row["name"]) if row["name"] in materials else 0)
-            avail_lots = ["─"] + sorted(list(set([a["lot_no"] for a in arrivals if a["material_type"] == sel_mat and str(a.get("lot_no")).strip()])), reverse=True)
+            avail_lots = ["─"] + sorted(list(set([a["lot_no"] for a in arrivals if a.get("material_type") == sel_mat and str(a.get("lot_no")).strip()])), reverse=True)
             sel_lot = oc2.selectbox("ロットNo", avail_lots, key=f"lot_{i}")
             sel_kg = oc3.number_input("使用量(kg)", min_value=0.0, format="%.2f", key=f"kg_{i}", value=float(row["kg"]) if row["kg"] else None)
             
@@ -381,27 +381,87 @@ elif page == "🔍 双方向トレース":
 
 # ════════════════════════════════════════════════════════════════
 elif page == "📊 生産分析":
-    st.markdown('<div class="main-header"><div><h1>📊 生産分析・歩留</h1><p>高度な生産KPIと歩留まり分析</p></div></div>', unsafe_allow_html=True)
-    if not brewing: st.info("データがありません"); st.stop()
+    st.markdown('<div class="main-header"><div><h1>📊 生産分析・歩留</h1><p>精粉使用量・添加物の比較と歩留まりの客観的評価</p></div></div>', unsafe_allow_html=True)
+    if not brewing: 
+        st.info("データがありません")
+        st.stop()
     
     df = pd.DataFrame(brewing)
     df["brew_date"] = pd.to_datetime(df["brew_date"], errors="coerce")
-    for c in ["brew_amount", "material_kg"]: df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
+    for c in ["brew_amount", "material_kg", "seaweed_kg", "starch_kg", "lime_kg"]: 
+        df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
     
     pt = st.radio("集計単位", ["日別", "月別", "年間"], horizontal=True, key="pt_sel")
     if pt == "日別": df["period"] = df["brew_date"].dt.date.astype(str)
     elif pt == "月別": df["period"] = df["brew_date"].dt.to_period("M").astype(str)
     else: df["period"] = df["brew_date"].dt.to_period("Y").astype(str)
     
-    grp = df.groupby("period").agg(件数=("no", "count"), 仕込量=("brew_amount", "sum"), 精粉=("material_kg", "sum")).reset_index()
-    grp["歩留まり(倍)"] = (grp["仕込量"] / grp["精粉"].replace(0, float("nan"))).round(2)
+    # 基本原料の集計
+    grp = df.groupby("period").agg(
+        仕込回数=("no", "count"), 
+        製品仕込量=("brew_amount", "sum"), 
+        精粉=("material_kg", "sum"),
+        海藻粉=("seaweed_kg", "sum"),
+        加工デンプン=("starch_kg", "sum"),
+        石灰=("lime_kg", "sum")
+    ).reset_index()
     
-    fig = go.Figure()
-    fig.add_trace(go.Bar(x=grp["period"], y=grp["仕込量"], name="仕込量(kg)", marker_color="#1565c0"))
-    fig.add_trace(go.Bar(x=grp["period"], y=grp["精粉"], name="精粉(kg)", marker_color="#43a047"))
-    fig.update_layout(barmode="group", height=400, plot_bgcolor="#f8faff")
-    st.plotly_chart(fig, use_container_width=True)
-    st.dataframe(grp.style.format({"仕込量":"{:.1f}", "精粉":"{:.1f}", "歩留まり(倍)":"{:.2f}"}), use_container_width=True)
+    # その他添加物の集計
+    other_data = []
+    for _, r in df.iterrows():
+        period = r["period"]
+        if r.get("other_additives"):
+            try:
+                for o in json.loads(r["other_additives"]):
+                    name = o.get("name")
+                    kg = float(o.get("kg") or 0)
+                    if name and kg > 0:
+                        other_data.append({"period": period, "name": name, "kg": kg})
+            except: pass
+            
+    if other_data:
+        df_others = pd.DataFrame(other_data)
+        others_pivot = df_others.groupby(["period", "name"])["kg"].sum().unstack(fill_value=0).reset_index()
+        grp = pd.merge(grp, others_pivot, on="period", how="left").fillna(0)
+        
+    grp["歩留まり(倍)"] = (grp["製品仕込量"] / grp["精粉"].replace(0, float("nan"))).round(2)
+    
+    tab1, tab2, tab3 = st.tabs(["📈 生産量・歩留まり推移", "📊 原料・添加物 内訳比較", "📋 データ詳細・比率検証"])
+    
+    with tab1:
+        st.markdown('<div class="section-title">製品仕込量・精粉使用量・歩留まり(倍)</div>', unsafe_allow_html=True)
+        fig1 = go.Figure()
+        fig1.add_trace(go.Bar(x=grp["period"], y=grp["製品仕込量"], name="製品仕込量(kg)", marker_color="#1565c0"))
+        fig1.add_trace(go.Bar(x=grp["period"], y=grp["精粉"], name="精粉(kg)", marker_color="#43a047"))
+        fig1.add_trace(go.Scatter(x=grp["period"], y=grp["歩留まり(倍)"], name="歩留まり(倍)", yaxis="y2", mode="lines+markers", line=dict(color="#f57f17", width=3)))
+        fig1.update_layout(barmode="group", height=450, plot_bgcolor="#f8faff", yaxis=dict(title="重量 (kg)"), yaxis2=dict(title="歩留まり(倍)", overlaying="y", side="right", showgrid=False), legend=dict(orientation="h", y=-0.15))
+        st.plotly_chart(fig1, use_container_width=True)
+        
+    with tab2:
+        st.markdown('<div class="section-title">原料・添加物 使用量内訳 (kg)</div>', unsafe_allow_html=True)
+        base_materials = ["精粉", "海藻粉", "加工デンプン", "石灰"]
+        other_additives = [c for c in grp.columns if c not in ["period", "仕込回数", "製品仕込量", "歩留まり(倍)"] + base_materials]
+        
+        fig2 = go.Figure()
+        colors = ["#43a047", "#e53935", "#fb8c00", "#8e24aa", "#3949ab", "#1e88e5", "#039be5", "#00acc1", "#00897b", "#00838f"]
+        for i, mat in enumerate(base_materials + other_additives):
+            if mat in grp.columns:
+                fig2.add_trace(go.Bar(x=grp["period"], y=grp[mat], name=mat, marker_color=colors[i % len(colors)]))
+                
+        fig2.update_layout(barmode="stack", height=450, plot_bgcolor="#f8faff", yaxis=dict(title="使用量 (kg)"), legend=dict(orientation="h", y=-0.15))
+        st.plotly_chart(fig2, use_container_width=True)
+        
+    with tab3:
+        st.markdown('<div class="section-title">データ詳細・精粉に対する添加物比率(%)</div>', unsafe_allow_html=True)
+        st.info("※ 精粉を100%とした場合の、各添加物の使用比率を検証できます（レシピのブレや過剰添加の確認用）。")
+        ratio_df = grp[["period", "仕込回数", "製品仕込量", "精粉", "歩留まり(倍)"]].copy()
+        for mat in base_materials[1:] + other_additives:
+            if mat in grp.columns:
+                ratio_df[f"{mat} 比率(%)"] = (grp[mat] / grp["精粉"].replace(0, float("nan")) * 100).round(2)
+        st.dataframe(ratio_df, use_container_width=True)
+        st.markdown("##### 実数データ")
+        format_dict = {c: "{:.1f}" for c in grp.columns if c not in ["period", "仕込回数"]}
+        st.dataframe(grp.style.format(format_dict), use_container_width=True)
 
 # ════════════════════════════════════════════════════════════════
 elif page == "⚙️ マスター設定":
