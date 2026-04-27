@@ -4,6 +4,16 @@ import pandas as pd
 import plotly.graph_objects as go
 import json
 from datetime import datetime, date, timedelta
+import traceback
+
+# 画像処理用ライブラリ
+try:
+    from PIL import Image
+    import base64
+    from io import BytesIO
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
 
 st.set_page_config(page_title="原料管理ERP", page_icon="🏭", layout="wide", initial_sidebar_state="expanded")
 
@@ -13,12 +23,12 @@ st.markdown("""
 *, html, body, [class*="css"] { font-family: 'Noto Sans JP', sans-serif; }
 section[data-testid="stSidebar"] { background: #0f172a !important; border-right: 1px solid #1e293b; }
 section[data-testid="stSidebar"] * { color: #cbd5e1 !important; }
-.main-header { display:flex; align-items:center; gap:14px; background: linear-gradient(135deg,#1e3a5f,#1565c0); padding:18px 24px; border-radius:14px; margin-bottom:22px; }
+.main-header { display:flex; align-items:center; gap:14px; background: linear-gradient(135deg,#1e3a5f,#1565c0); padding:18px 24px; border-radius:14px; margin-bottom:22px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);}
 .main-header h1 { color:#fff; font-size:1.6rem; font-weight:700; margin:0; }
 .main-header p  { color:#90caf9; font-size:0.85rem; margin:3px 0 0; }
 .kpi-card { background:#fff; border-radius:12px; padding:16px 18px; box-shadow:0 1px 6px rgba(0,0,0,.07); border-top:3px solid #1565c0; text-align:center; }
 .kpi-value { font-size:2rem; font-weight:700; color:#1a237e; line-height:1.15; }
-.kpi-label { font-size:.8rem; color:#78909c; margin-top:4px; }
+.kpi-label { font-size:.8rem; color:#78909c; margin-top:4px; font-weight:500;}
 .alert-ng { background:#fff3f3; border:1px solid #ffcdd2; border-left:4px solid #e53935; padding:10px 14px; border-radius:8px; color:#b71c1c; font-size:.88rem; font-weight:600; margin-bottom:8px; }
 .form-card { background:#f8faff; border:1px solid #dde6f5; border-radius:12px; padding:18px 20px; margin-bottom:14px; }
 .section-title { font-size:1rem; font-weight:700; color:#1a237e; border-left:4px solid #1565c0; padding-left:10px; margin:18px 0 10px; }
@@ -34,31 +44,34 @@ try:
     )
     SHEETS_OK = True
 except Exception as e:
-    SHEETS_OK, SHEETS_ERROR = False, str(e)
+    st.error(f"🚨 システム起動エラー\n\n```\n{traceback.format_exc()}\n```")
+    st.stop()
+
+def refresh():
+    st.cache_data.clear()
+    st.rerun()
 
 with st.sidebar:
     st.markdown("### 🏭 原料管理 ERP")
-    if SHEETS_OK: st.markdown('<span style="color:#4caf50;font-size:.8rem">● Google Sheets 接続中</span>', unsafe_allow_html=True)
-    else: st.markdown('<span style="color:#ef5350;font-size:.8rem">● 接続エラー</span>', unsafe_allow_html=True)
+    st.markdown('<span style="color:#4caf50;font-size:.8rem">● データベース接続中</span>', unsafe_allow_html=True)
     st.markdown("---")
     page = st.radio("", ["🏠 ダッシュボード", "📦 入荷記録", "🧪 仕込み記録", "🏭 原料在庫", "🧹 資材在庫", "🔍 双方向トレース", "📊 生産分析", "⚙️ マスター設定"], label_visibility="collapsed")
-    
-    def refresh():
-        st.cache_data.clear()
-        st.rerun()
     if st.button("🔄 データ手動更新", use_container_width=True): refresh()
     st.caption(f"最終読込: {datetime.now().strftime('%H:%M')}")
 
-if not SHEETS_OK: st.error(f"接続エラー: {SHEETS_ERROR}"); st.stop()
-
-@st.cache_data(ttl=600, show_spinner="📡 データを読み込み中...")
+# ── データのキャッシュ（反映速度向上のため60秒に変更） ──
+@st.cache_data(ttl=60)
 def fetch_all(): 
     return (load_arrivals(), load_brewing(), load_adjustments(), load_supplies(), load_supply_logs(), 
             load_materials(), load_makers(), load_inspectors(), load_order_points())
 
-(arrivals, brewing, adjustments, supplies, supply_logs, materials, makers, inspectors, order_points) = fetch_all()
+try:
+    (arrivals, brewing, adjustments, supplies, supply_logs, materials, makers, inspectors, order_points) = fetch_all()
+except Exception as e:
+    st.error(f"🚨 データ取得エラー\n\n```\n{traceback.format_exc()}\n```")
+    st.stop()
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=60)
 def calc_inventory(arr_t, brew_t, adj_t):
     if not arr_t: return {}
     inv = {a["arrival_no"]: {
@@ -94,7 +107,7 @@ def calc_inventory(arr_t, brew_t, adj_t):
         v["current_kg"] = v["current_bags"] * bpk
     return inv
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=60)
 def calc_supply_inv(sup_t, log_t):
     if not sup_t: return []
     inv = {s["supply_id"]: {**s, "initial": float(s.get("initial_stock") or 0), "in_out": 0.0} for s in sup_t if s.get("supply_id")}
@@ -123,8 +136,8 @@ if page == "🏠 ダッシュボード":
         for al in alerts: st.markdown(f'<div class="alert-ng">{al}</div>', unsafe_allow_html=True)
     
     c1,c2,c3,c4 = st.columns(4)
-    week_brew = [b for b in brewing if b.get("brew_date", "") >= str(date.today() - timedelta(days=7))]
-    c1.markdown(f'<div class="kpi-card"><div class="kpi-value">{len([b for b in brewing if b.get("brew_date")==str(date.today())])}</div><div class="kpi-label">本日の仕込み回数</div></div>', unsafe_allow_html=True)
+    week_brew = [b for b in brewing if str(b.get("brew_date", "")) >= str(date.today() - timedelta(days=7))]
+    c1.markdown(f'<div class="kpi-card"><div class="kpi-value">{len([b for b in brewing if str(b.get("brew_date"))==str(date.today())])}</div><div class="kpi-label">本日の仕込み回数</div></div>', unsafe_allow_html=True)
     c2.markdown(f'<div class="kpi-card"><div class="kpi-value">{sum(float(b.get("brew_amount") or 0) for b in week_brew):,.0f}</div><div class="kpi-label">直近7日 仕込量(kg)</div></div>', unsafe_allow_html=True)
     c3.markdown(f'<div class="kpi-card"><div class="kpi-value">{sum(max(v["current_bags"],0) for v in inventory_data.values()):,.0f}</div><div class="kpi-label">全原料 総在庫(袋)</div></div>', unsafe_allow_html=True)
     c4.markdown(f'<div class="kpi-card" style="border-top-color:#e53935;"><div class="kpi-value" style="color:#c62828;">{len(alerts)}</div><div class="kpi-label">要発注アラート</div></div>', unsafe_allow_html=True)
@@ -387,8 +400,15 @@ elif page == "📊 生産分析":
         st.stop()
     
     df = pd.DataFrame(brewing)
+    
+    # 🌟 日付の強力パース（スプレッドシートの直接編集対応）
+    df["brew_date"] = df["brew_date"].astype(str).str.replace("/", "-").str.replace(".", "-")
     df["brew_date"] = pd.to_datetime(df["brew_date"], errors="coerce")
+    df = df.dropna(subset=["brew_date"])
+    
+    # 🌟 数値の強力パース（カンマ除去）
     for c in ["brew_amount", "material_kg", "seaweed_kg", "starch_kg", "lime_kg"]: 
+        df[c] = df[c].astype(str).str.replace(",", "").str.replace(" ", "")
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
     
     pt = st.radio("集計単位", ["日別", "月別", "年間"], horizontal=True, key="pt_sel")
@@ -396,7 +416,6 @@ elif page == "📊 生産分析":
     elif pt == "月別": df["period"] = df["brew_date"].dt.to_period("M").astype(str)
     else: df["period"] = df["brew_date"].dt.to_period("Y").astype(str)
     
-    # 基本原料の集計
     grp = df.groupby("period").agg(
         仕込回数=("no", "count"), 
         製品仕込量=("brew_amount", "sum"), 
@@ -406,7 +425,6 @@ elif page == "📊 生産分析":
         石灰=("lime_kg", "sum")
     ).reset_index()
     
-    # その他添加物の集計
     other_data = []
     for _, r in df.iterrows():
         period = r["period"]
@@ -414,7 +432,7 @@ elif page == "📊 生産分析":
             try:
                 for o in json.loads(r["other_additives"]):
                     name = o.get("name")
-                    kg = float(o.get("kg") or 0)
+                    kg = float(str(o.get("kg") or 0).replace(",",""))
                     if name and kg > 0:
                         other_data.append({"period": period, "name": name, "kg": kg})
             except: pass
@@ -467,6 +485,7 @@ elif page == "📊 生産分析":
 elif page == "⚙️ マスター設定":
     st.markdown('<div class="main-header"><div><h1>⚙️ マスター設定</h1></div></div>', unsafe_allow_html=True)
     t1, t2, t3, t4, t5 = st.tabs(["🧴 原料", "🏭 メーカー", "👤 担当者", "⚠️ 発注点", "🧹 資材(備品)登録"])
+    
     with t1:
         m1 = st.text_area("原料リスト (1行1件)", "\n".join(materials), height=200, key="mst_mat")
         if st.button("保存", key="b1"): save_materials([x.strip() for x in m1.splitlines() if x.strip()]); refresh()
@@ -483,10 +502,58 @@ elif page == "⚙️ マスター設定":
         if st.button("保存", key="b4"):
             save_order_points({r["原料名"]: r["発注点(袋)"] for _, r in e_op.iterrows() if float(r["発注点(袋)"]) > 0})
             refresh()
+            
     with t5:
-        st.info("衛生備品や梱包資材などのマスター登録を行います（画像URLはネット上のリンク）")
-        sup_df = pd.DataFrame(supplies) if supplies else pd.DataFrame(columns=["supply_id", "name", "category", "image_url", "initial_stock"])
-        e_sup = st.data_editor(sup_df, num_rows="dynamic", use_container_width=True, key="mst_sup")
-        if st.button("資材マスター保存", key="b5"):
-            save_supplies(e_sup.to_dict("records")); refresh()
+        st.info("衛生備品や梱包資材の登録を行います。画像はPC/スマホからアップロードするか、URLを指定してください。")
+        
+        # 🌟 PC・スマホからの画像アップロード対応 フォーム
+        with st.form("new_supply_form"):
+            sc1, sc2, sc3 = st.columns(3)
+            n_name  = sc1.text_input("資材名 ＊")
+            n_cat   = sc2.text_input("カテゴリ (例: 衛生, 梱包)")
+            n_stock = sc3.number_input("初期在庫", min_value=0, step=1)
+            
+            sc4, sc5 = st.columns(2)
+            n_file = sc4.file_uploader("📷 画像をアップロード", type=["png","jpg","jpeg"])
+            n_url  = sc5.text_input("🌐 または画像のURLを指定")
+            
+            if st.form_submit_button("➕ 新規資材を登録"):
+                if not n_name:
+                    st.error("資材名を入力してください")
+                else:
+                    img_val = "https://cdn-icons-png.flaticon.com/512/1243/1243324.png"
+                    if n_file and HAS_PIL:
+                        # 画像を圧縮してBase64に変換し、直接スプレッドシートに保存
+                        img = Image.open(n_file)
+                        img.thumbnail((150, 150))
+                        buf = BytesIO()
+                        img.save(buf, format="PNG")
+                        img_val = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"
+                    elif n_url:
+                        img_val = n_url
+                        
+                    current_supplies = supplies.copy()
+                    current_supplies.append({
+                        "supply_id": f"SUP-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                        "name": n_name, "category": n_cat, "image_url": img_val, "initial_stock": n_stock
+                    })
+                    save_supplies(current_supplies)
+                    st.success(f"{n_name} を登録しました！")
+                    refresh()
+
+        st.markdown("#### 登録済み資材の一覧・削除")
+        if supplies:
+            del_sup = st.selectbox("削除する資材を選択", ["─"] + [s["name"] for s in supplies])
+            if st.button("🗑 選択した資材を削除"):
+                if del_sup != "─":
+                    save_supplies([s for s in supplies if s["name"] != del_sup])
+                    st.success("削除しました")
+                    refresh()
+                    
+            df_s = pd.DataFrame(supplies)[["image_url", "name", "category", "initial_stock"]]
+            st.dataframe(
+                df_s,
+                column_config={"image_url": st.column_config.ImageColumn("画像")},
+                use_container_width=True, hide_index=True
+            )
 # --- END OF FILE app.py ---
