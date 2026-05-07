@@ -26,9 +26,9 @@ section[data-testid="stSidebar"] * { color: #cbd5e1 !important; }
 .main-header { display:flex; align-items:center; gap:14px; background: linear-gradient(135deg,#1e3a5f,#1565c0); padding:18px 24px; border-radius:14px; margin-bottom:22px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);}
 .main-header h1 { color:#fff; font-size:1.6rem; font-weight:700; margin:0; }
 .main-header p  { color:#90caf9; font-size:0.85rem; margin:3px 0 0; }
-.kpi-card { background:#fff; border-radius:12px; padding:16px 18px; box-shadow:0 1px 6px rgba(0,0,0,.07); border-top:3px solid #1565c0; text-align:center; }
-.kpi-value { font-size:2rem; font-weight:700; color:#1a237e; line-height:1.15; }
-.kpi-label { font-size:.8rem; color:#78909c; margin-top:4px; font-weight:500;}
+.kpi-card { background:#fff; border-radius:12px; padding:16px 18px; box-shadow:0 1px 6px rgba(0,0,0,.07); border-top:3px solid #1565c0; text-align:center; height:100%;}
+.kpi-value { font-size:2.2rem; font-weight:700; color:#1a237e; line-height:1.2; }
+.kpi-label { font-size:.85rem; color:#78909c; margin-top:4px; font-weight:500;}
 .alert-ng { background:#fff3f3; border:1px solid #ffcdd2; border-left:4px solid #e53935; padding:10px 14px; border-radius:8px; color:#b71c1c; font-size:.88rem; font-weight:600; margin-bottom:8px; display:flex; align-items:center;}
 .alert-warning { background:#fff8e1; border:1px solid #ffecb3; border-left:4px solid #ff9800; padding:10px 14px; border-radius:8px; color:#e65100; font-size:.88rem; font-weight:600; margin-bottom:8px; display:flex; align-items:center;}
 .form-card { background:#ffffff; border:1px solid #cfd8dc; border-radius:12px; padding:20px; margin-bottom:20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);}
@@ -137,23 +137,16 @@ for v in inventory_data.values(): type_totals[v["原料種別"]] = type_totals.g
 raw_alerts = [f"⚠️ 【原料アラート】 {m} の在庫（{c:,.1f}袋）が発注点（{order_points.get(m, 0):,.1f}袋）を下回っています！" for m, c in type_totals.items() if m in order_points and c < order_points[m]]
 sup_alerts = [f"📦 【資材アラート】 {s['資材名']} の在庫（{s['現在庫']:.0f}個）が発注点（{s['発注点']:.0f}個）を下回っています！" for s in supply_inventory if s.get("発注点", 0) > 0 and s["現在庫"] < s["発注点"]]
 
-# 🌟 ロット表示用ヘルパー関数（強力に拾い上げる）
 def get_fancy_lots(mat_keywords, maker_filter="すべて", current_val=""):
-    if isinstance(mat_keywords, str):
-        mat_keywords = [mat_keywords]
-    
+    if isinstance(mat_keywords, str): mat_keywords = [mat_keywords]
     arrs = []
     for a in arrivals:
         m_type = str(a.get("原料種別", ""))
         lot = str(a.get("ロットNo", "")).strip()
-        if lot:
-            if any(k in m_type for k in mat_keywords):
-                if maker_filter == "すべて" or str(a.get("メーカー", "")) == maker_filter:
-                    arrs.append(a)
-                    
+        if lot and any(k in m_type for k in mat_keywords):
+            if maker_filter == "すべて" or str(a.get("メーカー", "")) == maker_filter: arrs.append(a)
     opts = [f"{a['ロットNo']} | {a.get('メーカー','')} | 入荷:{str(a.get('入荷日',''))[-5:]}" for a in arrs]
     res = ["─"] + sorted(list(set(opts)), reverse=True)
-    
     if current_val and current_val != "─" and not any(current_val == opt.split(" | ")[0].strip() for opt in res):
         res.insert(1, current_val)
     return res
@@ -165,16 +158,81 @@ def extract_lot(fancy_str):
 # ════════════════════════════════════════════════════════════════
 if page == "🏠 ダッシュボード":
     st.markdown('<div class="main-header"><div><h1>📊 ERP ダッシュボード</h1><p>工場の稼働状況・在庫・アラートをリアルタイムで把握します</p></div></div>', unsafe_allow_html=True)
+    
+    # --- アラート表示 ---
     if raw_alerts or sup_alerts:
         for al in raw_alerts: st.markdown(f'<div class="alert-ng">{al}</div>', unsafe_allow_html=True)
         for al in sup_alerts: st.markdown(f'<div class="alert-warning">{al}</div>', unsafe_allow_html=True)
     
-    c1,c2,c3,c4 = st.columns(4)
-    week_brew = [b for b in brewing if str(b.get("仕込日", "")) >= str(date.today() - timedelta(days=7))]
-    c1.markdown(f'<div class="kpi-card"><div class="kpi-value">{len([b for b in brewing if str(b.get("仕込日"))==str(date.today())])}</div><div class="kpi-label">本日の仕込み回数</div></div>', unsafe_allow_html=True)
-    c2.markdown(f'<div class="kpi-card"><div class="kpi-value">{sum(float(b.get("仕込量(kg)") or 0) for b in week_brew):,.0f}</div><div class="kpi-label">直近7日 仕込量(kg)</div></div>', unsafe_allow_html=True)
-    c3.markdown(f'<div class="kpi-card"><div class="kpi-value">{sum(max(v["現在庫(袋)"],0) for v in inventory_data.values()):,.0f}</div><div class="kpi-label">全原料 総在庫(袋)</div></div>', unsafe_allow_html=True)
-    c4.markdown(f'<div class="kpi-card" style="border-top-color:#e53935;"><div class="kpi-value" style="color:#c62828;">{len(raw_alerts)+len(sup_alerts)}</div><div class="kpi-label">要発注アラート</div></div>', unsafe_allow_html=True)
+    # --- KPI計算 ---
+    today_str = str(date.today())
+    week_ago_str = str(date.today() - timedelta(days=7))
+    month_ago_str = str(date.today() - timedelta(days=30))
+    
+    today_brews = len([b for b in brewing if str(b.get("仕込日")) == today_str])
+    week_brew_list = [b for b in brewing if str(b.get("仕込日", "")) >= week_ago_str]
+    week_kg = sum(float(b.get("仕込量(kg)") or 0) for b in week_brew_list)
+    total_bags = sum(max(v["現在庫(袋)"], 0) for v in inventory_data.values())
+    
+    # ★ 新規追加: 平均こんにゃく粉使用量(袋) / 回 (直近30日)
+    month_brew_list = [b for b in brewing if str(b.get("仕込日", "")) >= month_ago_str]
+    if month_brew_list:
+        total_konjac_kg = sum(float(b.get("こんにゃく精粉(kg)") or 0) for b in month_brew_list)
+        avg_konjac_bags = (total_konjac_kg / 20.0) / len(month_brew_list)
+    else:
+        avg_konjac_bags = 0.0
+
+    # --- KPIカード描画 ---
+    c1, c2, c3, c4 = st.columns(4)
+    c1.markdown(f'<div class="kpi-card"><div class="kpi-value">{today_brews}</div><div class="kpi-label">本日の仕込み回数</div></div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="kpi-card"><div class="kpi-value">{week_kg:,.0f}</div><div class="kpi-label">直近7日 製品仕込量(kg)</div></div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="kpi-card"><div class="kpi-value">{avg_konjac_bags:,.1f}</div><div class="kpi-label">1回あたりの平均こんにゃく粉(袋)<br><span style="font-size:0.7rem;">※直近30日</span></div></div>', unsafe_allow_html=True)
+    c4.markdown(f'<div class="kpi-card"><div class="kpi-value">{total_bags:,.0f}</div><div class="kpi-label">全原料 総在庫(袋)</div></div>', unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # --- グラフとアクティビティ ---
+    col_left, col_right = st.columns([6, 4])
+    
+    with col_left:
+        st.markdown('<div class="section-title">📈 直近14日間の生産推移</div>', unsafe_allow_html=True)
+        if brewing:
+            df_b = pd.DataFrame(brewing)
+            df_b["仕込日"] = pd.to_datetime(df_b["仕込日"].astype(str).str.replace("/", "-").str.replace(".", "-"), errors="coerce")
+            df_b["仕込量(kg)"] = pd.to_numeric(df_b["仕込量(kg)"], errors="coerce").fillna(0)
+            df_b["こんにゃく精粉(kg)"] = pd.to_numeric(df_b["こんにゃく精粉(kg)"], errors="coerce").fillna(0)
+            df_b["こんにゃく粉(袋)"] = df_b["こんにゃく精粉(kg)"] / 20.0
+            
+            df_14 = df_b[df_b["仕込日"] >= pd.to_datetime(date.today() - timedelta(days=14))]
+            daily = df_14.groupby("仕込日").agg({"仕込量(kg)":"sum", "こんにゃく粉(袋)":"sum"}).reset_index()
+            
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=daily["仕込日"], y=daily["こんにゃく粉(袋)"], name="こんにゃく粉(袋)", marker_color="#43a047", yaxis="y"))
+            fig.add_trace(go.Scatter(x=daily["仕込日"], y=daily["仕込量(kg)"], mode='lines+markers', name="製品仕込量(kg)", line=dict(color="#1565c0", width=3), yaxis="y2"))
+            
+            fig.update_layout(
+                height=350, margin=dict(l=20,r=20,t=20,b=20), plot_bgcolor="#f8faff", paper_bgcolor="#fff",
+                yaxis=dict(title="こんにゃく粉(袋)"),
+                yaxis2=dict(title="製品仕込量(kg)", overlaying="y", side="right", showgrid=False),
+                legend=dict(orientation="h", y=-0.15)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("データがありません")
+            
+    with col_right:
+        st.markdown('<div class="section-title">⏱️ 最新アクティビティ</div>', unsafe_allow_html=True)
+        tab_a, tab_b = st.tabs(["🧪 最新の仕込み", "📦 最新の入荷"])
+        with tab_a:
+            if brewing:
+                df_sh = pd.DataFrame(brewing)[["仕込日", "品名", "主原料ロット", "仕込量(kg)"]][::-1].head(8)
+                st.dataframe(df_sh, use_container_width=True, hide_index=True)
+            else: st.write("データなし")
+        with tab_b:
+            if arrivals:
+                df_ar = pd.DataFrame(arrivals)[["入荷日", "原料種別", "ロットNo", "袋数"]][::-1].head(8)
+                st.dataframe(df_ar, use_container_width=True, hide_index=True)
+            else: st.write("データなし")
 
 # ════════════════════════════════════════════════════════════════
 elif page == "📦 入荷記録":
@@ -232,8 +290,7 @@ elif page == "📦 入荷記録":
             if edit_target:
                 td = next((a for a in arrivals if a.get("入荷No") == edit_target), None)
                 e_date = st.text_input("入荷日", value=td.get("入荷日",""), key="ea_date")
-                e_maker = st.selectbox("メーカー", makers + ["その他"], index=makers.index(td.get("メーカー")) if td.get("メーカー") in makers else len(makers), key="ea_maker")
-                if e_maker == "その他": e_maker = st.text_input("メーカー直接入力", value=td.get("メーカー",""), key="ea_maker_free")
+                e_maker = st.text_input("メーカー", value=td.get("メーカー",""), key="ea_maker")
                 e_lot = st.text_input("ロットNo", value=td.get("ロットNo",""), key="ea_lot")
                 e_mat = st.selectbox("原料種別", materials, index=materials.index(td.get("原料種別")) if td.get("原料種別") in materials else 0, key="ea_mat")
                 e_bags = st.number_input("袋数", value=int(td.get("袋数") or 0), key="ea_bags")
@@ -258,7 +315,6 @@ elif page == "🧪 仕込み記録":
         
         st.markdown('<div class="form-card"><div class="section-title">⚗️ 主原料（こんにゃく粉）</div>', unsafe_allow_html=True)
         cm1, cm2, cm3 = st.columns(3)
-        # 「精粉」から「こんにゃく粉」に表記を統一
         sf_makers = ["すべて"] + sorted(list(set(a.get("メーカー","") for a in arrivals if any(k in a.get("原料種別","") for k in ["こんにゃく粉", "精粉", "粉", "マンナン"]))))
         sel_sf_maker = cm1.selectbox("🔍 こんにゃく粉メーカーで絞り込み", sf_makers, key="filter_maker")
         
@@ -285,7 +341,6 @@ elif page == "🧪 仕込み記録":
         st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown('<div class="form-card"><div class="section-title">🧂 その他添加物</div>', unsafe_allow_html=True)
-        st.caption("原料を選ぶと、その原料の入荷ロット（メーカー・日付付き）が自動でドロップダウンに表示されます。")
         
         if "other_rows" not in st.session_state: st.session_state.other_rows = []
         for i, row in enumerate(st.session_state.other_rows):
@@ -330,8 +385,7 @@ elif page == "🧪 仕込み記録":
                 td = next((b for b in brewing if str(b.get("仕込No")) == str(t_no)), None)
                 
                 eb_name = st.text_input("品名", value=td.get("品名",""), key="eb_name")
-                
-                eb_lot_disp = st.selectbox("こんにゃく粉ロットNo", get_fancy_lots(["こんにゃく粉","精粉","粉","マンナン"], current_val=td.get("主原料ロット","")), key="eb_lot")
+                eb_lot_disp = st.selectbox("主原料ロットNo", get_fancy_lots(["こんにゃく粉","精粉","粉","マンナン"], current_val=td.get("主原料ロット","")), key="eb_lot")
                 eb_sl_disp = st.selectbox("海藻粉ロットNo", get_fancy_lots(["海藻"], current_val=td.get("海藻粉ロット","")), key="eb_slot")
                 eb_stl_disp = st.selectbox("デンプンロットNo", get_fancy_lots(["デンプン"], current_val=td.get("デンプンロット","")), key="eb_stlot")
                 
@@ -489,7 +543,6 @@ elif page == "📈 統計・比較分析":
         df[c] = df[c].astype(str).str.replace(",", "").str.replace(" ", "")
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
         
-    # こんにゃく精粉という内部列名を、分析グラフ用に「こんにゃく粉」に変換
     df["こんにゃく粉(袋)"] = (df["こんにゃく精粉(kg)"] / 20.0).round(1)
     df.rename(columns={"こんにゃく精粉(kg)": "こんにゃく粉(kg)"}, inplace=True)
     
@@ -588,7 +641,6 @@ elif page == "📈 統計・比較分析":
         for mat in base_additives + other_additives:
             if mat in grp.columns:
                 ratio_df[f"{mat} 比率(%)"] = (grp[mat] / grp["こんにゃく粉_kg"].replace(0, float("nan")) * 100).round(2)
-        
         st.dataframe(ratio_df.sort_values("period", ascending=False), use_container_width=True)
 
 # ════════════════════════════════════════════════════════════════
