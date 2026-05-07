@@ -31,8 +31,8 @@ section[data-testid="stSidebar"] * { color: #cbd5e1 !important; }
 .kpi-label { font-size:.8rem; color:#78909c; margin-top:4px; font-weight:500;}
 .alert-ng { background:#fff3f3; border:1px solid #ffcdd2; border-left:4px solid #e53935; padding:10px 14px; border-radius:8px; color:#b71c1c; font-size:.88rem; font-weight:600; margin-bottom:8px; display:flex; align-items:center;}
 .alert-warning { background:#fff8e1; border:1px solid #ffecb3; border-left:4px solid #ff9800; padding:10px 14px; border-radius:8px; color:#e65100; font-size:.88rem; font-weight:600; margin-bottom:8px; display:flex; align-items:center;}
-.form-card { background:#f8faff; border:1px solid #dde6f5; border-radius:12px; padding:18px 20px; margin-bottom:14px; }
-.section-title { font-size:1rem; font-weight:700; color:#1a237e; border-left:4px solid #1565c0; padding-left:10px; margin:18px 0 10px; }
+.form-card { background:#ffffff; border:1px solid #cfd8dc; border-radius:12px; padding:20px; margin-bottom:20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);}
+.section-title { font-size:1.05rem; font-weight:700; color:#1565c0; border-bottom:2px solid #e3f2fd; padding-bottom:6px; margin-bottom:16px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -137,20 +137,30 @@ for v in inventory_data.values(): type_totals[v["原料種別"]] = type_totals.g
 raw_alerts = [f"⚠️ 【原料アラート】 {m} の在庫（{c:,.1f}袋）が発注点（{order_points.get(m, 0):,.1f}袋）を下回っています！" for m, c in type_totals.items() if m in order_points and c < order_points[m]]
 sup_alerts = [f"📦 【資材アラート】 {s['資材名']} の在庫（{s['現在庫']:.0f}個）が発注点（{s['発注点']:.0f}個）を下回っています！" for s in supply_inventory if s.get("発注点", 0) > 0 and s["現在庫"] < s["発注点"]]
 
-# 🌟 ロット表示用ヘルパー関数
-def get_fancy_lots(mat_type, current_val=""):
-    """入荷記録から該当原料のロットを「ロットNo (メーカー / 入荷日)」の形式で抽出"""
-    arrs = [a for a in arrivals if mat_type in a.get("原料種別","") and str(a.get("ロットNo","")).strip()]
-    opts = [f"{a['ロットNo']} ({a['メーカー']} / 入荷:{a['入荷日'][-5:]})" for a in arrs]
+# 🌟 ロット表示用ヘルパー関数（強力に拾い上げる）
+def get_fancy_lots(mat_keywords, maker_filter="すべて", current_val=""):
+    if isinstance(mat_keywords, str):
+        mat_keywords = [mat_keywords]
+    
+    arrs = []
+    for a in arrivals:
+        m_type = str(a.get("原料種別", ""))
+        lot = str(a.get("ロットNo", "")).strip()
+        if lot:
+            if any(k in m_type for k in mat_keywords):
+                if maker_filter == "すべて" or str(a.get("メーカー", "")) == maker_filter:
+                    arrs.append(a)
+                    
+    opts = [f"{a['ロットNo']} | {a.get('メーカー','')} | 入荷:{str(a.get('入荷日',''))[-5:]}" for a in arrs]
     res = ["─"] + sorted(list(set(opts)), reverse=True)
-    # 既存のデータ（履歴編集時など）がリストになければそのまま追加
-    if current_val and current_val != "─" and not any(current_val == opt.split(" ")[0] for opt in res):
+    
+    if current_val and current_val != "─" and not any(current_val == opt.split(" | ")[0].strip() for opt in res):
         res.insert(1, current_val)
     return res
 
 def extract_lot(fancy_str):
     if not fancy_str or fancy_str == "─": return "─"
-    return fancy_str.split(" ")[0]
+    return fancy_str.split(" | ")[0].strip()
 
 # ════════════════════════════════════════════════════════════════
 if page == "🏠 ダッシュボード":
@@ -172,7 +182,7 @@ elif page == "📦 入荷記録":
     t1, t2, t3 = st.tabs(["➕ 新規登録", "📋 履歴一覧", "✏️ 既存データ編集"])
     
     with t1:
-        st.markdown('<div class="form-card">', unsafe_allow_html=True)
+        st.markdown('<div class="form-card"><div class="section-title">📦 基本情報</div>', unsafe_allow_html=True)
         c1,c2,c3 = st.columns(3)
         new_no = next_arrival_no(arrivals)
         c1.text_input("入荷No", value=new_no, disabled=True, key="new_arr_no")
@@ -185,8 +195,10 @@ elif page == "📦 入荷記録":
         m_type = c5.selectbox("原料種別", materials, key="new_arr_mat")
         bags = c6.number_input("袋数", min_value=0, step=1, value=None, key="new_arr_bags")
         b_per = st.number_input("1袋重量(kg)", value=20.0, step=0.5, key="new_arr_bper")
-        st.markdown('</div><div class="form-card"><div class="section-title">🔍 品質検査</div>', unsafe_allow_html=True)
+        st.info(f"💡 自動計算 総量: **{(bags or 0) * b_per:,.1f} kg**")
+        st.markdown('</div>', unsafe_allow_html=True)
         
+        st.markdown('<div class="form-card"><div class="section-title">🔍 品質検査</div>', unsafe_allow_html=True)
         ck1, ck2 = st.columns(2)
         app    = ck1.selectbox("① 外観検査", ["OK（正常）", "NG（異常あり）", "要確認"], key="new_arr_app")
         c_name = ck1.selectbox("② 品名・規格確認", ["OK（一致）", "NG（不一致）"], key="new_arr_name")
@@ -236,40 +248,51 @@ elif page == "🧪 仕込み記録":
     t1, t2, t3 = st.tabs(["➕ 新規登録", "📋 履歴一覧", "✏️ 既存データ編集"])
     
     with t1:
-        st.markdown('<div class="form-card">', unsafe_allow_html=True)
-        c1,c2,c3 = st.columns(3)
+        st.markdown('<div class="form-card"><div class="section-title">📋 製品情報</div>', unsafe_allow_html=True)
+        c1,c2,c3,c4 = st.columns(4)
         b_date = c1.date_input("仕込日", key="new_brw_date")
         p_name = c2.text_input("品名 ＊", key="new_brw_name")
-        b_maker = c3.selectbox("メーカー", makers, key="new_brw_maker")
+        b_maker = c3.selectbox("得意先・メーカー", makers, key="new_brw_maker")
+        b_amount = c4.number_input("製品仕込量(kg) ＊", min_value=0.0, value=None, step=10.0, key="new_brw_amt")
+        st.markdown('</div>', unsafe_allow_html=True)
         
-        c4, c5 = st.columns(2)
-        lot_no_disp = c4.selectbox("主原料（こんにゃく精粉）ロットNo ＊", get_fancy_lots("精粉"), key="new_brw_lot")
-        lot_no_b = extract_lot(lot_no_disp)
-        b_amount = c5.number_input("仕込量(kg) ＊", min_value=0.0, value=None, step=10.0, key="new_brw_amt")
-        st.markdown('</div><div class="form-card"><div class="section-title">⚗️ 基本原料</div>', unsafe_allow_html=True)
+        st.markdown('<div class="form-card"><div class="section-title">⚗️ 主原料（こんにゃく粉）</div>', unsafe_allow_html=True)
+        cm1, cm2, cm3 = st.columns(3)
+        # 「精粉」から「こんにゃく粉」に表記を統一
+        sf_makers = ["すべて"] + sorted(list(set(a.get("メーカー","") for a in arrivals if any(k in a.get("原料種別","") for k in ["こんにゃく粉", "精粉", "粉", "マンナン"]))))
+        sel_sf_maker = cm1.selectbox("🔍 こんにゃく粉メーカーで絞り込み", sf_makers, key="filter_maker")
         
-        c6,c7,c8 = st.columns(3)
-        mat_kg = c6.number_input("こんにゃく精粉 使用量(kg)", min_value=0.0, value=None, format="%.2f", key="new_brw_mkg")
+        lot_no_b_disp = cm2.selectbox("こんにゃく粉 ロットNo ＊", get_fancy_lots(["こんにゃく粉", "精粉", "粉", "マンナン"], maker_filter=sel_sf_maker), key="new_brw_lot")
+        lot_no_b = extract_lot(lot_no_b_disp)
+        mat_kg = cm3.number_input("こんにゃく粉 使用量(kg)", min_value=0.0, value=None, format="%.2f", key="new_brw_mkg")
+        st.markdown('</div>', unsafe_allow_html=True)
         
-        sea_lot_disp = c6.selectbox("海藻粉 ロット", get_fancy_lots("海藻"), key="new_brw_sl")
+        st.markdown('<div class="form-card"><div class="section-title">🌿 副原料（海藻・デンプン・石灰）</div>', unsafe_allow_html=True)
+        r1, r2, r3 = st.columns(3)
+        sea_lot_disp = r1.selectbox("海藻粉 ロット", get_fancy_lots(["海藻", "青海苔", "ひじき", "アラメ"]), key="new_brw_sl")
         sea_lot = extract_lot(sea_lot_disp)
-        sea_kg = c6.number_input("海藻粉 使用量(kg)", min_value=0.0, value=None, format="%.2f", key="new_brw_skg")
+        sea_type = r1.selectbox("海藻粉 種別", ["─", "青海苔", "ひじき", "アラメ", "その他"], key="new_brw_s_type")
+        sea_kg = r1.number_input("海藻粉 使用量(kg)", min_value=0.0, value=None, format="%.2f", key="new_brw_skg")
         
-        sta_lot_disp = c7.selectbox("加工デンプン ロット", get_fancy_lots("デンプン"), key="new_brw_stl")
+        sta_lot_disp = r2.selectbox("加工デンプン ロット", get_fancy_lots(["デンプン", "でんぷん", "澱粉"]), key="new_brw_stl")
         sta_lot = extract_lot(sta_lot_disp)
-        sta_kg = c7.number_input("デンプン 使用量(kg)", min_value=0.0, value=None, format="%.2f", key="new_brw_stkg")
-        sta_type = c7.selectbox("デンプン種別", ["─","ゆり8","VA70","その他"], key="new_brw_stt")
+        sta_type = r2.selectbox("デンプン 種別", ["─","ゆり8","VA70","その他"], key="new_brw_stt")
+        sta_kg = r2.number_input("デンプン 使用量(kg)", min_value=0.0, value=None, format="%.2f", key="new_brw_stkg")
         
-        lime_kg = c8.number_input("石灰(kg)", min_value=0.0, value=None, format="%.2f", key="new_brw_lkg")
-        lime_w = c8.number_input("石灰水(L)", min_value=0.0, value=None, format="%.1f", key="new_brw_lw")
-        st.markdown('</div><div class="form-card"><div class="section-title">🧂 その他添加物</div>', unsafe_allow_html=True)
+        r3.markdown("<br>", unsafe_allow_html=True)
+        lime_kg = r3.number_input("石灰(kg)", min_value=0.0, value=None, format="%.2f", key="new_brw_lkg")
+        lime_w = r3.number_input("石灰水(L)", min_value=0.0, value=None, format="%.1f", key="new_brw_lw")
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown('<div class="form-card"><div class="section-title">🧂 その他添加物</div>', unsafe_allow_html=True)
+        st.caption("原料を選ぶと、その原料の入荷ロット（メーカー・日付付き）が自動でドロップダウンに表示されます。")
         
         if "other_rows" not in st.session_state: st.session_state.other_rows = []
         for i, row in enumerate(st.session_state.other_rows):
             oc1, oc2, oc3, oc4 = st.columns([3,4,2,1])
             sel_mat = oc1.selectbox("原料名", materials, key=f"mat_{i}", index=materials.index(row["name"]) if row["name"] in materials else 0)
             
-            sel_lot_disp = oc2.selectbox("ロットNo", get_fancy_lots(sel_mat, row.get("lot")), key=f"lot_{i}")
+            sel_lot_disp = oc2.selectbox("ロットNo", get_fancy_lots([sel_mat], current_val=row.get("lot")), key=f"lot_{i}")
             sel_lot = extract_lot(sel_lot_disp)
             
             sel_kg = oc3.number_input("使用量(kg)", min_value=0.0, format="%.2f", key=f"kg_{i}", value=float(row["kg"]) if row["kg"] else None)
@@ -280,15 +303,16 @@ elif page == "🧪 仕込み記録":
         st.markdown('</div>', unsafe_allow_html=True)
         
         if st.button("✅ 仕込み記録を保存", type="primary", use_container_width=True, key="save_brw_btn"):
-            if not p_name or lot_no_b == "─" or not b_amount: st.error("品名、主ロット、仕込量は必須です")
+            if not p_name or lot_no_b == "─" or not b_amount: st.error("品名、主原料ロット、仕込量は必須です")
             else:
                 others_json = json.dumps([r for r in st.session_state.other_rows if r["kg"] > 0], ensure_ascii=False)
                 append_brewing({
                     "仕込No": next_brewing_no(brewing), "仕込日": str(b_date), "品名": p_name, "メーカー": b_maker, 
-                    "主原料ロット": lot_no_b, "海藻粉ロット": sea_lot, "デンプンロット": sta_lot, 
-                    "仕込量(kg)": b_amount or 0.0, "こんにゃく精粉(kg)": mat_kg or 0.0, "海藻粉(kg)": sea_kg or 0.0, 
-                    "デンプン(kg)": sta_kg or 0.0, "デンプン種別": sta_type, "石灰(kg)": lime_kg or 0.0, "石灰水(L)": lime_w or 0.0, 
-                    "その他添加物": others_json, "登録日時": datetime.now().isoformat()
+                    "主原料ロット": lot_no_b, "仕込量(kg)": b_amount or 0.0, "こんにゃく精粉(kg)": mat_kg or 0.0, 
+                    "海藻粉(kg)": sea_kg or 0.0, "海藻粉ロット": sea_lot, "海藻粉種別": sea_type,
+                    "デンプン(kg)": sta_kg or 0.0, "デンプンロット": sta_lot, "デンプン種別": sta_type, 
+                    "石灰(kg)": lime_kg or 0.0, "石灰水(L)": lime_w or 0.0, "その他添加物": others_json, 
+                    "登録日時": datetime.now().isoformat()
                 })
                 st.session_state.other_rows = []
                 st.success("保存しました！"); refresh()
@@ -307,12 +331,13 @@ elif page == "🧪 仕込み記録":
                 
                 eb_name = st.text_input("品名", value=td.get("品名",""), key="eb_name")
                 
-                eb_lot_disp = st.selectbox("主原料ロットNo", get_fancy_lots("精粉", td.get("主原料ロット","")), key="eb_lot")
-                eb_sl_disp = st.selectbox("海藻粉ロットNo", get_fancy_lots("海藻", td.get("海藻粉ロット","")), key="eb_slot")
-                eb_stl_disp = st.selectbox("デンプンロットNo", get_fancy_lots("デンプン", td.get("デンプンロット","")), key="eb_stlot")
+                eb_lot_disp = st.selectbox("こんにゃく粉ロットNo", get_fancy_lots(["こんにゃく粉","精粉","粉","マンナン"], current_val=td.get("主原料ロット","")), key="eb_lot")
+                eb_sl_disp = st.selectbox("海藻粉ロットNo", get_fancy_lots(["海藻"], current_val=td.get("海藻粉ロット","")), key="eb_slot")
+                eb_stl_disp = st.selectbox("デンプンロットNo", get_fancy_lots(["デンプン"], current_val=td.get("デンプンロット","")), key="eb_stlot")
                 
                 eb_amt = st.number_input("仕込量(kg)", value=float(td.get("仕込量(kg)") or 0), key="eb_amt")
-                eb_mat = st.number_input("こんにゃく精粉(kg)", value=float(td.get("こんにゃく精粉(kg)") or 0), key="eb_mat")
+                eb_mat = st.number_input("こんにゃく粉(kg)", value=float(td.get("こんにゃく精粉(kg)") or 0), key="eb_mat")
+                
                 if st.button("💾 変更を上書き保存", type="primary", key="eb_save"):
                     td.update({
                         "品名": eb_name, 
@@ -439,7 +464,7 @@ elif page == "🔍 双方向トレース":
                 for tb in target_brews:
                     st.markdown(f"### 🧪 仕込No: {tb.get('仕込No')} - {tb.get('仕込日')} 【{tb.get('品名')}】")
                     used_lots = []
-                    for k, n in [("主原料ロット","こんにゃく精粉"), ("海藻粉ロット","海藻粉"), ("デンプンロット","加工デンプン")]:
+                    for k, n in [("主原料ロット","こんにゃく粉"), ("海藻粉ロット","海藻粉"), ("デンプンロット","加工デンプン")]:
                         if tb.get(k) and tb.get(k) != "─": used_lots.append({"役割": n, "ロットNo": tb.get(k)})
                     if tb.get("その他添加物"):
                         try:
@@ -452,7 +477,7 @@ elif page == "🔍 双方向トレース":
 
 # ════════════════════════════════════════════════════════════════
 elif page == "📈 統計・比較分析":
-    st.markdown('<div class="main-header"><div><h1>📈 統計・比較分析</h1><p>こんにゃく精粉(袋換算)と添加物の使用量推移と前期間比較</p></div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><div><h1>📈 統計・比較分析</h1><p>こんにゃく粉(袋換算)と添加物の使用量推移と前期間比較</p></div></div>', unsafe_allow_html=True)
     if not brewing: st.info("データがありません"); st.stop()
     
     df = pd.DataFrame(brewing)
@@ -464,7 +489,9 @@ elif page == "📈 統計・比較分析":
         df[c] = df[c].astype(str).str.replace(",", "").str.replace(" ", "")
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
         
-    df["こんにゃく精粉(袋)"] = (df["こんにゃく精粉(kg)"] / 20.0).round(1)
+    # こんにゃく精粉という内部列名を、分析グラフ用に「こんにゃく粉」に変換
+    df["こんにゃく粉(袋)"] = (df["こんにゃく精粉(kg)"] / 20.0).round(1)
+    df.rename(columns={"こんにゃく精粉(kg)": "こんにゃく粉(kg)"}, inplace=True)
     
     pt = st.radio("集計単位を選択", ["日別", "月別", "年別"], horizontal=True, key="pt_sel")
     if pt == "日別": df["period"] = df["仕込日"].dt.date.astype(str)
@@ -474,8 +501,8 @@ elif page == "📈 統計・比較分析":
     grp = df.groupby("period").agg(
         仕込回数=("仕込No", "count"), 
         製品仕込量=("仕込量(kg)", "sum"), 
-        こんにゃく精粉_袋=("こんにゃく精粉(袋)", "sum"),
-        こんにゃく精粉_kg=("こんにゃく精粉(kg)", "sum"),
+        こんにゃく粉_袋=("こんにゃく粉(袋)", "sum"),
+        こんにゃく粉_kg=("こんにゃく粉(kg)", "sum"),
         海藻粉=("海藻粉(kg)", "sum"),
         加工デンプン=("デンプン(kg)", "sum"),
         石灰=("石灰(kg)", "sum")
@@ -498,17 +525,19 @@ elif page == "📈 統計・比較分析":
         others_pivot = df_others.groupby(["period", "name"])["kg"].sum().unstack(fill_value=0).reset_index()
         grp = pd.merge(grp, others_pivot, on="period", how="left").fillna(0)
         
-    grp["歩留まり(倍)"] = (grp["製品仕込量"] / grp["こんにゃく精粉_kg"].replace(0, float("nan"))).round(2)
+    grp["歩留まり(倍)"] = (grp["製品仕込量"] / grp["こんにゃく粉_kg"].replace(0, float("nan"))).round(2)
     
     st.markdown('<div class="section-title">📊 直近実績 と 前期間比較</div>', unsafe_allow_html=True)
     if len(grp) >= 2:
         curr = grp.iloc[-1]
         prev = grp.iloc[-2]
+        
         m1, m2, m3, m4 = st.columns(4)
         def _delta(c, p): return f"{(c - p) / p * 100:+.1f}%" if p else "N/A"
+        
         m1.metric(f"最新仕込回数 ({curr['period']})", f"{curr['仕込回数']:.0f}回", _delta(curr['仕込回数'], prev['仕込回数']))
         m2.metric("製品仕込量", f"{curr['製品仕込量']:,.0f} kg", _delta(curr['製品仕込量'], prev['製品仕込量']))
-        m3.metric("こんにゃく精粉(袋)", f"{curr['こんにゃく精粉_袋']:,.1f} 袋", _delta(curr['こんにゃく精粉_袋'], prev['こんにゃく精粉_袋']))
+        m3.metric("こんにゃく粉(袋)", f"{curr['こんにゃく粉_袋']:,.1f} 袋", _delta(curr['こんにゃく粉_袋'], prev['こんにゃく粉_袋']))
         m4.metric("歩留まり", f"{curr['歩留まり(倍)']:.2f} 倍", f"{curr['歩留まり(倍)'] - prev['歩留まり(倍)']:+.2f}")
     else:
         st.info("比較するための過去データが不足しています。")
@@ -518,15 +547,21 @@ elif page == "📈 統計・比較分析":
     
     with tab1:
         fig1 = go.Figure()
-        fig1.add_trace(go.Bar(x=grp["period"], y=grp["こんにゃく精粉_袋"], name="こんにゃく精粉(袋)", marker_color="#43a047"))
+        fig1.add_trace(go.Bar(x=grp["period"], y=grp["こんにゃく粉_袋"], name="こんにゃく粉(袋)", marker_color="#43a047"))
         fig1.add_trace(go.Bar(x=grp["period"], y=grp["製品仕込量"], name="製品仕込量(kg)", marker_color="#1565c0", yaxis="y2"))
         fig1.add_trace(go.Scatter(x=grp["period"], y=grp["歩留まり(倍)"], name="歩留まり(倍)", yaxis="y3", mode="lines+markers", line=dict(color="#f57f17", width=3)))
-        fig1.update_layout(barmode="group", height=450, plot_bgcolor="#f8faff", yaxis=dict(title="こんにゃく精粉 (袋)"), yaxis2=dict(title="製品仕込量 (kg)", overlaying="y", side="right", showgrid=False), yaxis3=dict(title="歩留まり(倍)", overlaying="y", side="right", position=0.95, showgrid=False), legend=dict(orientation="h", y=-0.15))
+        fig1.update_layout(
+            barmode="group", height=450, plot_bgcolor="#f8faff",
+            yaxis=dict(title="こんにゃく粉 (袋)"),
+            yaxis2=dict(title="製品仕込量 (kg)", overlaying="y", side="right", showgrid=False),
+            yaxis3=dict(title="歩留まり(倍)", overlaying="y", side="right", position=0.95, showgrid=False),
+            legend=dict(orientation="h", y=-0.15)
+        )
         st.plotly_chart(fig1, use_container_width=True)
         
     with tab2:
         base_additives = ["海藻粉", "加工デンプン", "石灰"]
-        other_additives = [c for c in grp.columns if c not in ["period", "仕込回数", "製品仕込量", "歩留まり(倍)", "こんにゃく精粉_袋", "こんにゃく精粉_kg"] + base_additives]
+        other_additives = [c for c in grp.columns if c not in ["period", "仕込回数", "製品仕込量", "歩留まり(倍)", "こんにゃく粉_袋", "こんにゃく粉_kg"] + base_additives]
         col_g1, col_g2 = st.columns([7, 3])
         with col_g1:
             fig2 = go.Figure()
@@ -536,6 +571,7 @@ elif page == "📈 統計・比較分析":
                     fig2.add_trace(go.Bar(x=grp["period"], y=grp[mat], name=mat, marker_color=colors[i % len(colors)]))
             fig2.update_layout(barmode="stack", height=400, plot_bgcolor="#f8faff", yaxis=dict(title="使用量 (kg)"), legend=dict(orientation="h", y=-0.2))
             st.plotly_chart(fig2, use_container_width=True)
+            
         with col_g2:
             if len(grp) > 0:
                 latest = grp.iloc[-1]
@@ -547,11 +583,12 @@ elif page == "📈 統計・比較分析":
                     st.plotly_chart(fig_pie, use_container_width=True)
         
     with tab3:
-        st.info("※ こんにゃく精粉の重量(kg)を100%とした場合の、各添加物の使用比率です。毎日のレシピのブレを確認できます。")
-        ratio_df = grp[["period", "仕込回数", "製品仕込量", "こんにゃく精粉_袋", "歩留まり(倍)"]].copy()
+        st.info("※ こんにゃく粉の重量(kg)を100%とした場合の、各添加物の使用比率です。毎日のレシピのブレを確認できます。")
+        ratio_df = grp[["period", "仕込回数", "製品仕込量", "こんにゃく粉_袋", "歩留まり(倍)"]].copy()
         for mat in base_additives + other_additives:
             if mat in grp.columns:
-                ratio_df[f"{mat} 比率(%)"] = (grp[mat] / grp["こんにゃく精粉_kg"].replace(0, float("nan")) * 100).round(2)
+                ratio_df[f"{mat} 比率(%)"] = (grp[mat] / grp["こんにゃく粉_kg"].replace(0, float("nan")) * 100).round(2)
+        
         st.dataframe(ratio_df.sort_values("period", ascending=False), use_container_width=True)
 
 # ════════════════════════════════════════════════════════════════
