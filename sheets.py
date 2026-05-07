@@ -8,6 +8,7 @@ from datetime import datetime
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
 COLS_ARR = ["入荷No", "入荷日", "メーカー", "ロットNo", "原料種別", "袋数", "1袋重量(kg)", "総量(kg)", "搬入温度", "外観", "臭い", "包装", "色調", "異物", "水分", "賞味期限", "異常内容", "担当者", "備考", "登録日時", "品名・規格確認"]
+# ※スプレッドシート側の列名は過去のデータと連携させるため「こんにゃく精粉」のままにしています。画面上は「こんにゃく粉」になります。
 COLS_BRW = ["仕込No", "仕込日", "品名", "メーカー", "主原料ロット", "仕込量(kg)", "こんにゃく精粉(kg)", "海藻粉(kg)", "海藻粉ロット", "デンプン(kg)", "デンプンロット", "デンプン種別", "石灰(kg)", "石灰水(L)", "その他添加物", "備考", "登録日時"]
 COLS_ADJ = ["調整ID", "入荷No", "調整日", "調整袋数", "理由", "担当者", "登録日時"]
 COLS_SUP = ["資材ID", "資材名", "カテゴリ", "画像URL", "初期在庫", "発注点"]
@@ -17,9 +18,7 @@ COLS_LOG = ["ログID", "登録日", "資材ID", "処理", "数量", "作業者"
 def _client():
     info = dict(st.secrets["gcp_service_account"])
     if "private_key" in info:
-        pk = info["private_key"].replace("\\n", "\n")
-        pk = pk.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
-        pk = pk.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----\n")
+        pk = info["private_key"].replace("\\n", "\n").replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n").replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----\n")
         info["private_key"] = pk.replace("\n\n\n", "\n").replace("\n\n", "\n")
     return gspread.authorize(Credentials.from_service_account_info(info, scopes=SCOPES))
 
@@ -79,7 +78,6 @@ def _i(v, d=0):
     except: 
         return d
 
-# 🌟 修正箇所：カンマ区切りをやめ、1行ずつ明確に代入するように修正しました
 def load_arrivals():
     rows = _read("入荷記録", COLS_ARR)
     for r in rows: 
@@ -160,7 +158,8 @@ def _scol(n, vs):
     w.clear()
     w.update(range_name="A1", values=[["name"]] + [[v] for v in vs])
 
-def load_materials(): return _lcol("原料マスター", ["こんにゃく精粉（国産）","海藻粉","加工デンプン","石灰","食塩"])
+# 🌟 デフォルトの原料マスターに「こんにゃく粉」を追加
+def load_materials(): return _lcol("原料マスター", ["こんにゃく粉（国産）","こんにゃく粉（輸入）","海藻粉","加工デンプン","石灰","食塩"])
 def save_materials(v): _scol("原料マスター", v)
 
 def load_makers(): return _lcol("メーカーマスター", ["滝田商店","荻野","オリヒロ","その他"])
@@ -180,5 +179,4 @@ def save_order_points(d):
     w = _ws("発注点マスター", ["material","order_point"])
     w.clear()
     w.update(range_name="A1", values=[["material","order_point"]] + [[k,str(v)] for k,v in d.items()])
-
 # --- END OF FILE sheets.py ---
