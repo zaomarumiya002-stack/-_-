@@ -93,6 +93,7 @@ def get_inventory():
         _deduct(b.get("主原料ロット"), b.get("こんにゃく精粉(kg)"))
         _deduct(b.get("海藻粉ロット"), b.get("海藻粉(kg)"))
         _deduct(b.get("デンプンロット"), b.get("デンプン(kg)"))
+        _deduct(b.get("石灰ロット"), b.get("石灰(kg)"))
         if b.get("その他添加物"):
             try:
                 for o in json.loads(b["その他添加物"]): _deduct(o.get("lot"), o.get("kg"))
@@ -160,12 +161,10 @@ def extract_lot(fancy_str):
 if page == "🏠 ダッシュボード":
     st.markdown('<div class="main-header"><div><h1>📊 ERP ダッシュボード</h1><p>工場の稼働状況・在庫・アラートをリアルタイムで把握します</p></div></div>', unsafe_allow_html=True)
     
-    # --- アラート表示 ---
     if raw_alerts or sup_alerts:
         for al in raw_alerts: st.markdown(f'<div class="alert-ng">{al}</div>', unsafe_allow_html=True)
         for al in sup_alerts: st.markdown(f'<div class="alert-warning">{al}</div>', unsafe_allow_html=True)
     
-    # --- データ整形（共通） ---
     df_b = pd.DataFrame(brewing)
     if not df_b.empty:
         df_b["仕込日"] = pd.to_datetime(df_b["仕込日"].astype(str).str.replace("/", "-").str.replace(".", "-"), errors="coerce")
@@ -173,21 +172,16 @@ if page == "🏠 ダッシュボード":
         df_b["こんにゃく粉(袋)"] = df_b["こんにゃく精粉(kg)"] / 20.0
         df_b["製品仕込量(kg)"] = pd.to_numeric(df_b["仕込量(kg)"], errors="coerce").fillna(0)
     
-    # --- 1日・1ヶ月・1年の平均袋数計算 ---
     avg_day = avg_month = avg_year = 0.0
     if not df_b.empty:
         today = pd.to_datetime(date.today())
-        
         df_day = df_b[df_b["仕込日"] >= today - timedelta(days=1)]
         if not df_day.empty and len(df_day) > 0: avg_day = df_day["こんにゃく粉(袋)"].sum() / len(df_day)
-        
         df_month = df_b[df_b["仕込日"] >= today - timedelta(days=30)]
         if not df_month.empty and len(df_month) > 0: avg_month = df_month["こんにゃく粉(袋)"].sum() / len(df_month)
-        
         df_year = df_b[df_b["仕込日"] >= today - timedelta(days=365)]
         if not df_year.empty and len(df_year) > 0: avg_year = df_year["こんにゃく粉(袋)"].sum() / len(df_year)
 
-    # --- 上段 KPI（稼働サマリー） ---
     st.markdown('<div class="section-title">🏭 稼働・在庫サマリー</div>', unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns(4)
     today_brews = len(df_b[df_b["仕込日"] == pd.to_datetime(date.today())]) if not df_b.empty else 0
@@ -198,7 +192,6 @@ if page == "🏠 ダッシュボード":
     c3.markdown(f'<div class="kpi-card"><div class="kpi-value">{total_bags:,.0f}</div><div class="kpi-label">全原料 総在庫(袋)</div></div>', unsafe_allow_html=True)
     c4.markdown(f'<div class="kpi-card" style="border-top-color:#e53935;"><div class="kpi-value" style="color:#c62828;">{len(raw_alerts)+len(sup_alerts)}</div><div class="kpi-label">要発注アラート</div></div>', unsafe_allow_html=True)
 
-    # --- 中段 KPI（粉の消費ペース） ---
     st.markdown('<div class="section-title">⚖️ 平均こんにゃく粉 消費ペース (1回あたり)</div>', unsafe_allow_html=True)
     c5, c6, c7 = st.columns(3)
     c5.markdown(f'<div class="kpi-card" style="border-top-color:#43a047;"><div class="kpi-value" style="color:#2e7d32;">{avg_day:,.1f} 袋</div><div class="kpi-label">直近 1日 平均</div></div>', unsafe_allow_html=True)
@@ -206,23 +199,16 @@ if page == "🏠 ダッシュボード":
     c7.markdown(f'<div class="kpi-card" style="border-top-color:#43a047;"><div class="kpi-value" style="color:#2e7d32;">{avg_year:,.1f} 袋</div><div class="kpi-label">直近 1年 平均</div></div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    
-    # --- 下段 グラフ（昨対推移） ---
     col_left, col_right = st.columns([6, 4])
-    
     with col_left:
         st.markdown('<div class="section-title">📈 昨対 生産トレンド (月別・袋数)</div>', unsafe_allow_html=True)
         if not df_b.empty:
             df_b["year"] = df_b["仕込日"].dt.year
             df_b["month"] = df_b["仕込日"].dt.month
-            
             curr_year = date.today().year
             prev_year = curr_year - 1
-            
             df_curr = df_b[df_b["year"] == curr_year].groupby("month")["こんにゃく粉(袋)"].sum().reset_index()
             df_prev = df_b[df_b["year"] == prev_year].groupby("month")["こんにゃく粉(袋)"].sum().reset_index()
-            
-            # 全月（1〜12月）の骨組みを作る
             months = pd.DataFrame({"month": range(1, 13)})
             df_curr = pd.merge(months, df_curr, on="month", how="left").fillna(0)
             df_prev = pd.merge(months, df_prev, on="month", how="left").fillna(0)
@@ -230,29 +216,18 @@ if page == "🏠 ダッシュボード":
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=df_curr["month"], y=df_curr["こんにゃく粉(袋)"], mode='lines+markers', name=f"今年 ({curr_year})", line=dict(color="#1565c0", width=4), marker=dict(size=8)))
             fig.add_trace(go.Scatter(x=df_prev["month"], y=df_prev["こんにゃく粉(袋)"], mode='lines+markers', name=f"昨年 ({prev_year})", line=dict(color="#b0bec5", width=3, dash='dash'), marker=dict(size=6)))
-            
-            fig.update_layout(
-                height=350, margin=dict(l=20,r=20,t=20,b=20), plot_bgcolor="#f8faff", paper_bgcolor="#fff",
-                xaxis=dict(title="月", tickmode='linear', tick0=1, dtick=1),
-                yaxis=dict(title="こんにゃく粉 (袋)"),
-                legend=dict(orientation="h", y=-0.15)
-            )
+            fig.update_layout(height=350, margin=dict(l=20,r=20,t=20,b=20), plot_bgcolor="#f8faff", paper_bgcolor="#fff", xaxis=dict(title="月", tickmode='linear', tick0=1, dtick=1), yaxis=dict(title="こんにゃく粉 (袋)"), legend=dict(orientation="h", y=-0.15))
             st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("データがありません")
+        else: st.info("データがありません")
             
     with col_right:
         st.markdown('<div class="section-title">⏱️ 最新アクティビティ</div>', unsafe_allow_html=True)
         tab_a, tab_b = st.tabs(["🧪 最新の仕込み", "📦 最新の入荷"])
         with tab_a:
-            if brewing:
-                df_sh = pd.DataFrame(brewing)[["仕込日", "品名", "主原料ロット", "仕込量(kg)"]][::-1].head(8)
-                st.dataframe(df_sh, use_container_width=True, hide_index=True)
+            if brewing: st.dataframe(pd.DataFrame(brewing)[["仕込日", "品名", "主原料ロット", "仕込量(kg)"]][::-1].head(8), use_container_width=True, hide_index=True)
             else: st.write("データなし")
         with tab_b:
-            if arrivals:
-                df_ar = pd.DataFrame(arrivals)[["入荷日", "原料種別", "ロットNo", "袋数"]][::-1].head(8)
-                st.dataframe(df_ar, use_container_width=True, hide_index=True)
+            if arrivals: st.dataframe(pd.DataFrame(arrivals)[["入荷日", "原料種別", "ロットNo", "袋数"]][::-1].head(8), use_container_width=True, hide_index=True)
             else: st.write("データなし")
 
 # ════════════════════════════════════════════════════════════════
@@ -311,7 +286,8 @@ elif page == "📦 入荷記録":
             if edit_target:
                 td = next((a for a in arrivals if a.get("入荷No") == edit_target), None)
                 e_date = st.text_input("入荷日", value=td.get("入荷日",""), key="ea_date")
-                e_maker = st.text_input("メーカー", value=td.get("メーカー",""), key="ea_maker")
+                e_maker = st.selectbox("メーカー", makers + ["その他"], index=makers.index(td.get("メーカー")) if td.get("メーカー") in makers else len(makers), key="ea_maker")
+                if e_maker == "その他": e_maker = st.text_input("メーカー直接入力", value=td.get("メーカー",""), key="ea_maker_free")
                 e_lot = st.text_input("ロットNo", value=td.get("ロットNo",""), key="ea_lot")
                 e_mat = st.selectbox("原料種別", materials, index=materials.index(td.get("原料種別")) if td.get("原料種別") in materials else 0, key="ea_mat")
                 e_bags = st.number_input("袋数", value=int(td.get("袋数") or 0), key="ea_bags")
@@ -327,18 +303,16 @@ elif page == "🧪 仕込み記録":
     
     with t1:
         st.markdown('<div class="form-card"><div class="section-title">📋 製品情報</div>', unsafe_allow_html=True)
-        c1,c2,c3,c4 = st.columns(4)
+        c1,c2,c3 = st.columns(3)
         b_date = c1.date_input("仕込日", key="new_brw_date")
         p_name = c2.text_input("品名 ＊", key="new_brw_name")
-        b_maker = c3.selectbox("得意先・メーカー", makers, key="new_brw_maker")
-        b_amount = c4.number_input("製品仕込量(kg) ＊", min_value=0.0, value=None, step=10.0, key="new_brw_amt")
+        b_amount = c3.number_input("製品仕込量(kg) ＊", min_value=0.0, value=None, step=10.0, key="new_brw_amt")
         st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown('<div class="form-card"><div class="section-title">⚗️ 主原料（こんにゃく粉）</div>', unsafe_allow_html=True)
         cm1, cm2, cm3 = st.columns(3)
         sf_makers = ["すべて"] + sorted(list(set(a.get("メーカー","") for a in arrivals if any(k in a.get("原料種別","") for k in ["こんにゃく粉", "精粉", "粉", "マンナン"]))))
         sel_sf_maker = cm1.selectbox("🔍 こんにゃく粉メーカーで絞り込み", sf_makers, key="filter_maker")
-        
         lot_no_b_disp = cm2.selectbox("こんにゃく粉 ロットNo ＊", get_fancy_lots(["こんにゃく粉", "精粉", "粉", "マンナン"], maker_filter=sel_sf_maker), key="new_brw_lot")
         lot_no_b = extract_lot(lot_no_b_disp)
         mat_kg = cm3.number_input("こんにゃく粉 使用量(kg)", min_value=0.0, value=None, format="%.2f", key="new_brw_mkg")
@@ -348,30 +322,24 @@ elif page == "🧪 仕込み記録":
         r1, r2, r3 = st.columns(3)
         sea_lot_disp = r1.selectbox("海藻粉 ロット", get_fancy_lots(["海藻", "青海苔", "ひじき", "アラメ"]), key="new_brw_sl")
         sea_lot = extract_lot(sea_lot_disp)
-        sea_type = r1.selectbox("海藻粉 種別", ["─", "青海苔", "ひじき", "アラメ", "その他"], key="new_brw_s_type")
         sea_kg = r1.number_input("海藻粉 使用量(kg)", min_value=0.0, value=None, format="%.2f", key="new_brw_skg")
         
         sta_lot_disp = r2.selectbox("加工デンプン ロット", get_fancy_lots(["デンプン", "でんぷん", "澱粉"]), key="new_brw_stl")
         sta_lot = extract_lot(sta_lot_disp)
-        sta_type = r2.selectbox("デンプン 種別", ["─","ゆり8","VA70","その他"], key="new_brw_stt")
         sta_kg = r2.number_input("デンプン 使用量(kg)", min_value=0.0, value=None, format="%.2f", key="new_brw_stkg")
         
-        r3.markdown("<br>", unsafe_allow_html=True)
+        lime_lot_disp = r3.selectbox("石灰 ロット", get_fancy_lots(["石灰"]), key="new_brw_ll")
+        lime_lot = extract_lot(lime_lot_disp)
         lime_kg = r3.number_input("石灰(kg)", min_value=0.0, value=None, format="%.2f", key="new_brw_lkg")
-        lime_w = r3.number_input("石灰水(L)", min_value=0.0, value=None, format="%.1f", key="new_brw_lw")
         st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown('<div class="form-card"><div class="section-title">🧂 その他添加物</div>', unsafe_allow_html=True)
-        st.caption("原料を選ぶと、その原料の入荷ロット（メーカー・日付付き）が自動でドロップダウンに表示されます。")
-        
         if "other_rows" not in st.session_state: st.session_state.other_rows = []
         for i, row in enumerate(st.session_state.other_rows):
             oc1, oc2, oc3, oc4 = st.columns([3,4,2,1])
             sel_mat = oc1.selectbox("原料名", materials, key=f"mat_{i}", index=materials.index(row["name"]) if row["name"] in materials else 0)
-            
             sel_lot_disp = oc2.selectbox("ロットNo", get_fancy_lots([sel_mat], current_val=row.get("lot")), key=f"lot_{i}")
             sel_lot = extract_lot(sel_lot_disp)
-            
             sel_kg = oc3.number_input("使用量(kg)", min_value=0.0, format="%.2f", key=f"kg_{i}", value=float(row["kg"]) if row["kg"] else None)
             if oc4.button("❌", key=f"del_{i}"): st.session_state.other_rows.pop(i); st.rerun()
             st.session_state.other_rows[i] = {"name": sel_mat, "lot": sel_lot, "kg": sel_kg or 0.0}
@@ -384,12 +352,12 @@ elif page == "🧪 仕込み記録":
             else:
                 others_json = json.dumps([r for r in st.session_state.other_rows if r["kg"] > 0], ensure_ascii=False)
                 append_brewing({
-                    "仕込No": next_brewing_no(brewing), "仕込日": str(b_date), "品名": p_name, "メーカー": b_maker, 
+                    "仕込No": next_brewing_no(brewing), "仕込日": str(b_date), "品名": p_name, 
                     "主原料ロット": lot_no_b, "仕込量(kg)": b_amount or 0.0, "こんにゃく精粉(kg)": mat_kg or 0.0, 
-                    "海藻粉(kg)": sea_kg or 0.0, "海藻粉ロット": sea_lot, "海藻粉種別": sea_type,
-                    "デンプン(kg)": sta_kg or 0.0, "デンプンロット": sta_lot, "デンプン種別": sta_type, 
-                    "石灰(kg)": lime_kg or 0.0, "石灰水(L)": lime_w or 0.0, "その他添加物": others_json, 
-                    "登録日時": datetime.now().isoformat()
+                    "海藻粉(kg)": sea_kg or 0.0, "海藻粉ロット": sea_lot, 
+                    "デンプン(kg)": sta_kg or 0.0, "デンプンロット": sta_lot, 
+                    "石灰(kg)": lime_kg or 0.0, "石灰ロット": lime_lot, 
+                    "その他添加物": others_json, "登録日時": datetime.now().isoformat()
                 })
                 st.session_state.other_rows = []
                 st.success("保存しました！"); refresh()
@@ -405,24 +373,14 @@ elif page == "🧪 仕込み記録":
             if edit_target_b:
                 t_no = edit_target_b.split(" - ")[0]
                 td = next((b for b in brewing if str(b.get("仕込No")) == str(t_no)), None)
-                
                 eb_name = st.text_input("品名", value=td.get("品名",""), key="eb_name")
-                
                 eb_lot_disp = st.selectbox("こんにゃく粉ロットNo", get_fancy_lots(["こんにゃく粉","精粉","粉","マンナン"], current_val=td.get("主原料ロット","")), key="eb_lot")
                 eb_sl_disp = st.selectbox("海藻粉ロットNo", get_fancy_lots(["海藻"], current_val=td.get("海藻粉ロット","")), key="eb_slot")
                 eb_stl_disp = st.selectbox("デンプンロットNo", get_fancy_lots(["デンプン"], current_val=td.get("デンプンロット","")), key="eb_stlot")
-                
                 eb_amt = st.number_input("仕込量(kg)", value=float(td.get("仕込量(kg)") or 0), key="eb_amt")
                 eb_mat = st.number_input("こんにゃく粉(kg)", value=float(td.get("こんにゃく精粉(kg)") or 0), key="eb_mat")
-                
                 if st.button("💾 変更を上書き保存", type="primary", key="eb_save"):
-                    td.update({
-                        "品名": eb_name, 
-                        "主原料ロット": extract_lot(eb_lot_disp), 
-                        "海藻粉ロット": extract_lot(eb_sl_disp), 
-                        "デンプンロット": extract_lot(eb_stl_disp), 
-                        "仕込量(kg)": eb_amt, "こんにゃく精粉(kg)": eb_mat
-                    })
+                    td.update({"品名": eb_name, "主原料ロット": extract_lot(eb_lot_disp), "海藻粉ロット": extract_lot(eb_sl_disp), "デンプンロット": extract_lot(eb_stl_disp), "仕込量(kg)": eb_amt, "こんにゃく精粉(kg)": eb_mat})
                     update_brewing(td["仕込No"], td); st.success("更新しました！"); refresh()
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -434,8 +392,7 @@ elif page == "🏭 原料在庫":
         if not inventory_data: st.info("データなし")
         else:
             inv_df = pd.DataFrame(list(inventory_data.values()))[["入荷No", "原料種別", "ロットNo", "入荷袋数", "使用袋数", "調整袋数", "現在庫(袋)"]]
-            inv_df.columns = ["入荷No", "原料種別", "ロットNo", "入荷(袋)", "使用(袋)", "調整(袋)", "現在庫(袋)"]
-            st.dataframe(inv_df, column_config={"入荷(袋)": st.column_config.NumberColumn(format="%.1f"), "使用(袋)": st.column_config.NumberColumn(format="%.1f"), "調整(袋)": st.column_config.NumberColumn(format="%.1f"), "現在庫(袋)": st.column_config.NumberColumn(format="%.1f")}, use_container_width=True, height=400)
+            st.dataframe(inv_df, column_config={"入荷袋数": st.column_config.NumberColumn("入荷(袋)", format="%.1f"), "使用袋数": st.column_config.NumberColumn("使用(袋)", format="%.1f"), "調整袋数": st.column_config.NumberColumn("調整(袋)", format="%.1f"), "現在庫(袋)": st.column_config.NumberColumn("現在庫(袋)", format="%.1f")}, use_container_width=True, height=400)
     with t2:
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
         if inventory_data:
@@ -454,10 +411,8 @@ elif page == "🏭 原料在庫":
 # ════════════════════════════════════════════════════════════════
 elif page == "🧹 資材在庫":
     st.markdown('<div class="main-header"><div><h1>🧹 資材・衛生備品 管理</h1><p>スマホ対応：写真を見ながら簡単に入出庫記録ができます</p></div></div>', unsafe_allow_html=True)
-    
     if sup_alerts:
         for al in sup_alerts: st.markdown(f'<div class="alert-warning">{al}</div>', unsafe_allow_html=True)
-        
     st.markdown('<div class="form-card" style="border-left: 5px solid #ff9800;">', unsafe_allow_html=True)
     if not supplies: st.warning("資材マスターが未登録です")
     else:
@@ -472,15 +427,10 @@ elif page == "🧹 資材在庫":
             append_supply_log({"登録日": str(date.today()), "資材ID": target_id, "処理": "入荷" if "➕" in act_sel else "使用", "数量": amt_val, "作業者": ins_sel, "登録日時": datetime.now().isoformat()})
             st.success("記録しました！"); refresh()
     st.markdown('</div>', unsafe_allow_html=True)
-    
     if supply_inventory:
         df_sup = pd.DataFrame(supply_inventory)[["画像URL", "資材名", "カテゴリ", "現在庫", "発注点"]]
         df_sup["状態"] = df_sup.apply(lambda r: "🔴発注" if r["発注点"] > 0 and r["現在庫"] < r["発注点"] else "✅正常", axis=1)
-        st.dataframe(df_sup, column_config={
-            "画像URL": st.column_config.ImageColumn("画像"), 
-            "現在庫": st.column_config.NumberColumn("現在庫", format="%d"),
-            "発注点": st.column_config.NumberColumn("発注点", format="%d")
-        }, use_container_width=True, hide_index=True, height=500)
+        st.dataframe(df_sup, column_config={"画像URL": st.column_config.ImageColumn("画像"), "現在庫": st.column_config.NumberColumn("現在庫", format="%d"), "発注点": st.column_config.NumberColumn("発注点", format="%d")}, use_container_width=True, hide_index=True, height=500)
 
 # ════════════════════════════════════════════════════════════════
 elif page == "🔍 双方向トレース":
@@ -498,11 +448,8 @@ elif page == "🔍 双方向トレース":
             maker_fwd = st.selectbox("登録メーカーから選択", makers, key="maker_fwd")
             
         if st.button("➡️ 追跡実行", type="primary", key="btn_fwd"):
-            if kw_fwd:
-                arr_info = [a for a in arrivals if kw_fwd.lower() in str(a.get("ロットNo","")).lower()]
-            else:
-                arr_info = [a for a in arrivals if maker_fwd == a.get("メーカー","")]
-                
+            kw_l = kw_fwd.strip().lower()
+            arr_info = [a for a in arrivals if kw_fwd.lower() in str(a.get("ロットNo","")).lower()] if kw_fwd else [a for a in arrivals if maker_fwd == a.get("メーカー","")]
             if arr_info:
                 st.markdown("#### 📦 対象の原料入荷記録")
                 st.dataframe(pd.DataFrame(arr_info)[["入荷No","入荷日","メーカー","原料種別","ロットNo","袋数"]], use_container_width=True, hide_index=True)
@@ -510,16 +457,13 @@ elif page == "🔍 双方向トレース":
             res_fwd = []
             for b in brewing:
                 is_match = False
-                for l_key in ["主原料ロット", "海藻粉ロット", "デンプンロット"]:
+                for l_key in ["主原料ロット", "海藻粉ロット", "デンプンロット", "石灰ロット"]:
                     if kw_fwd and kw_fwd.lower() in str(b.get(l_key,"")).lower(): is_match = True
-                if maker_fwd and b.get("メーカー") == maker_fwd: is_match = True
-                
                 if b.get("その他添加物") and kw_fwd:
                     try:
                         for o in json.loads(b.get("その他添加物")):
                             if kw_fwd.lower() in str(o.get("lot","")).lower(): is_match = True
                     except: pass
-                    
                 if is_match:
                     res_fwd.append({"仕込No": b.get("仕込No",""), "仕込日": b.get("仕込日",""), "品名": b.get("品名",""), "メーカー": b.get("メーカー",""), "主原料ロット": b.get("主原料ロット",""), "海藻粉ロット": b.get("海藻粉ロット",""), "デンプンロット": b.get("デンプンロット","")})
             if res_fwd: st.dataframe(pd.DataFrame(res_fwd), use_container_width=True, hide_index=True)
@@ -541,7 +485,7 @@ elif page == "🔍 双方向トレース":
                 for tb in target_brews:
                     st.markdown(f"### 🧪 仕込No: {tb.get('仕込No')} - {tb.get('仕込日')} 【{tb.get('品名')}】")
                     used_lots = []
-                    for k, n in [("主原料ロット","こんにゃく粉"), ("海藻粉ロット","海藻粉"), ("デンプンロット","加工デンプン")]:
+                    for k, n in [("主原料ロット","こんにゃく粉"), ("海藻粉ロット","海藻粉"), ("デンプンロット","加工デンプン"), ("石灰ロット","石灰")]:
                         if tb.get(k) and tb.get(k) != "─": used_lots.append({"役割": n, "ロットNo": tb.get(k)})
                     if tb.get("その他添加物"):
                         try:
@@ -589,7 +533,7 @@ elif page == "📈 統計・比較分析":
         period = r["period"]
         if r.get("その他添加物"):
             try:
-                for o in json.loads(r["その他添加物"]):
+                for o in json.loads(r.get("その他添加物")):
                     name = o.get("name")
                     kg = float(str(o.get("kg") or 0).replace(",",""))
                     if name and kg > 0:
@@ -607,10 +551,8 @@ elif page == "📈 統計・比較分析":
     if len(grp) >= 2:
         curr = grp.iloc[-1]
         prev = grp.iloc[-2]
-        
         m1, m2, m3, m4 = st.columns(4)
         def _delta(c, p): return f"{(c - p) / p * 100:+.1f}%" if p else "N/A"
-        
         m1.metric(f"最新仕込回数 ({curr['period']})", f"{curr['仕込回数']:.0f}回", _delta(curr['仕込回数'], prev['仕込回数']))
         m2.metric("製品仕込量", f"{curr['製品仕込量']:,.0f} kg", _delta(curr['製品仕込量'], prev['製品仕込量']))
         m3.metric("こんにゃく粉(袋)", f"{curr['こんにゃく粉_袋']:,.1f} 袋", _delta(curr['こんにゃく粉_袋'], prev['こんにゃく粉_袋']))
@@ -626,13 +568,7 @@ elif page == "📈 統計・比較分析":
         fig1.add_trace(go.Bar(x=grp["period"], y=grp["こんにゃく粉_袋"], name="こんにゃく粉(袋)", marker_color="#43a047"))
         fig1.add_trace(go.Bar(x=grp["period"], y=grp["製品仕込量"], name="製品仕込量(kg)", marker_color="#1565c0", yaxis="y2"))
         fig1.add_trace(go.Scatter(x=grp["period"], y=grp["歩留まり(倍)"], name="歩留まり(倍)", yaxis="y3", mode="lines+markers", line=dict(color="#f57f17", width=3)))
-        fig1.update_layout(
-            barmode="group", height=450, plot_bgcolor="#f8faff",
-            yaxis=dict(title="こんにゃく粉 (袋)"),
-            yaxis2=dict(title="製品仕込量 (kg)", overlaying="y", side="right", showgrid=False),
-            yaxis3=dict(title="歩留まり(倍)", overlaying="y", side="right", position=0.95, showgrid=False),
-            legend=dict(orientation="h", y=-0.15)
-        )
+        fig1.update_layout(barmode="group", height=450, plot_bgcolor="#f8faff", yaxis=dict(title="こんにゃく粉 (袋)"), yaxis2=dict(title="製品仕込量 (kg)", overlaying="y", side="right", showgrid=False), yaxis3=dict(title="歩留まり(倍)", overlaying="y", side="right", position=0.95, showgrid=False), legend=dict(orientation="h", y=-0.15))
         st.plotly_chart(fig1, use_container_width=True)
         
     with tab2:
@@ -647,7 +583,6 @@ elif page == "📈 統計・比較分析":
                     fig2.add_trace(go.Bar(x=grp["period"], y=grp[mat], name=mat, marker_color=colors[i % len(colors)]))
             fig2.update_layout(barmode="stack", height=400, plot_bgcolor="#f8faff", yaxis=dict(title="使用量 (kg)"), legend=dict(orientation="h", y=-0.2))
             st.plotly_chart(fig2, use_container_width=True)
-            
         with col_g2:
             if len(grp) > 0:
                 latest = grp.iloc[-1]
