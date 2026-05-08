@@ -33,6 +33,7 @@ section[data-testid="stSidebar"] * { color: #cbd5e1 !important; }
 .alert-warning { background:#fff8e1; border:1px solid #ffecb3; border-left:4px solid #ff9800; padding:10px 14px; border-radius:8px; color:#e65100; font-size:.88rem; font-weight:600; margin-bottom:8px; display:flex; align-items:center;}
 .form-card { background:#ffffff; border:1px solid #cfd8dc; border-radius:12px; padding:20px; margin-bottom:20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);}
 .section-title { font-size:1.05rem; font-weight:700; color:#1565c0; border-bottom:2px solid #e3f2fd; padding-bottom:6px; margin-bottom:16px; }
+.kpi-sub { font-size:0.75rem; color:#90a4ae; margin-top:4px; display:block;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -164,56 +165,76 @@ if page == "🏠 ダッシュボード":
         for al in raw_alerts: st.markdown(f'<div class="alert-ng">{al}</div>', unsafe_allow_html=True)
         for al in sup_alerts: st.markdown(f'<div class="alert-warning">{al}</div>', unsafe_allow_html=True)
     
-    # --- KPI計算 ---
-    today_str = str(date.today())
-    week_ago_str = str(date.today() - timedelta(days=7))
-    month_ago_str = str(date.today() - timedelta(days=30))
+    # --- データ整形（共通） ---
+    df_b = pd.DataFrame(brewing)
+    if not df_b.empty:
+        df_b["仕込日"] = pd.to_datetime(df_b["仕込日"].astype(str).str.replace("/", "-").str.replace(".", "-"), errors="coerce")
+        df_b["こんにゃく精粉(kg)"] = pd.to_numeric(df_b["こんにゃく精粉(kg)"], errors="coerce").fillna(0)
+        df_b["こんにゃく粉(袋)"] = df_b["こんにゃく精粉(kg)"] / 20.0
+        df_b["製品仕込量(kg)"] = pd.to_numeric(df_b["仕込量(kg)"], errors="coerce").fillna(0)
     
-    today_brews = len([b for b in brewing if str(b.get("仕込日")) == today_str])
-    week_brew_list = [b for b in brewing if str(b.get("仕込日", "")) >= week_ago_str]
-    week_kg = sum(float(b.get("仕込量(kg)") or 0) for b in week_brew_list)
-    total_bags = sum(max(v["現在庫(袋)"], 0) for v in inventory_data.values())
-    
-    # ★ 新規追加: 平均こんにゃく粉使用量(袋) / 回 (直近30日)
-    month_brew_list = [b for b in brewing if str(b.get("仕込日", "")) >= month_ago_str]
-    if month_brew_list:
-        total_konjac_kg = sum(float(b.get("こんにゃく精粉(kg)") or 0) for b in month_brew_list)
-        avg_konjac_bags = (total_konjac_kg / 20.0) / len(month_brew_list)
-    else:
-        avg_konjac_bags = 0.0
+    # --- 1日・1ヶ月・1年の平均袋数計算 ---
+    avg_day = avg_month = avg_year = 0.0
+    if not df_b.empty:
+        today = pd.to_datetime(date.today())
+        
+        df_day = df_b[df_b["仕込日"] >= today - timedelta(days=1)]
+        if not df_day.empty and len(df_day) > 0: avg_day = df_day["こんにゃく粉(袋)"].sum() / len(df_day)
+        
+        df_month = df_b[df_b["仕込日"] >= today - timedelta(days=30)]
+        if not df_month.empty and len(df_month) > 0: avg_month = df_month["こんにゃく粉(袋)"].sum() / len(df_month)
+        
+        df_year = df_b[df_b["仕込日"] >= today - timedelta(days=365)]
+        if not df_year.empty and len(df_year) > 0: avg_year = df_year["こんにゃく粉(袋)"].sum() / len(df_year)
 
-    # --- KPIカード描画 ---
+    # --- 上段 KPI（稼働サマリー） ---
+    st.markdown('<div class="section-title">🏭 稼働・在庫サマリー</div>', unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns(4)
+    today_brews = len(df_b[df_b["仕込日"] == pd.to_datetime(date.today())]) if not df_b.empty else 0
+    week_kg = df_b[df_b["仕込日"] >= pd.to_datetime(date.today() - timedelta(days=7))]["製品仕込量(kg)"].sum() if not df_b.empty else 0
+    total_bags = sum(max(v["現在庫(袋)"], 0) for v in inventory_data.values())
     c1.markdown(f'<div class="kpi-card"><div class="kpi-value">{today_brews}</div><div class="kpi-label">本日の仕込み回数</div></div>', unsafe_allow_html=True)
     c2.markdown(f'<div class="kpi-card"><div class="kpi-value">{week_kg:,.0f}</div><div class="kpi-label">直近7日 製品仕込量(kg)</div></div>', unsafe_allow_html=True)
-    c3.markdown(f'<div class="kpi-card"><div class="kpi-value">{avg_konjac_bags:,.1f}</div><div class="kpi-label">1回あたりの平均こんにゃく粉(袋)<br><span style="font-size:0.7rem;">※直近30日</span></div></div>', unsafe_allow_html=True)
-    c4.markdown(f'<div class="kpi-card"><div class="kpi-value">{total_bags:,.0f}</div><div class="kpi-label">全原料 総在庫(袋)</div></div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="kpi-card"><div class="kpi-value">{total_bags:,.0f}</div><div class="kpi-label">全原料 総在庫(袋)</div></div>', unsafe_allow_html=True)
+    c4.markdown(f'<div class="kpi-card" style="border-top-color:#e53935;"><div class="kpi-value" style="color:#c62828;">{len(raw_alerts)+len(sup_alerts)}</div><div class="kpi-label">要発注アラート</div></div>', unsafe_allow_html=True)
+
+    # --- 中段 KPI（粉の消費ペース） ---
+    st.markdown('<div class="section-title">⚖️ 平均こんにゃく粉 消費ペース (1回あたり)</div>', unsafe_allow_html=True)
+    c5, c6, c7 = st.columns(3)
+    c5.markdown(f'<div class="kpi-card" style="border-top-color:#43a047;"><div class="kpi-value" style="color:#2e7d32;">{avg_day:,.1f} 袋</div><div class="kpi-label">直近 1日 平均</div></div>', unsafe_allow_html=True)
+    c6.markdown(f'<div class="kpi-card" style="border-top-color:#43a047;"><div class="kpi-value" style="color:#2e7d32;">{avg_month:,.1f} 袋</div><div class="kpi-label">直近 1ヶ月 平均</div></div>', unsafe_allow_html=True)
+    c7.markdown(f'<div class="kpi-card" style="border-top-color:#43a047;"><div class="kpi-value" style="color:#2e7d32;">{avg_year:,.1f} 袋</div><div class="kpi-label">直近 1年 平均</div></div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # --- グラフとアクティビティ ---
+    # --- 下段 グラフ（昨対推移） ---
     col_left, col_right = st.columns([6, 4])
     
     with col_left:
-        st.markdown('<div class="section-title">📈 直近14日間の生産推移</div>', unsafe_allow_html=True)
-        if brewing:
-            df_b = pd.DataFrame(brewing)
-            df_b["仕込日"] = pd.to_datetime(df_b["仕込日"].astype(str).str.replace("/", "-").str.replace(".", "-"), errors="coerce")
-            df_b["仕込量(kg)"] = pd.to_numeric(df_b["仕込量(kg)"], errors="coerce").fillna(0)
-            df_b["こんにゃく精粉(kg)"] = pd.to_numeric(df_b["こんにゃく精粉(kg)"], errors="coerce").fillna(0)
-            df_b["こんにゃく粉(袋)"] = df_b["こんにゃく精粉(kg)"] / 20.0
+        st.markdown('<div class="section-title">📈 昨対 生産トレンド (月別・袋数)</div>', unsafe_allow_html=True)
+        if not df_b.empty:
+            df_b["year"] = df_b["仕込日"].dt.year
+            df_b["month"] = df_b["仕込日"].dt.month
             
-            df_14 = df_b[df_b["仕込日"] >= pd.to_datetime(date.today() - timedelta(days=14))]
-            daily = df_14.groupby("仕込日").agg({"仕込量(kg)":"sum", "こんにゃく粉(袋)":"sum"}).reset_index()
+            curr_year = date.today().year
+            prev_year = curr_year - 1
+            
+            df_curr = df_b[df_b["year"] == curr_year].groupby("month")["こんにゃく粉(袋)"].sum().reset_index()
+            df_prev = df_b[df_b["year"] == prev_year].groupby("month")["こんにゃく粉(袋)"].sum().reset_index()
+            
+            # 全月（1〜12月）の骨組みを作る
+            months = pd.DataFrame({"month": range(1, 13)})
+            df_curr = pd.merge(months, df_curr, on="month", how="left").fillna(0)
+            df_prev = pd.merge(months, df_prev, on="month", how="left").fillna(0)
             
             fig = go.Figure()
-            fig.add_trace(go.Bar(x=daily["仕込日"], y=daily["こんにゃく粉(袋)"], name="こんにゃく粉(袋)", marker_color="#43a047", yaxis="y"))
-            fig.add_trace(go.Scatter(x=daily["仕込日"], y=daily["仕込量(kg)"], mode='lines+markers', name="製品仕込量(kg)", line=dict(color="#1565c0", width=3), yaxis="y2"))
+            fig.add_trace(go.Scatter(x=df_curr["month"], y=df_curr["こんにゃく粉(袋)"], mode='lines+markers', name=f"今年 ({curr_year})", line=dict(color="#1565c0", width=4), marker=dict(size=8)))
+            fig.add_trace(go.Scatter(x=df_prev["month"], y=df_prev["こんにゃく粉(袋)"], mode='lines+markers', name=f"昨年 ({prev_year})", line=dict(color="#b0bec5", width=3, dash='dash'), marker=dict(size=6)))
             
             fig.update_layout(
                 height=350, margin=dict(l=20,r=20,t=20,b=20), plot_bgcolor="#f8faff", paper_bgcolor="#fff",
-                yaxis=dict(title="こんにゃく粉(袋)"),
-                yaxis2=dict(title="製品仕込量(kg)", overlaying="y", side="right", showgrid=False),
+                xaxis=dict(title="月", tickmode='linear', tick0=1, dtick=1),
+                yaxis=dict(title="こんにゃく粉 (袋)"),
                 legend=dict(orientation="h", y=-0.15)
             )
             st.plotly_chart(fig, use_container_width=True)
@@ -341,6 +362,7 @@ elif page == "🧪 仕込み記録":
         st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown('<div class="form-card"><div class="section-title">🧂 その他添加物</div>', unsafe_allow_html=True)
+        st.caption("原料を選ぶと、その原料の入荷ロット（メーカー・日付付き）が自動でドロップダウンに表示されます。")
         
         if "other_rows" not in st.session_state: st.session_state.other_rows = []
         for i, row in enumerate(st.session_state.other_rows):
@@ -385,7 +407,8 @@ elif page == "🧪 仕込み記録":
                 td = next((b for b in brewing if str(b.get("仕込No")) == str(t_no)), None)
                 
                 eb_name = st.text_input("品名", value=td.get("品名",""), key="eb_name")
-                eb_lot_disp = st.selectbox("主原料ロットNo", get_fancy_lots(["こんにゃく粉","精粉","粉","マンナン"], current_val=td.get("主原料ロット","")), key="eb_lot")
+                
+                eb_lot_disp = st.selectbox("こんにゃく粉ロットNo", get_fancy_lots(["こんにゃく粉","精粉","粉","マンナン"], current_val=td.get("主原料ロット","")), key="eb_lot")
                 eb_sl_disp = st.selectbox("海藻粉ロットNo", get_fancy_lots(["海藻"], current_val=td.get("海藻粉ロット","")), key="eb_slot")
                 eb_stl_disp = st.selectbox("デンプンロットNo", get_fancy_lots(["デンプン"], current_val=td.get("デンプンロット","")), key="eb_stlot")
                 
