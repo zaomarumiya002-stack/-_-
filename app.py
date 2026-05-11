@@ -635,4 +635,108 @@ elif page == "📈 統計・比較分析":
         
     with tab2:
         base_additives = ["海藻粉", "加工デンプン", "石灰"]
-        other_additives = [c for c in grp.col
+        other_additives = [c for c in grp.columns if c not in ["period", "仕込回数", "製品仕込量", "歩留まり(倍)", "こんにゃく粉_袋", "こんにゃく粉_kg"] + base_additives]
+        
+        col_g1, col_g2 = st.columns([7, 3])
+        with col_g1:
+            fig2 = go.Figure()
+            colors = ["#e53935", "#fb8c00", "#8e24aa", "#3949ab", "#1e88e5", "#039be5", "#00acc1", "#00897b", "#00838f"]
+            for i, mat in enumerate(base_additives + other_additives):
+                if mat in grp.columns:
+                    fig2.add_trace(go.Bar(x=grp["period"], y=grp[mat], name=mat, marker_color=colors[i % len(colors)]))
+            fig2.update_layout(barmode="stack", height=400, plot_bgcolor="#f8faff", yaxis=dict(title="使用量 (kg)"), legend=dict(orientation="h", y=-0.2))
+            st.plotly_chart(fig2, use_container_width=True)
+            
+        with col_g2:
+            if len(grp) > 0:
+                latest = grp.iloc[-1]
+                pie_data = {mat: latest[mat] for mat in base_additives + other_additives if mat in latest and latest[mat] > 0}
+                if pie_data:
+                    fig_pie = px.pie(names=list(pie_data.keys()), values=list(pie_data.values()), title=f"添加物割合 ({latest['period']})", hole=0.4)
+                    fig_pie.update_layout(height=400, showlegend=False)
+                    fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+                    st.plotly_chart(fig_pie, use_container_width=True)
+        
+    with tab3:
+        st.info("※ こんにゃく粉の重量(kg)を100%とした場合の、各添加物の使用比率です。毎日のレシピのブレを確認できます。")
+        ratio_df = grp[["period", "仕込回数", "製品仕込量", "こんにゃく粉_袋", "歩留まり(倍)"]].copy()
+        for mat in base_additives + other_additives:
+            if mat in grp.columns:
+                ratio_df[f"{mat} 比率(%)"] = (grp[mat] / grp["こんにゃく粉_kg"].replace(0, float("nan")) * 100).round(2)
+        st.dataframe(ratio_df.sort_values("period", ascending=False), use_container_width=True)
+
+# ════════════════════════════════════════════════════════════════
+elif page == "⚙️ マスター設定":
+    st.markdown('<div class="main-header"><div><h1>⚙️ マスター設定</h1></div></div>', unsafe_allow_html=True)
+    t1, t2, t3, t4, t5 = st.tabs(["🧴 原料", "🏭 メーカー", "👤 担当者", "⚠️ 発注点", "🧹 資材(備品)登録"])
+    
+    with t1:
+        m1 = st.text_area("原料リスト (1行1件)", "\n".join(materials), height=200, key="mst_mat")
+        if st.button("保存", key="b1"): save_materials([x.strip() for x in m1.splitlines() if x.strip()]); refresh()
+    with t2:
+        m2 = st.text_area("メーカーリスト", "\n".join(makers), height=200, key="mst_mak")
+        if st.button("保存", key="b2"): save_makers([x.strip() for x in m2.splitlines() if x.strip()]); refresh()
+    with t3:
+        m3 = st.text_area("担当者リスト", "\n".join(inspectors), height=200, key="mst_ins")
+        if st.button("保存", key="b3"): save_inspectors([x.strip() for x in m3.splitlines() if x.strip()]); refresh()
+    with t4:
+        st.info("原料ごとの発注点（袋数）を設定")
+        op_df = pd.DataFrame([{"原料名": m, "発注点(袋)": order_points.get(m, 0.0)} for m in materials])
+        e_op = st.data_editor(op_df, use_container_width=True, key="mst_op")
+        if st.button("保存", key="b4"):
+            save_order_points({r["原料名"]: r["発注点(袋)"] for _, r in e_op.iterrows() if float(r["発注点(袋)"]) > 0})
+            refresh()
+            
+    with t5:
+        st.info("衛生備品や梱包資材の登録を行います。PCやスマホから直接画像をアップロード可能です。")
+        with st.form("new_supply_form"):
+            sc1, sc2, sc3, sc_op = st.columns(4)
+            n_name  = sc1.text_input("資材名 ＊")
+            n_cat   = sc2.text_input("カテゴリ (例: 衛生, 梱包)")
+            n_stock = sc3.number_input("初期在庫", min_value=0, step=1)
+            n_order = sc_op.number_input("発注点(警告)", min_value=0, step=1)
+            
+            sc4, sc5 = st.columns(2)
+            n_file = sc4.file_uploader("📷 写真・画像をアップロード", type=["png","jpg","jpeg"])
+            n_url  = sc5.text_input("🌐 または画像のURLを指定")
+            
+            if st.form_submit_button("➕ 新規資材を登録"):
+                if not n_name:
+                    st.error("資材名を入力してください")
+                else:
+                    img_val = "https://cdn-icons-png.flaticon.com/512/1243/1243324.png"
+                    if n_file and HAS_PIL:
+                        img = Image.open(n_file)
+                        img.thumbnail((200, 200))
+                        buf = BytesIO()
+                        img.save(buf, format="PNG")
+                        img_val = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"
+                    elif n_url:
+                        img_val = n_url
+                        
+                    current_supplies = supplies.copy()
+                    current_supplies.append({
+                        "資材ID": f"SUP-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                        "資材名": n_name, "カテゴリ": n_cat, "画像URL": img_val, 
+                        "初期在庫": n_stock, "発注点": n_order
+                    })
+                    save_supplies(current_supplies)
+                    st.success(f"{n_name} を登録しました！")
+                    refresh()
+
+        st.markdown("#### 登録済み資材の一覧・削除")
+        if supplies:
+            del_sup = st.selectbox("削除する資材を選択", ["─"] + [s.get("資材名","") for s in supplies])
+            if st.button("🗑 選択した資材を削除"):
+                if del_sup != "─":
+                    save_supplies([s for s in supplies if s.get("資材名") != del_sup])
+                    st.success("削除しました")
+                    refresh()
+                    
+            df_s = pd.DataFrame(supplies)[["画像URL", "資材名", "カテゴリ", "初期在庫", "発注点"]]
+            st.dataframe(
+                df_s,
+                column_config={"画像URL": st.column_config.ImageColumn("画像")},
+                use_container_width=True, hide_index=True
+            )
+# --- END OF FILE app.py ---
