@@ -156,6 +156,13 @@ def extract_lot(fancy_str):
     if not fancy_str or fancy_str == "─": return "─"
     return fancy_str.split(" | ")[0].strip()
 
+# 🌟 安全にリストからインデックスを取得する関数（絶対にエラーで落ちない）
+def safe_index(lst, val, default=0):
+    try:
+        return lst.index(val)
+    except ValueError:
+        return default
+
 # ════════════════════════════════════════════════════════════════
 if page == "🏠 ダッシュボード":
     st.markdown('<div class="main-header"><div><h1>📊 ERP ダッシュボード</h1><p>工場の稼働状況・在庫・アラートをリアルタイムで把握します</p></div></div>', unsafe_allow_html=True)
@@ -275,15 +282,7 @@ elif page == "📦 入荷記録":
                 st.success("保存しました！"); refresh()
 
     with t2:
-        if arrivals: 
-            st.markdown('<div class="section-title">📋 入荷履歴（品質検査結果一覧）</div>', unsafe_allow_html=True)
-            # 🌟 履歴一覧に品質検査の結果を追加して明瞭化
-            df_arr = pd.DataFrame(arrivals)[["入荷No", "入荷日", "メーカー", "ロットNo", "原料種別", "袋数", "外観", "品名・規格確認", "賞味期限", "異物", "異常内容", "担当者"]]
-            # NGがあれば目立つように色付けする関数
-            def highlight_ng(s):
-                return ['background-color: #ffebee' if 'NG' in str(v) else '' for v in s]
-            
-            st.dataframe(df_arr[::-1].reset_index(drop=True).style.apply(highlight_ng, subset=["外観", "品名・規格確認", "賞味期限", "異物"]), use_container_width=True, height=600)
+        if arrivals: st.dataframe(pd.DataFrame(arrivals)[["入荷No", "入荷日", "メーカー", "ロットNo", "原料種別", "袋数", "外観", "担当者"]][::-1].reset_index(drop=True), use_container_width=True, height=500)
 
     with t3:
         if not arrivals: st.info("データなし")
@@ -295,20 +294,30 @@ elif page == "📦 入荷記録":
                 
                 c_e1, c_e2, c_e3 = st.columns(3)
                 e_date = c_e1.text_input("入荷日", value=td.get("入荷日",""), key="ea_date")
-                e_maker = c_e2.selectbox("メーカー", makers + ["その他"], index=makers.index(td.get("メーカー")) if td.get("メーカー") in makers else len(makers), key="ea_maker")
+                e_maker = c_e2.selectbox("メーカー", makers + ["その他"], index=safe_index(makers, td.get("メーカー"), len(makers)), key="ea_maker")
                 if e_maker == "その他": e_maker = st.text_input("メーカー直接入力", value=td.get("メーカー",""), key="ea_maker_free")
                 e_lot = c_e3.text_input("ロットNo", value=td.get("ロットNo",""), key="ea_lot")
                 
                 c_e4, c_e5 = st.columns(2)
-                e_mat = c_e4.selectbox("原料種別", materials, index=materials.index(td.get("原料種別")) if td.get("原料種別") in materials else 0, key="ea_mat")
+                e_mat = c_e4.selectbox("原料種別", materials, index=safe_index(materials, td.get("原料種別"), 0), key="ea_mat")
                 e_bags = c_e5.number_input("袋数", value=int(td.get("袋数") or 0), key="ea_bags")
                 
                 st.markdown('<div class="section-title" style="margin-top:10px;">🔍 品質検査の修正</div>', unsafe_allow_html=True)
                 ck_e1, ck_e2 = st.columns(2)
-                e_app = ck_e1.selectbox("外観検査", ["OK（正常）", "NG（異常あり）", "要確認"], index=["OK（正常）", "NG（異常あり）", "要確認"].index(td.get("外観", "OK（正常）")), key="ea_app")
-                e_name = ck_e1.selectbox("品名・規格確認", ["OK（一致）", "NG（不一致）"], index=["OK（一致）", "NG（不一致）"].index(td.get("品名・規格確認", "OK（一致）")), key="ea_name")
-                e_exp = ck_e2.selectbox("賞味・消費期限", ["OK（期限内）", "NG（期限外・不明）"], index=["OK（期限内）", "NG（期限外・不明）"].index(td.get("賞味期限", "OK（期限内）")), key="ea_exp")
-                e_dmg = ck_e2.selectbox("異物・破損確認", ["OK（なし）", "NG（あり）"], index=["OK（なし）", "NG（あり）"].index(td.get("異物", "OK（なし）")), key="ea_dmg")
+                
+                # 🌟 安全にインデックスを取得するように修正
+                opts_app = ["OK（正常）", "NG（異常あり）", "要確認"]
+                e_app = ck_e1.selectbox("外観検査", opts_app, index=safe_index(opts_app, td.get("外観", "OK（正常）")), key="ea_app")
+                
+                opts_name = ["OK（一致）", "NG（不一致）"]
+                e_name = ck_e1.selectbox("品名・規格確認", opts_name, index=safe_index(opts_name, td.get("品名・規格確認", "OK（一致）")), key="ea_name")
+                
+                opts_exp = ["OK（期限内）", "NG（期限外・不明）"]
+                e_exp = ck_e2.selectbox("賞味・消費期限", opts_exp, index=safe_index(opts_exp, td.get("賞味期限", "OK（期限内）")), key="ea_exp")
+                
+                opts_dmg = ["OK（なし）", "NG（あり）"]
+                e_dmg = ck_e2.selectbox("異物・破損確認", opts_dmg, index=safe_index(opts_dmg, td.get("異物", "OK（なし）")), key="ea_dmg")
+                
                 e_abn = st.text_input("異常内容（NG時）", value=td.get("異常内容", ""), key="ea_abn")
                 
                 if st.button("💾 変更を上書き保存", type="primary", key="ea_save"):
@@ -337,7 +346,6 @@ elif page == "🧪 仕込み記録":
         cm1, cm2, cm3 = st.columns(3)
         sf_makers = ["すべて"] + sorted(list(set(a.get("メーカー","") for a in arrivals if any(k in a.get("原料種別","") for k in ["こんにゃく粉", "精粉", "粉", "マンナン"]))))
         sel_sf_maker = cm1.selectbox("🔍 こんにゃく粉メーカーで絞り込み", sf_makers, key="filter_maker")
-        
         lot_no_b_disp = cm2.selectbox("こんにゃく粉 ロットNo ＊", get_fancy_lots(["こんにゃく粉", "精粉", "粉", "マンナン"], maker_filter=sel_sf_maker), key="new_brw_lot")
         lot_no_b = extract_lot(lot_no_b_disp)
         mat_kg = cm3.number_input("こんにゃく粉 使用量(kg)", min_value=0.0, value=None, format="%.2f", key="new_brw_mkg")
@@ -361,15 +369,12 @@ elif page == "🧪 仕込み記録":
         st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown('<div class="form-card"><div class="section-title">🧂 その他添加物</div>', unsafe_allow_html=True)
-        
         if "other_rows" not in st.session_state: st.session_state.other_rows = []
         for i, row in enumerate(st.session_state.other_rows):
             oc1, oc2, oc3, oc4 = st.columns([3,4,2,1])
-            sel_mat = oc1.selectbox("原料名", materials, key=f"mat_{i}", index=materials.index(row["name"]) if row["name"] in materials else 0)
-            
+            sel_mat = oc1.selectbox("原料名", materials, key=f"mat_{i}", index=safe_index(materials, row["name"], 0))
             sel_lot_disp = oc2.selectbox("ロットNo", get_fancy_lots([sel_mat], current_val=row.get("lot")), key=f"lot_{i}")
             sel_lot = extract_lot(sel_lot_disp)
-            
             sel_kg = oc3.number_input("使用量(kg)", min_value=0.0, format="%.2f", key=f"kg_{i}", value=float(row["kg"]) if row["kg"] else None)
             if oc4.button("❌", key=f"del_{i}"): st.session_state.other_rows.pop(i); st.rerun()
             st.session_state.other_rows[i] = {"name": sel_mat, "lot": sel_lot, "kg": sel_kg or 0.0}
@@ -405,22 +410,13 @@ elif page == "🧪 仕込み記録":
                 td = next((b for b in brewing if str(b.get("仕込No")) == str(t_no)), None)
                 
                 eb_name = st.text_input("品名", value=td.get("品名",""), key="eb_name")
-                
                 eb_lot_disp = st.selectbox("こんにゃく粉ロットNo", get_fancy_lots(["こんにゃく粉","精粉","粉","マンナン"], current_val=td.get("主原料ロット","")), key="eb_lot")
                 eb_sl_disp = st.selectbox("海藻粉ロットNo", get_fancy_lots(["海藻"], current_val=td.get("海藻粉ロット","")), key="eb_slot")
                 eb_stl_disp = st.selectbox("デンプンロットNo", get_fancy_lots(["デンプン"], current_val=td.get("デンプンロット","")), key="eb_stlot")
-                
                 eb_amt = st.number_input("仕込量(kg)", value=float(td.get("仕込量(kg)") or 0), key="eb_amt")
                 eb_mat = st.number_input("こんにゃく粉(kg)", value=float(td.get("こんにゃく精粉(kg)") or 0), key="eb_mat")
-                
                 if st.button("💾 変更を上書き保存", type="primary", key="eb_save"):
-                    td.update({
-                        "品名": eb_name, 
-                        "主原料ロット": extract_lot(eb_lot_disp), 
-                        "海藻粉ロット": extract_lot(eb_sl_disp), 
-                        "デンプンロット": extract_lot(eb_stl_disp), 
-                        "仕込量(kg)": eb_amt, "こんにゃく精粉(kg)": eb_mat
-                    })
+                    td.update({"品名": eb_name, "主原料ロット": extract_lot(eb_lot_disp), "海藻粉ロット": extract_lot(eb_sl_disp), "デンプンロット": extract_lot(eb_stl_disp), "仕込量(kg)": eb_amt, "こんにゃく精粉(kg)": eb_mat})
                     update_brewing(td["仕込No"], td); st.success("更新しました！"); refresh()
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -526,8 +522,6 @@ elif page == "🔍 双方向トレース":
         bc1, bc2 = st.columns(2)
         kw_date = bc1.date_input("対象の仕込日", value=None, key="kw_date")
         kw_prod = bc2.text_input("品名（一部でも可）", placeholder="例: つきこん", key="kw_prod")
-        
-        # 🌟 ボタン名を分かりやすく変更
         if st.button("⬅️ 製品から使用原料を調査する", type="primary", key="btn_bwd"):
             target_brews = brewing
             if kw_date: target_brews = [b for b in target_brews if b.get("仕込日") == str(kw_date).replace("-","/")]
@@ -604,10 +598,8 @@ elif page == "📈 統計・比較分析":
     if len(grp) >= 2:
         curr = grp.iloc[-1]
         prev = grp.iloc[-2]
-        
         m1, m2, m3, m4 = st.columns(4)
         def _delta(c, p): return f"{(c - p) / p * 100:+.1f}%" if p else "N/A"
-        
         m1.metric(f"最新仕込回数 ({curr['period']})", f"{curr['仕込回数']:.0f}回", _delta(curr['仕込回数'], prev['仕込回数']))
         m2.metric("製品仕込量", f"{curr['製品仕込量']:,.0f} kg", _delta(curr['製品仕込量'], prev['製品仕込量']))
         m3.metric("こんにゃく粉(袋)", f"{curr['こんにゃく粉_袋']:,.1f} 袋", _delta(curr['こんにゃく粉_袋'], prev['こんにゃく粉_袋']))
@@ -623,20 +615,12 @@ elif page == "📈 統計・比較分析":
         fig1.add_trace(go.Bar(x=grp["period"], y=grp["こんにゃく粉_袋"], name="こんにゃく粉(袋)", marker_color="#43a047"))
         fig1.add_trace(go.Bar(x=grp["period"], y=grp["製品仕込量"], name="製品仕込量(kg)", marker_color="#1565c0", yaxis="y2"))
         fig1.add_trace(go.Scatter(x=grp["period"], y=grp["歩留まり(倍)"], name="歩留まり(倍)", yaxis="y3", mode="lines+markers", line=dict(color="#f57f17", width=3)))
-        
-        fig1.update_layout(
-            barmode="group", height=450, plot_bgcolor="#f8faff",
-            yaxis=dict(title="こんにゃく粉 (袋)"),
-            yaxis2=dict(title="製品仕込量 (kg)", overlaying="y", side="right", showgrid=False),
-            yaxis3=dict(title="歩留まり(倍)", overlaying="y", side="right", position=0.95, showgrid=False),
-            legend=dict(orientation="h", y=-0.15)
-        )
+        fig1.update_layout(barmode="group", height=450, plot_bgcolor="#f8faff", yaxis=dict(title="こんにゃく粉 (袋)"), yaxis2=dict(title="製品仕込量 (kg)", overlaying="y", side="right", showgrid=False), yaxis3=dict(title="歩留まり(倍)", overlaying="y", side="right", position=0.95, showgrid=False), legend=dict(orientation="h", y=-0.15))
         st.plotly_chart(fig1, use_container_width=True)
         
     with tab2:
         base_additives = ["海藻粉", "加工デンプン", "石灰"]
         other_additives = [c for c in grp.columns if c not in ["period", "仕込回数", "製品仕込量", "歩留まり(倍)", "こんにゃく粉_袋", "こんにゃく粉_kg"] + base_additives]
-        
         col_g1, col_g2 = st.columns([7, 3])
         with col_g1:
             fig2 = go.Figure()
@@ -646,7 +630,6 @@ elif page == "📈 統計・比較分析":
                     fig2.add_trace(go.Bar(x=grp["period"], y=grp[mat], name=mat, marker_color=colors[i % len(colors)]))
             fig2.update_layout(barmode="stack", height=400, plot_bgcolor="#f8faff", yaxis=dict(title="使用量 (kg)"), legend=dict(orientation="h", y=-0.2))
             st.plotly_chart(fig2, use_container_width=True)
-            
         with col_g2:
             if len(grp) > 0:
                 latest = grp.iloc[-1]
