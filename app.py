@@ -156,7 +156,6 @@ def extract_lot(fancy_str):
     if not fancy_str or fancy_str == "─": return "─"
     return fancy_str.split(" | ")[0].strip()
 
-# 🌟 安全にリストからインデックスを取得する関数（絶対にエラーで落ちない）
 def safe_index(lst, val, default=0):
     try:
         return lst.index(val)
@@ -282,7 +281,20 @@ elif page == "📦 入荷記録":
                 st.success("保存しました！"); refresh()
 
     with t2:
-        if arrivals: st.dataframe(pd.DataFrame(arrivals)[["入荷No", "入荷日", "メーカー", "ロットNo", "原料種別", "袋数", "外観", "担当者"]][::-1].reset_index(drop=True), use_container_width=True, height=500)
+        if not arrivals: 
+            st.info("データがありません")
+        else:
+            # 🌟 履歴一覧に品質検査項目を全て表示＆NGハイライト
+            st.markdown('<div class="section-title">📋 入荷履歴・品質検査結果一覧</div>', unsafe_allow_html=True)
+            df_arr = pd.DataFrame(arrivals)[["入荷No", "入荷日", "メーカー", "ロットNo", "原料種別", "袋数", "外観", "品名・規格確認", "賞味期限", "異物", "異常内容", "担当者"]]
+            
+            def highlight_ng(s):
+                return ['background-color: #ffebee; color: #c62828; font-weight: bold' if 'NG' in str(v) else '' for v in s]
+            
+            st.dataframe(
+                df_arr[::-1].reset_index(drop=True).style.apply(highlight_ng, subset=["外観", "品名・規格確認", "賞味期限", "異物"]), 
+                use_container_width=True, height=600
+            )
 
     with t3:
         if not arrivals: st.info("データなし")
@@ -305,7 +317,6 @@ elif page == "📦 入荷記録":
                 st.markdown('<div class="section-title" style="margin-top:10px;">🔍 品質検査の修正</div>', unsafe_allow_html=True)
                 ck_e1, ck_e2 = st.columns(2)
                 
-                # 🌟 安全にインデックスを取得するように修正
                 opts_app = ["OK（正常）", "NG（異常あり）", "要確認"]
                 e_app = ck_e1.selectbox("外観検査", opts_app, index=safe_index(opts_app, td.get("外観", "OK（正常）")), key="ea_app")
                 
@@ -338,8 +349,7 @@ elif page == "🧪 仕込み記録":
         c1,c2,c3,c4 = st.columns(4)
         b_date = c1.date_input("仕込日", key="new_brw_date")
         p_name = c2.text_input("品名 ＊", key="new_brw_name")
-        b_maker = c3.selectbox("得意先・メーカー", makers, key="new_brw_maker")
-        b_amount = c4.number_input("製品仕込量(kg) ＊", min_value=0.0, value=None, step=10.0, key="new_brw_amt")
+        b_amount = c3.number_input("製品仕込量(kg) ＊", min_value=0.0, value=None, step=10.0, key="new_brw_amt")
         st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown('<div class="form-card"><div class="section-title">⚗️ 主原料（こんにゃく粉）</div>', unsafe_allow_html=True)
@@ -355,17 +365,16 @@ elif page == "🧪 仕込み記録":
         r1, r2, r3 = st.columns(3)
         sea_lot_disp = r1.selectbox("海藻粉 ロット", get_fancy_lots(["海藻", "青海苔", "ひじき", "アラメ"]), key="new_brw_sl")
         sea_lot = extract_lot(sea_lot_disp)
-        sea_type = r1.selectbox("海藻粉 種別", ["─", "青海苔", "ひじき", "アラメ", "その他"], key="new_brw_s_type")
         sea_kg = r1.number_input("海藻粉 使用量(kg)", min_value=0.0, value=None, format="%.2f", key="new_brw_skg")
         
         sta_lot_disp = r2.selectbox("加工デンプン ロット", get_fancy_lots(["デンプン", "でんぷん", "澱粉"]), key="new_brw_stl")
         sta_lot = extract_lot(sta_lot_disp)
-        sta_type = r2.selectbox("デンプン 種別", ["─","ゆり8","VA70","その他"], key="new_brw_stt")
         sta_kg = r2.number_input("デンプン 使用量(kg)", min_value=0.0, value=None, format="%.2f", key="new_brw_stkg")
+        sta_type = r2.selectbox("デンプン種別", ["─","ゆり8","VA70","その他"], key="new_brw_stt")
         
-        r3.markdown("<br>", unsafe_allow_html=True)
+        lime_lot_disp = r3.selectbox("石灰 ロット", get_fancy_lots(["石灰"]), key="new_brw_ll")
+        lime_lot = extract_lot(lime_lot_disp)
         lime_kg = r3.number_input("石灰(kg)", min_value=0.0, value=None, format="%.2f", key="new_brw_lkg")
-        lime_w = r3.number_input("石灰水(L)", min_value=0.0, value=None, format="%.1f", key="new_brw_lw")
         st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown('<div class="form-card"><div class="section-title">🧂 その他添加物</div>', unsafe_allow_html=True)
@@ -387,12 +396,12 @@ elif page == "🧪 仕込み記録":
             else:
                 others_json = json.dumps([r for r in st.session_state.other_rows if r["kg"] > 0], ensure_ascii=False)
                 append_brewing({
-                    "仕込No": next_brewing_no(brewing), "仕込日": str(b_date), "品名": p_name, "メーカー": b_maker, 
+                    "仕込No": next_brewing_no(brewing), "仕込日": str(b_date), "品名": p_name, 
                     "主原料ロット": lot_no_b, "仕込量(kg)": b_amount or 0.0, "こんにゃく精粉(kg)": mat_kg or 0.0, 
-                    "海藻粉(kg)": sea_kg or 0.0, "海藻粉ロット": sea_lot, "海藻粉種別": sea_type,
+                    "海藻粉(kg)": sea_kg or 0.0, "海藻粉ロット": sea_lot, 
                     "デンプン(kg)": sta_kg or 0.0, "デンプンロット": sta_lot, "デンプン種別": sta_type, 
-                    "石灰(kg)": lime_kg or 0.0, "石灰水(L)": lime_w or 0.0, "その他添加物": others_json, 
-                    "登録日時": datetime.now().isoformat()
+                    "石灰(kg)": lime_kg or 0.0, "石灰ロット": lime_lot, 
+                    "その他添加物": others_json, "登録日時": datetime.now().isoformat()
                 })
                 st.session_state.other_rows = []
                 st.success("保存しました！"); refresh()
@@ -503,8 +512,6 @@ elif page == "🔍 双方向トレース":
                 is_match = False
                 for l_key in ["主原料ロット", "海藻粉ロット", "デンプンロット"]:
                     if kw_fwd and kw_fwd.lower() in str(b.get(l_key,"")).lower(): is_match = True
-                if maker_fwd and b.get("メーカー") == maker_fwd: is_match = True
-                
                 if b.get("その他添加物") and kw_fwd:
                     try:
                         for o in json.loads(b.get("その他添加物")):
@@ -522,7 +529,7 @@ elif page == "🔍 双方向トレース":
         bc1, bc2 = st.columns(2)
         kw_date = bc1.date_input("対象の仕込日", value=None, key="kw_date")
         kw_prod = bc2.text_input("品名（一部でも可）", placeholder="例: つきこん", key="kw_prod")
-        if st.button("⬅️ 製品から使用原料を調査する", type="primary", key="btn_bwd"):
+        if st.button("⬅️ 遡及実行", type="primary", key="btn_bwd"):
             target_brews = brewing
             if kw_date: target_brews = [b for b in target_brews if b.get("仕込日") == str(kw_date).replace("-","/")]
             if kw_prod: target_brews = [b for b in target_brews if kw_prod.lower() in str(b.get("品名","")).lower()]
