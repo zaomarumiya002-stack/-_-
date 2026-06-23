@@ -23,87 +23,51 @@ st.set_page_config(page_title="原料管理ERP", page_icon="🏭", layout="wide"
 WARN_BUFFER = 0.3  # 発注点の何%上まで「注意」ゾーンにするか（0.3=30%）
 
 st.markdown("""
+st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
 
 :root{
-  --c-bg:#f1f5f9; --c-surface:#ffffff; --c-surface-soft:#f8fafc;
-  --c-primary:#163b66; --c-primary-light:#2f6fb0; --c-accent:#0d9aa6;
-  --c-text:#1e293b; --c-text-soft:#64748b; --c-border:#e2e8f0;
-  --c-ok:#16a34a; --c-ok-bg:#e9f8ee; --c-warn:#d97706; --c-warn-bg:#fff4e0;
-  --c-danger:#dc2626; --c-danger-bg:#fdeaea; --c-none:#94a3b8; --c-none-bg:#f1f5f9;
-  --radius:14px;
+  --c-bg:#f1f5f9; --c-surface:#ffffff; --c-primary:#163b66; 
+  --c-primary-light:#2f6fb0; --c-border:#cbd5e1;
 }
-*, html, body, [class*="css"] { font-family:'Noto Sans JP', sans-serif; }
+*, html, body { font-family:'Noto Sans JP', sans-serif; }
 .stApp { background: var(--c-bg); }
-section[data-testid="stSidebar"] { background:#0f1f33 !important; border-right:1px solid #1e293b; }
-section[data-testid="stSidebar"] * { color:#cbd5e1 !important; }
-section[data-testid="stSidebar"] .stRadio label { padding:9px 10px; border-radius:9px; margin-bottom:2px; font-size:0.92rem; transition:.15s; }
-section[data-testid="stSidebar"] .stRadio label:hover { background:#1c3354; }
 
-.main-header{ display:flex; align-items:center; justify-content:space-between; gap:14px;
-  background:linear-gradient(120deg,var(--c-primary),var(--c-primary-light)); padding:20px 26px;
-  border-radius:var(--radius); margin-bottom:22px; box-shadow:0 6px 18px rgba(22,59,102,.18); }
-.main-header h1{ color:#fff; font-size:1.55rem; font-weight:800; margin:0; letter-spacing:.01em;}
-.main-header p{ color:#bcd9f5; font-size:.85rem; margin:4px 0 0; }
-.main-header .hdr-right{ color:#dce9f7; font-size:.78rem; text-align:right; }
+/* --- 入力フィールドの視認性改善（ここが重要） --- */
+.stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"], 
+.stTextArea textarea, .stDateInput input {
+    background-color: #ffffff !important;
+    border: 1.5px solid var(--c-border) !important;
+    border-radius: 8px !important;
+    color: #1e293b !important;
+    padding: 10px !important;
+}
+/* 入力欄のフォーカス時の反応 */
+.stTextInput input:focus, .stNumberInput input:focus, 
+.stSelectbox div[data-baseweb="select"]:focus-within {
+    border-color: var(--c-primary-light) !important;
+    box-shadow: 0 0 0 3px rgba(47, 111, 176, 0.15) !important;
+}
+/* ラベルの太字・視認性 */
+label { color: #334155 !important; font-weight: 600 !important; }
 
-.kpi-card{ background:var(--c-surface); border-radius:var(--radius); padding:16px 18px;
-  box-shadow:0 1px 3px rgba(15,23,42,.06); border:1px solid var(--c-border); border-top:3px solid var(--c-primary-light);
-  text-align:center; height:100%; }
-.kpi-value{ font-family:'JetBrains Mono',monospace; font-size:2.05rem; font-weight:700; color:var(--c-primary); line-height:1.15;}
-.kpi-label{ font-size:.82rem; color:var(--c-text-soft); margin-top:5px; font-weight:500;}
-.kpi-sub{ font-size:.72rem; color:#94a3b8; margin-top:3px; display:block;}
-
-.alert-ng{ background:var(--c-danger-bg); border:1px solid #f3c4c4; border-left:4px solid var(--c-danger);
-  padding:10px 14px; border-radius:9px; color:#9f1f1f; font-size:.88rem; font-weight:600; margin-bottom:8px; display:flex; align-items:center;}
-.alert-warning{ background:var(--c-warn-bg); border:1px solid #fbe0b0; border-left:4px solid var(--c-warn);
-  padding:10px 14px; border-radius:9px; color:#9a5300; font-size:.88rem; font-weight:600; margin-bottom:8px; display:flex; align-items:center;}
-
-.form-card{ background:var(--c-surface); border:1px solid var(--c-border); border-radius:var(--radius);
-  padding:20px; margin-bottom:18px; box-shadow:0 1px 3px rgba(15,23,42,.04);}
-.section-title{ font-size:1.04rem; font-weight:700; color:var(--c-primary); border-bottom:2px solid #e3eefb;
-  padding-bottom:7px; margin-bottom:16px; }
-.subtle-note{ font-size:.8rem; color:var(--c-text-soft); margin-top:-4px; margin-bottom:10px;}
-
-/* ── 発注点ゲージ ───────────────────────────── */
-.gauge-card{ background:var(--c-surface); border:1px solid var(--c-border); border-radius:12px;
-  padding:13px 16px 11px; margin-bottom:10px; box-shadow:0 1px 2px rgba(15,23,42,.04);}
-.gauge-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:7px;}
-.gauge-label{ font-weight:700; color:var(--c-text); font-size:.92rem;}
-.gauge-badge{ font-size:.68rem; font-weight:800; padding:2px 10px; border-radius:20px; letter-spacing:.02em;}
-.gauge-badge.ok{ background:var(--c-ok-bg); color:var(--c-ok);}
-.gauge-badge.warn{ background:var(--c-warn-bg); color:var(--c-warn);}
-.gauge-badge.ng{ background:var(--c-danger-bg); color:var(--c-danger);}
-.gauge-badge.none{ background:var(--c-none-bg); color:var(--c-none);}
-.gauge-track{ position:relative; height:13px; background:#eef2f6; border-radius:7px; overflow:hidden;}
-.gauge-fill{ height:100%; border-radius:7px; transition:width .3s ease;}
-.gauge-fill.ok{ background:linear-gradient(90deg,#16a34a,#4ade80);}
-.gauge-fill.warn{ background:linear-gradient(90deg,#d97706,#fbbf24);}
-.gauge-fill.ng{ background:linear-gradient(90deg,#dc2626,#f87171);}
-.gauge-fill.none{ background:#cbd5e1;}
-.gauge-threshold-marker{ position:absolute; top:-3px; bottom:-3px; width:2px; background:#334155;}
-.gauge-numbers{ display:flex; justify-content:space-between; align-items:baseline; margin-top:6px;}
-.gauge-current{ font-family:'JetBrains Mono',monospace; font-weight:700; font-size:.95rem; color:var(--c-text);}
-.gauge-sep{ font-size:.74rem; color:var(--c-text-soft); margin-left:6px;}
-.gauge-caption{ font-size:.7rem; color:#94a3b8; margin-top:2px;}
-
-/* ── タブレットモード（仕込み記録）：大きめタップ領域 ── */
-.st-key-tablet_wizard div[data-testid="stButton"] button{ font-size:1.18rem !important; padding:16px 18px !important; min-height:56px !important; border-radius:12px !important; font-weight:700 !important;}
-.st-key-tablet_wizard div[data-baseweb="select"] > div{ min-height:54px !important; font-size:1.1rem !important;}
-.st-key-tablet_wizard input{ font-size:1.15rem !important; min-height:46px !important;}
-.st-key-tablet_wizard label{ font-size:1.02rem !important; font-weight:600 !important;}
-.st-key-tablet_wizard .stRadio label{ font-size:1.05rem !important;}
-.st-key-tablet_wizard .stCaption{ font-size:.95rem !important; font-weight:600; color:var(--c-accent) !important;}
-.tablet-step-badge{ display:inline-block; background:var(--c-accent); color:#fff; font-weight:800; font-size:.82rem;
-  padding:5px 16px; border-radius:20px; margin-bottom:10px;}
-.tablet-review-row{ display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px dashed var(--c-border); font-size:1.02rem;}
-.tablet-review-row b{ color:var(--c-primary);}
-
-.status-chip{ display:inline-block; padding:3px 11px; border-radius:20px; font-size:.78rem; font-weight:700;}
-.status-chip.ok{ background:var(--c-ok-bg); color:var(--c-ok);}
-.status-chip.warn{ background:var(--c-warn-bg); color:var(--c-warn);}
-.status-chip.ng{ background:var(--c-danger-bg); color:var(--c-danger);}
+/* --- レイアウト部品のブラッシュアップ --- */
+section[data-testid="stSidebar"] { background:#0f1f33 !important; }
+.main-header{ 
+    background:linear-gradient(120deg,var(--c-primary),var(--c-primary-light)); 
+    padding:20px 26px; border-radius:12px; margin-bottom:22px; color:white;
+}
+.form-card{ 
+    background:var(--c-surface); border:1px solid #e2e8f0; 
+    border-radius:12px; padding:24px; margin-bottom:20px; 
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.08); 
+}
+.kpi-card{ 
+    background:var(--c-surface); border-radius:12px; padding:18px;
+    border:1px solid #e2e8f0; border-top:4px solid var(--c-primary-light); 
+    text-align:center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
 </style>
 """, unsafe_allow_html=True)
 
