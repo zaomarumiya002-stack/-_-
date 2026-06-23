@@ -446,8 +446,11 @@ elif page == "📦 入荷記録":
                     update_arrival(td["入荷No"], td); st.success("更新しました！"); refresh()
             st.markdown('</div>', unsafe_allow_html=True)
 
+# ---------------------------------------------------------
+# 🧪 仕込み記録 ページ（計算機能・配合マスタ統合版）
+# ---------------------------------------------------------
 elif page == "🧪 仕込み記録":
-    st.markdown('<div class="main-header"><h1>🧪 仕込み・配合計算</h1></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><div><h1>🧪 仕込み・配合計算</h1></div></div>', unsafe_allow_html=True)
     if "recipe_master" not in st.session_state:
         st.session_state.recipe_master = {"通常品0.2％": {"原料": 25, "石灰": 2, "海藻": 1, "でん粉": 10}, "通常品（白）": {"原料": 24, "石灰": 2, "海藻": 0, "でん粉": 8}}
     
@@ -469,191 +472,18 @@ elif page == "🧪 仕込み記録":
             })
             st.success("登録完了！"); refresh()
     with t_list:
-        if brewing: st.dataframe(pd.DataFrame(brewing), use_container_width=True)
+        if brewing: st.dataframe(pd.DataFrame(brewing)[["仕込日", "品名", "仕込量(kg)", "こんにゃく精粉(kg)"]], use_container_width=True)
         else: st.info("データなし")
-        else:
-            if "tablet_step" not in st.session_state: st.session_state.tablet_step = 1
-            if "tablet_other_rows" not in st.session_state: st.session_state.tablet_other_rows = []
-            if "tablet_data" not in st.session_state: st.session_state.tablet_data = {}
-            TD = st.session_state.tablet_data
 
-            def _lot_idx(opts, raw):
-                if not raw: return 0
-                for i, o in enumerate(opts):
-                    if extract_lot(o) == raw: return i
-                return 0
-
-            with st.container(key="tablet_wizard"):
-                step_labels = ["基本情報", "主原料", "副原料・添加物", "確認・保存"]
-                step = st.session_state.tablet_step
-                badges = "".join(
-                    f'<span class="tablet-step-badge" style="opacity:{1 if i + 1 == step else .4};">{i + 1}. {lbl}</span>　'
-                    for i, lbl in enumerate(step_labels)
-                )
-                st.markdown(badges, unsafe_allow_html=True)
-                st.progress(step / 4)
-
-                if step == 1:
-                    st.markdown('<div class="form-card"><div class="section-title">① 基本情報</div>', unsafe_allow_html=True)
-                    freq_names = [n for n, _ in Counter([b.get("品名") for b in brewing if b.get("品名")]).most_common(6)]
-                    if freq_names:
-                        st.caption("👉 よく使う品名をタップ:")
-                        qcols = st.columns(min(len(freq_names), 6))
-                        for i, n in enumerate(freq_names):
-                            if qcols[i % len(qcols)].button(n, key=f"tb_qn_{i}", use_container_width=True):
-                                st.session_state["tb_name"] = n; st.rerun()
-                    b_date = st.date_input("仕込日", value=TD.get("date", date.today()), key="tb_date")
-                    p_name = st.text_input("品名 ＊", value=TD.get("name", ""), key="tb_name")
-                    b_amount = st.number_input("製品仕込量(kg) ＊", min_value=0.0, value=TD.get("amount"), step=10.0, key="tb_amount")
-                    st.markdown('</div>', unsafe_allow_html=True)
-                    if st.button("次へ →", type="primary", use_container_width=True, key="tb_next1"):
-                        TD["date"], TD["name"], TD["amount"] = b_date, p_name, b_amount
-                        if not p_name or not b_amount:
-                            st.error("品名と製品仕込量は必須です")
-                        else:
-                            st.session_state.tablet_step = 2; st.rerun()
-
-                elif step == 2:
-                    st.markdown('<div class="form-card"><div class="section-title">② 主原料（こんにゃく粉）</div>', unsafe_allow_html=True)
-                    main_opts = get_fancy_lots(["こんにゃく粉", "精粉", "粉", "マンナン"])
-                    lot_map = {extract_lot(o): o for o in main_opts}
-                    recent_lots = []
-                    for b in reversed(brewing):
-                        lot = b.get("主原料ロット")
-                        if lot and lot != "─" and lot in lot_map and lot not in recent_lots:
-                            recent_lots.append(lot)
-                        if len(recent_lots) >= 4: break
-                    if recent_lots:
-                        st.caption("👉 最近使用したロットをタップ:")
-                        rcols = st.columns(len(recent_lots))
-                        for i, lot in enumerate(recent_lots):
-                            if rcols[i].button(lot, key=f"tb_ql_{i}", use_container_width=True):
-                                st.session_state["tb_main_lot"] = lot_map[lot]; st.rerun()
-                    main_disp = st.selectbox("こんにゃく粉 ロットNo ＊", main_opts, index=_lot_idx(main_opts, TD.get("main_lot_raw", "")), key="tb_main_lot")
-                    main_kg = st.number_input("こんにゃく粉 使用量(kg) ＊", min_value=0.0, value=TD.get("main_kg"), format="%.2f", key="tb_main_kg")
-                    st.markdown('</div>', unsafe_allow_html=True)
-                    nb1, nb2 = st.columns(2)
-                    if nb1.button("← 戻る", use_container_width=True, key="tb_back2"):
-                        TD["main_lot_raw"], TD["main_kg"] = extract_lot(main_disp), main_kg
-                        st.session_state.tablet_step = 1; st.rerun()
-                    if nb2.button("次へ →", type="primary", use_container_width=True, key="tb_next2"):
-                        TD["main_lot_raw"], TD["main_kg"] = extract_lot(main_disp), main_kg
-                        if TD["main_lot_raw"] == "─" or not main_kg:
-                            st.error("主原料ロットと使用量は必須です")
-                        else:
-                            st.session_state.tablet_step = 3; st.rerun()
-
-                elif step == 3:
-                    st.markdown('<div class="form-card"><div class="section-title">③ 副原料（海藻・デンプン・石灰）</div>', unsafe_allow_html=True)
-                    sea_opts = get_fancy_lots(["海藻", "青海苔", "ひじき", "アラメ"])
-                    sea_disp = st.selectbox("海藻粉 ロット", sea_opts, index=_lot_idx(sea_opts, TD.get("sea_lot_raw", "")), key="tb_sea_lot")
-                    sea_kg = st.number_input("海藻粉 使用量(kg)", min_value=0.0, value=TD.get("sea_kg"), format="%.2f", key="tb_sea_kg")
-                    st.markdown("---")
-                    starch_opts = get_fancy_lots(["デンプン", "でんぷん", "澱粉"])
-                    starch_disp = st.selectbox("加工デンプン ロット", starch_opts, index=_lot_idx(starch_opts, TD.get("starch_lot_raw", "")), key="tb_starch_lot")
-                    starch_kg = st.number_input("デンプン 使用量(kg)", min_value=0.0, value=TD.get("starch_kg"), format="%.2f", key="tb_starch_kg")
-                    starch_types = ["─", "ゆり8", "VA70", "その他"]
-                    starch_type = st.selectbox("デンプン種別", starch_types, index=safe_index(starch_types, TD.get("starch_type"), 0), key="tb_starch_type")
-                    st.markdown("---")
-                    lime_opts = get_fancy_lots(["石灰"])
-                    lime_disp = st.selectbox("石灰 ロット", lime_opts, index=_lot_idx(lime_opts, TD.get("lime_lot_raw", "")), key="tb_lime_lot")
-                    lime_kg = st.number_input("石灰 使用量(kg)", min_value=0.0, value=TD.get("lime_kg"), format="%.2f", key="tb_lime_kg")
-                    st.markdown('</div>', unsafe_allow_html=True)
-
-                    st.markdown('<div class="form-card"><div class="section-title">🧂 その他添加物（任意）</div>', unsafe_allow_html=True)
-                    for i, row in enumerate(st.session_state.tablet_other_rows):
-                        oc1, oc2, oc3, oc4 = st.columns([3, 4, 2, 1])
-                        sel_mat = oc1.selectbox("原料名", materials, key=f"tb_mat_{i}", index=safe_index(materials, row["name"], 0))
-                        sel_lot_disp = oc2.selectbox("ロットNo", get_fancy_lots([sel_mat], current_val=row.get("lot")), key=f"tb_lot_{i}")
-                        sel_kg = oc3.number_input("使用量(kg)", min_value=0.0, format="%.2f", key=f"tb_kg_{i}", value=float(row["kg"]) if row["kg"] else None)
-                        if oc4.button("❌", key=f"tb_del_{i}"): st.session_state.tablet_other_rows.pop(i); st.rerun()
-                        st.session_state.tablet_other_rows[i] = {"name": sel_mat, "lot": extract_lot(sel_lot_disp), "kg": sel_kg or 0.0}
-                    if st.button("➕ 添加物を追加", key="tb_add_oth", use_container_width=True):
-                        st.session_state.tablet_other_rows.append({"name": materials[0], "lot": "─", "kg": 0.0}); st.rerun()
-                    st.markdown('</div>', unsafe_allow_html=True)
-
-                    def _snap3():
-                        TD["sea_lot_raw"], TD["sea_kg"] = extract_lot(sea_disp), sea_kg
-                        TD["starch_lot_raw"], TD["starch_kg"], TD["starch_type"] = extract_lot(starch_disp), starch_kg, starch_type
-                        TD["lime_lot_raw"], TD["lime_kg"] = extract_lot(lime_disp), lime_kg
-
-                    nb1, nb2 = st.columns(2)
-                    if nb1.button("← 戻る", use_container_width=True, key="tb_back3"):
-                        _snap3(); st.session_state.tablet_step = 2; st.rerun()
-                    if nb2.button("確認画面へ →", type="primary", use_container_width=True, key="tb_next3"):
-                        _snap3(); st.session_state.tablet_step = 4; st.rerun()
-
-                elif step == 4:
-                    main_lot_f = TD.get("main_lot_raw") or "─"
-                    sea_lot_f = TD.get("sea_lot_raw") or "─"
-                    starch_lot_f = TD.get("starch_lot_raw") or "─"
-                    lime_lot_f = TD.get("lime_lot_raw") or "─"
-                    st.markdown('<div class="form-card"><div class="section-title">④ 入力内容の確認</div>', unsafe_allow_html=True)
-                    rows = [
-                        ("仕込日", str(TD.get("date", ""))), ("品名", TD.get("name", "")),
-                        ("製品仕込量", f"{TD.get('amount') or 0:,.1f} kg"),
-                        ("主原料ロット", main_lot_f), ("こんにゃく粉 使用量", f"{TD.get('main_kg') or 0:,.2f} kg"),
-                    ]
-                    if sea_lot_f != "─": rows.append(("海藻粉", f"ロット {sea_lot_f} ／ {TD.get('sea_kg') or 0:,.2f} kg"))
-                    if starch_lot_f != "─": rows.append(("デンプン", f"ロット {starch_lot_f} ／ {TD.get('starch_kg') or 0:,.2f} kg ／ {TD.get('starch_type', '─')}"))
-                    if lime_lot_f != "─": rows.append(("石灰", f"ロット {lime_lot_f} ／ {TD.get('lime_kg') or 0:,.2f} kg"))
-                    for r in st.session_state.tablet_other_rows:
-                        if r["kg"] > 0: rows.append((r["name"], f"ロット {r['lot']} ／ {r['kg']:,.2f} kg"))
-                    st.markdown("".join(f'<div class="tablet-review-row"><span>{k}</span><b>{v}</b></div>' for k, v in rows), unsafe_allow_html=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
-
-                    nb1, nb2 = st.columns(2)
-                    if nb1.button("← 内容を修正", use_container_width=True, key="tb_back4"):
-                        st.session_state.tablet_step = 3; st.rerun()
-                    if nb2.button("✅ この内容で保存する", type="primary", use_container_width=True, key="tb_save"):
-                        others_json = json.dumps([r for r in st.session_state.tablet_other_rows if r["kg"] > 0], ensure_ascii=False)
-                        append_brewing({
-                            "仕込No": next_brewing_no(brewing), "仕込日": str(TD.get("date", "")), "品名": TD.get("name", ""),
-                            "主原料ロット": main_lot_f, "仕込量(kg)": TD.get("amount") or 0.0, "こんにゃく精粉(kg)": TD.get("main_kg") or 0.0,
-                            "海藻粉(kg)": TD.get("sea_kg") or 0.0, "海藻粉ロット": sea_lot_f,
-                            "デンプン(kg)": TD.get("starch_kg") or 0.0, "デンプンロット": starch_lot_f, "デンプン種別": TD.get("starch_type", "─"),
-                            "石灰(kg)": TD.get("lime_kg") or 0.0, "石灰ロット": lime_lot_f,
-                            "その他添加物": others_json, "登録日時": datetime.now().isoformat()
-                        })
-                        st.session_state.tablet_data = {}
-                        st.session_state.tablet_other_rows = []
-                        st.session_state.tablet_step = 1
-                        st.success("保存しました！"); refresh()
-
-    with tab_hist:
-        if brewing:
-            st.markdown('<div class="section-title">📋 仕込み履歴一覧</div>', unsafe_allow_html=True)
-            st.dataframe(pd.DataFrame(brewing)[["仕込No", "仕込日", "品名", "主原料ロット", "海藻粉ロット", "デンプンロット", "仕込量(kg)"]][::-1].reset_index(drop=True), use_container_width=True, height=500)
-        else:
-            st.info("データがありません")
-
-    with tab_edit:
-        if not brewing:
-            st.info("データなし")
-        else:
-            st.markdown('<div class="form-card">', unsafe_allow_html=True)
-            edit_target_b = st.selectbox("編集する仕込Noを選択", [f"{b.get('仕込No')} - {b.get('品名')}" for b in reversed(brewing) if b.get("仕込No")], key="edit_brw_sel")
-            if edit_target_b:
-                t_no = edit_target_b.split(" - ")[0]
-                td = next((b for b in brewing if str(b.get("仕込No")) == str(t_no)), None)
-
-                eb_name = st.text_input("品名", value=td.get("品名", ""), key="eb_name")
-                eb_lot_disp = st.selectbox("こんにゃく粉ロットNo", get_fancy_lots(["こんにゃく粉", "精粉", "粉", "マンナン"], current_val=td.get("主原料ロット", "")), key="eb_lot")
-                eb_sl_disp = st.selectbox("海藻粉ロットNo", get_fancy_lots(["海藻"], current_val=td.get("海藻粉ロット", "")), key="eb_slot")
-                eb_stl_disp = st.selectbox("デンプンロットNo", get_fancy_lots(["デンプン"], current_val=td.get("デンプンロット", "")), key="eb_stlot")
-                eb_amt = st.number_input("仕込量(kg)", value=float(td.get("仕込量(kg)") or 0), key="eb_amt")
-                eb_mat = st.number_input("こんにゃく粉(kg)", value=float(td.get("こんにゃく精粉(kg)") or 0), key="eb_mat")
-                if st.button("💾 変更を上書き保存", type="primary", key="eb_save"):
-                    td.update({"品名": eb_name, "主原料ロット": extract_lot(eb_lot_disp), "海藻粉ロット": extract_lot(eb_sl_disp), "デンプンロット": extract_lot(eb_stl_disp), "仕込量(kg)": eb_amt, "こんにゃく精粉(kg)": eb_mat})
-                    update_brewing(td["仕込No"], td); st.success("更新しました！"); refresh()
-            st.markdown('</div>', unsafe_allow_html=True)
-
+# ---------------------------------------------------------
+# 🏭 原料在庫 ページ（正しく接続）
+# ---------------------------------------------------------
 elif page == "🏭 原料在庫":
     st.markdown('<div class="main-header"><div><h1>🏭 原料在庫管理</h1><p>自動計算された現在庫（袋単位）と発注点モニター、棚卸し調整</p></div></div>', unsafe_allow_html=True)
     rt1, rt2, rt3 = st.tabs(["📊 発注点モニター", "📋 現在庫一覧（ロット別）", "⚖️ 在庫ズレ調整"])
 
     with rt1:
-        st.markdown('<p class="subtle-note">原料種別ごとの合計在庫と発注点の状況です。発注点は「⚙️ マスター設定」の「発注点」タブで変更できます。</p>', unsafe_allow_html=True)
+        st.markdown('<p class="subtle-note">原料種別ごとの合計在庫と発注点の状況です。</p>', unsafe_allow_html=True)
         if not type_totals:
             st.info("原料データがありません")
         else:
@@ -663,34 +493,22 @@ elif page == "🏭 原料在庫":
                 (gc1 if i % 2 == 0 else gc2).markdown(gauge_html(m, c, order_points.get(m, 0)), unsafe_allow_html=True)
 
     with rt2:
-        if not inventory_data:
-            st.info("データなし")
-        else:
-            st.markdown('<div class="section-title">📋 ロット別 現在庫一覧</div>', unsafe_allow_html=True)
-            inv_df = pd.DataFrame(list(inventory_data.values()))[["入荷No", "原料種別", "ロットNo", "入荷袋数", "使用袋数", "調整袋数", "現在庫(袋)"]]
-            inv_df.columns = ["入荷No", "原料種別", "ロットNo", "入荷(袋)", "使用(袋)", "調整(袋)", "現在庫(袋)"]
-            st.dataframe(inv_df, column_config={
-                "入荷(袋)": st.column_config.NumberColumn(format="%.1f"), "使用(袋)": st.column_config.NumberColumn(format="%.1f"),
-                "調整(袋)": st.column_config.NumberColumn(format="%.1f"), "現在庫(袋)": st.column_config.NumberColumn(format="%.1f")
-            }, use_container_width=True, height=450)
+        st.markdown('<div class="section-title">📋 ロット別 現在庫一覧</div>', unsafe_allow_html=True)
+        inv_df = pd.DataFrame(list(inventory_data.values()))[["入荷No", "原料種別", "ロットNo", "入荷袋数", "使用袋数", "調整袋数", "現在庫(袋)"]]
+        st.dataframe(inv_df, use_container_width=True)
 
     with rt3:
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
-        if not inventory_data:
-            st.info("データなし")
+        if not inventory_data: st.info("データなし")
         else:
-            target_arr = st.selectbox("対象ロット", [f"{v['入荷No']} ({v['原料種別']} / ロット:{v['ロットNo']} / 現在庫:{v['現在庫(袋)']:.1f}袋)" for v in inventory_data.values()], key="adj_sel")
-            if target_arr:
-                arr_id = target_arr.split(" ")[0]
-                real_val = st.number_input("実在庫 (袋)", value=float(inventory_data[arr_id]["現在庫(袋)"]), step=1.0, key="adj_val")
-                diff = real_val - inventory_data[arr_id]["現在庫(袋)"]
-                st.write(f"👉 調整量: **{diff:+.1f} 袋**")
-                reason = st.text_input("調整理由", key="adj_rsn")
-                if st.button("⚖️ 在庫を調整する", type="primary", key="adj_btn"):
-                    append_adjustment({"調整日": str(date.today()), "入荷No": arr_id, "調整袋数": diff, "理由": reason, "登録日時": datetime.now().isoformat()})
-                    st.success("記録しました！"); refresh()
+            target_arr = st.selectbox("対象ロット", [f"{v['入荷No']} ({v['原料種別']} / ロット:{v['ロットNo']})" for v in inventory_data.values()])
+            arr_id = target_arr.split(" ")[0]
+            diff = st.number_input("調整量 (袋数: +/-で入力)", step=1.0)
+            reason = st.text_input("調整理由")
+            if st.button("⚖️ 在庫を調整する", type="primary"):
+                append_adjustment({"調整日": str(date.today()), "入荷No": arr_id, "調整袋数": diff, "理由": reason, "登録日時": datetime.now().isoformat()})
+                st.success("記録しました！"); refresh()
         st.markdown('</div>', unsafe_allow_html=True)
-
 elif page == "🧹 資材在庫":
     st.markdown('<div class="main-header"><div><h1>🧹 資材・衛生備品 管理</h1><p>一覧・入出庫記録、在庫推移の確認、編集・削除がこの1ページで行えます</p></div></div>', unsafe_allow_html=True)
     s_t1, s_t2, s_t3 = st.tabs(["📋 一覧・入出庫記録", "📈 推移グラフ", "✏️ 編集・削除"])
