@@ -33,48 +33,43 @@ st.markdown("""
 *, html, body { font-family:'Noto Sans JP', sans-serif; }
 .stApp { background: var(--c-bg); }
 
-/* Improved Input Field Visibility */
+/* Input Field Styling */
 .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"], 
 .stTextArea textarea, .stDateInput input {
     background-color: #ffffff !important;
     border: 2px solid var(--c-border) !important;
     border-radius: 8px !important;
     color: #0f172a !important;
-    font-size: 1rem !important;
-    font-weight: 500 !important;
-    padding: 12px !important;
+    padding: 10px !important;
 }
-
-/* Enhanced Focus Effect */
 .stTextInput input:focus, .stNumberInput input:focus, 
 .stSelectbox div[data-baseweb="select"]:focus-within {
     border-color: var(--c-primary) !important;
-    box-shadow: 0 0 0 4px rgba(22, 59, 102, 0.1) !important;
+    box-shadow: 0 0 0 3px rgba(22, 59, 102, 0.15) !important;
 }
 
-/* Label Styling */
-label { 
-    color: #1e293b !important; 
-    font-weight: 700 !important; 
-    margin-bottom: 5px !important; 
-    font-size: 0.95rem !important;
-}
-
-/* Card Styling */
+/* Label & Card Styling */
+label { color: #1e293b !important; font-weight: 700 !important; margin-bottom: 4px !important; }
 .form-card { 
-    background: var(--c-surface); 
-    border: 1px solid #cbd5e1; 
-    border-radius: 12px; 
-    padding: 24px; 
-    margin-bottom: 20px; 
-    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); 
+    background: var(--c-surface); border: 1px solid #cbd5e1; 
+    border-radius: 12px; padding: 20px; margin-bottom: 20px; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
 }
+
+/* Gauge Component Fixes */
+.gauge-card { 
+    background: var(--c-surface); border: 1px solid #e2e8f0; border-radius: 12px;
+    padding: 15px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.gauge-track { background: #eef2f6; height: 12px; border-radius: 6px; overflow: hidden; margin: 8px 0; }
+.gauge-fill { height: 100%; border-radius: 6px; }
+.gauge-current { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #1e293b; }
+.gauge-sep { font-size: 0.75rem; color: #64748b; margin-left: 8px; }
 
 /* Header Styling */
 .main-header{ 
     background:linear-gradient(120deg, #163b66, #2f6fb0); 
-    padding:24px; border-radius:12px; margin-bottom:24px; color:white;
-    box-shadow: 0 4px 12px rgba(22,59,102,0.3);
+    padding:20px; border-radius:12px; margin-bottom:20px; color:white;
 }
 </style>
 """, unsafe_allow_html=True)
