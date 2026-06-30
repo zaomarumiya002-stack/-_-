@@ -13,7 +13,7 @@ st.set_page_config(
 )
 
 # ════════════════════════════════════════════════════════════════
-#  CSS スタイル定義（モバイル・タブレット最適化）
+#  モバイル対応 CSS
 # ════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
@@ -100,7 +100,7 @@ def refresh():
     st.cache_data.clear()
     st.rerun()
 
-# 例外エラーの詳細表示化
+# スプレッドシートからデータを取得
 try:
     arrivals = sheets.load_arrivals()
     brewing = sheets.load_brewing()
@@ -111,34 +111,14 @@ try:
     makers = sheets.load_makers()
     inspectors = sheets.load_inspectors()
     order_points = sheets.load_order_points()
+    recipes_list = sheets.load_recipes()  # スプレッドシートから配合データをロード
 except Exception as e:
-    st.error("🚨 データベース（Googleスプレッドシート）への接続時にエラーが発生しました。")
-    
-    st.markdown("### 🔍 発生しているエラー内容:")
-    st.code(str(e))
-    
-    st.markdown("### 🛠 解決手順のガイド:")
-    
-    # 代表的なエラー別の対応策
-    e_str = str(e)
-    if "APIError: [403]" in e_str or "PERMISSION_DENIED" in e_str:
-        st.warning("👉 **原因: 共有権限がありません。**\n\nGoogleスプレッドシートの右上にある「共有」ボタンを押し、ご使用のサービスアカウントのメールアドレス（Secretsに設定されている `client_email`）に対して「編集者」としてアクセス権限を追加してください。")
-    elif "APIError: [404]" in e_str or "requested entity was not found" in e_str:
-        st.warning("👉 **原因: スプレッドシートIDが見つかりません。**\n\nSecrets内の `sheet_id` に指定されているIDが、GoogleスプレッドシートのURLと一致しているか確認してください。")
-    elif "APIError: [429]" in e_str:
-        st.warning("👉 **原因: 一時的なAPI制限に達しました。**\n\n短時間に連続して再読み込みを行うと発生します。API制限解除まで数秒〜30秒ほど待ってから「手動更新」を押してください。")
-    else:
-        st.info("Secretsに記載された接続設定情報、またはGCP側の認証キーの内容に誤りがないか確認してください。")
-
-    if st.button("🔄 設定を確認後、再接続を試みる"):
-        refresh()
-        
-    st.write("詳細なスタックトレース:")
+    st.error("🚨 スプレッドシートからのロードに失敗しました。接続設定を確認してください。")
     st.code(traceback.format_exc())
     st.stop()
 
 # ════════════════════════════════════════════════════════════════
-#  現在庫計算ロジック
+#  現在庫算出ロジック
 # ════════════════════════════════════════════════════════════════
 def get_inventory():
     inv = {}
@@ -300,33 +280,39 @@ elif page == "📦 原料入荷登録":
             st.info("過去の入荷記録はありません。")
 
 # ═══════════════════════════════════════════════════════════════
-#  3. 仕込み・配合記録
+#  3. 仕込み・配合記録（スプレッドシートマスタ連動＆直近ロット5件優先）
 # ═══════════════════════════════════════════════════════════════
 elif page == "🧪 仕込み・配合記録":
-    st.markdown('<div class="main-header"><h1>🧪 製造仕込み・配合計算</h1><p>配合比率に基づく投入量の自動算出と実績調整</p></div>', unsafe_allow_html=True)
-    if "recipe_master" not in st.session_state:
-        st.session_state.recipe_master = {
-            "通常こんにゃく (国産原料)": {"こんにゃく精粉(kg)": 25.0, "海藻粉(kg)": 1.0, "デンプン(kg)": 5.0, "石灰(kg)": 2.0},
-            "白こんにゃく (海藻不使用)": {"こんにゃく精粉(kg)": 24.0, "海藻粉(kg)": 0.0, "デンプン(kg)": 4.0, "石灰(kg)": 1.8},
-            "手延べ風太麺": {"こんにゃく精粉(kg)": 30.0, "海藻粉(kg)": 1.5, "デンプン(kg)": 8.0, "石灰(kg)": 2.5}
-        }
+    st.markdown('<div class="main-header"><h1>🧪 製造仕込み・配合計算</h1><p>マスタの配合比率に基づく自動算出とロット入力（直近5件表示＋自由手入力）</p></div>', unsafe_allow_html=True)
+    
+    # 配合辞書の構築 (スプレッドシートの配合マスタをDict化)
+    recipes_dict = {
+        r["品名"]: {
+            "こんにゃく精粉(kg)": r["こんにゃく精粉(kg)"],
+            "海藻粉(kg)": r["海藻粉(kg)"],
+            "デンプン(kg)": r["デンプン(kg)"],
+            "石灰(kg)": r["石灰(kg)"]
+        } for r in recipes_list
+    }
 
     tab_brw1, tab_brw2 = st.tabs(["🧪 配合計算・登録", "📋 仕込み履歴"])
     
     with tab_brw1:
         st.markdown('<div class="form-card"><div class="section-title">製品名と希望仕込み量の指定</div>', unsafe_allow_html=True)
-        recipe_opts = list(st.session_state.recipe_master.keys()) + ["直接入力（マスタ外）"]
-        selected_p = st.selectbox("製品名", recipe_opts)
+        recipe_opts = list(recipes_dict.keys()) + ["直接入力（マスタ外）"]
+        selected_p = st.selectbox("品名を選択してください", recipe_opts)
         
         if selected_p == "直接入力（マスタ外）":
             p_name = st.text_input("品名を手動入力")
             standard_recipe = {"こんにゃく精粉(kg)": 25.0, "海藻粉(kg)": 1.0, "デンプン(kg)": 5.0, "石灰(kg)": 2.0}
         else:
             p_name = selected_p
-            standard_recipe = st.session_state.recipe_master[selected_p]
+            standard_recipe = recipes_dict[selected_p]
 
         standard_sum = sum(standard_recipe.values())
         target_size = st.number_input("希望仕込製品量 (kg)", min_value=1.0, value=100.0, step=10.0)
+        
+        # 100kg標準比率をもとに各分量を算出
         scale_ratio = target_size / 100.0 if selected_p != "直接入力（マスタ外）" else 1.0
         
         rec_k = standard_recipe.get("こんにゃく精粉(kg)", 0.0) * scale_ratio
@@ -335,38 +321,70 @@ elif page == "🧪 仕込み・配合記録":
         rec_l = standard_recipe.get("石灰(kg)", 0.0) * scale_ratio
         st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown('<div class="form-card"><div class="section-title">投入量実績値 (微調整可能)</div>', unsafe_allow_html=True)
-        cx1, cx2 = st.columns(2)
-        actual_k = cx1.number_input("こんにゃく精粉投入量 (kg)", min_value=0.0, value=rec_k, step=0.5)
-        actual_s = cx2.number_input("海藻粉投入量 (kg)", min_value=0.0, value=rec_s, step=0.1)
-        actual_st = cx1.number_input("加工デンプン投入量 (kg)", min_value=0.0, value=rec_st, step=0.5)
-        actual_l = cx2.number_input("石灰投入量 (kg)", min_value=0.0, value=rec_l, step=0.1)
+        st.markdown('<div class="form-card"><div class="section-title">投入量実績値およびロット指定（直近5件提示＋手入力可能）</div>', unsafe_allow_html=True)
+        
+        # ーーー 直近入荷5件のロット抽出処理 ーーー
+        recent_arrivals = sorted(arrivals, key=lambda x: x.get("入荷日", ""), reverse=True)
+        # 直近の重複しないロットを5件抽出
+        recent_lots = []
+        for a in recent_arrivals:
+            l_no = str(a.get("ロットNo", "")).strip()
+            if l_no and l_no not in recent_lots:
+                recent_lots.append(l_no)
+            if len(recent_lots) >= 5:
+                break
+        
+        lots_choices = ["手入力する"] + recent_lots + ["─"]
 
-        st.markdown("<br><b>投入原料ロットの紐付け</b>", unsafe_allow_html=True)
-        lots_list = ["─"] + sorted(list(set([str(a.get("ロットNo", "")).strip() for a in arrivals if a.get("ロットNo")])), reverse=True)
-        col_lot1, col_lot2 = st.columns(2)
-        lot_k_val = col_lot1.selectbox("主原料ロット", lots_list, key="b_lot_k")
-        lot_s_val = col_lot2.selectbox("海藻粉ロット", lots_list, key="b_lot_s")
-        lot_st_val = col_lot1.selectbox("加工デンプンロット", lots_list, key="b_lot_st")
+        # 1. こんにゃく精粉
+        st.write("##### **[原料] こんにゃく精粉**")
+        cx1_k, cx2_k = st.columns([1, 1])
+        actual_k = cx1_k.number_input("投入量 (kg)", min_value=0.0, value=rec_k, step=0.5, key="k_kg_act")
+        lot_k_sel = cx2_k.selectbox("直近5件ロットから選択", lots_choices, key="k_lot_sel")
+        lot_k_val = st.text_input("ロットNo手入力", value="" if lot_k_sel == "手入力する" else lot_k_sel, disabled=(lot_k_sel != "手入力する"), key="k_lot_txt")
+
+        # 2. 海藻粉
+        st.write("##### **[添加物] 海藻粉**")
+        cx1_s, cx2_s = st.columns([1, 1])
+        actual_s = cx1_s.number_input("投入量 (kg)", min_value=0.0, value=rec_s, step=0.1, key="s_kg_act")
+        lot_s_sel = cx2_s.selectbox("直近5件ロットから選択", lots_choices, key="s_lot_sel")
+        lot_s_val = st.text_input("ロットNo手入力", value="" if lot_s_sel == "手入力する" else lot_s_sel, disabled=(lot_s_sel != "手入力する"), key="s_lot_txt")
+
+        # 3. 加工デンプン
+        st.write("##### **[添加物] 加工デンプン**")
+        cx1_st, cx2_st = st.columns([1, 1])
+        actual_st = cx1_st.number_input("投入量 (kg)", min_value=0.0, value=rec_st, step=0.5, key="st_kg_act")
+        lot_st_sel = cx2_st.selectbox("直近5件ロットから選択", lots_choices, key="st_lot_sel")
+        lot_st_val = st.text_input("ロットNo手入力", value="" if lot_st_sel == "手入力する" else lot_st_sel, disabled=(lot_st_sel != "手入力する"), key="st_lot_txt")
+
+        # 4. 石灰
+        st.write("##### **[凝固剤] 石灰**")
+        actual_l = st.number_input("石灰投入量 (kg)", min_value=0.0, value=rec_l, step=0.1, key="l_kg_act")
         st.markdown('</div>', unsafe_allow_html=True)
 
+        # 配合比誤差チェック
         if selected_p != "直接入力（マスタ外）":
             actual_total = actual_k + actual_s + actual_st + actual_l
             if actual_total > 0:
                 expected_pct = standard_recipe.get("こんにゃく精粉(kg)", 0.0) / standard_sum
                 actual_pct = actual_k / actual_total
                 if abs(actual_pct - expected_pct) > 0.05:
-                    st.warning("⚠️ 警告: 標準マスタの配合比率から5%以上の乖離が発生しています。投入量を再確認してください。")
+                    st.warning("⚠️ 警告: 標準マスタの配合比率から5%以上の乖離が発生しています。分量を再度ご確認ください。")
 
         if st.button("✅ この実績で仕込み記録を登録する", type="primary", use_container_width=True):
             if not p_name:
                 st.error("品名が設定されていません。")
             else:
+                # 最終的なロット番号を取得（手入力欄優先）
+                final_lot_k = lot_k_val if lot_k_sel == "手入力する" else lot_k_sel
+                final_lot_s = lot_s_val if lot_s_sel == "手入力する" else lot_s_sel
+                final_lot_st = lot_st_val if lot_st_sel == "手入力する" else lot_st_sel
+
                 sheets.append_brewing({
                     "仕込No": sheets.next_brewing_no(brewing), "仕込日": str(date.today()), "品名": p_name,
-                    "メーカー": "自社", "主原料ロット": lot_k_val, "仕込量(kg)": target_size,
-                    "こんにゃく精粉(kg)": actual_k, "海藻粉(kg)": actual_s, "海藻粉ロット": lot_s_val,
-                    "デンプン(kg)": actual_st, "デンプンロット": lot_st_val, "デンプン種別": "-",
+                    "メーカー": "自社", "主原料ロット": final_lot_k, "仕込量(kg)": target_size,
+                    "こんにゃく精粉(kg)": actual_k, "海藻粉(kg)": actual_s, "海藻粉ロット": final_lot_s,
+                    "デンプン(kg)": actual_st, "デンプンロット": final_lot_st, "デンプン種別": "-",
                     "石灰(kg)": actual_l, "石灰水(L)": 0, "その他添加物": "[]", "備考": "配合マスタ連動",
                     "登録日時": datetime.now().isoformat()
                 })
@@ -535,8 +553,8 @@ elif page == "🔍 双方向トレース":
 #  7. マスタ設定
 # ═══════════════════════════════════════════════════════════════
 elif page == "⚙️ マスタ設定":
-    st.markdown('<div class="main-header"><h1>⚙️ マスターデータ設定</h1><p>原料、メーカー、担当者、発注点、新規資材定義</p></div>', unsafe_allow_html=True)
-    m_tab1, m_tab2, m_tab3, m_tab4 = st.tabs(["⚗️ 原料マスタ", "🏢 メーカー・担当者", "🚨 原料発注点", "📦 新規資材登録"])
+    st.markdown('<div class="main-header"><h1>⚙️ マスターデータ設定</h1><p>原料、メーカー、担当者、発注点、配合マスター設定、新規資材定義</p></div>', unsafe_allow_html=True)
+    m_tab1, m_tab2, m_tab3, m_tab4, m_tab5 = st.tabs(["⚗️ 原料マスタ", "🏢 メーカー・担当者", "🚨 原料発注点", "🧪 配合マスタ設定", "📦 新規資材登録"])
     
     with m_tab1:
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
@@ -582,7 +600,31 @@ elif page == "⚙️ マスタ設定":
             refresh()
         st.markdown('</div>', unsafe_allow_html=True)
 
+    # ーーー 配合マスタのテーブル編集機能 ーーー
     with m_tab4:
+        st.markdown('<div class="form-card">', unsafe_allow_html=True)
+        st.write("製品100kgに対する基準配合重量(kg)をスプレッドシート上で管理します（最大10品目程度）。製品を削除するには行を選んでDeleteキー、または一番左のチェックボックスから行削除を行ってください。")
+        df_recipes = pd.DataFrame(recipes_list)
+        edited_recipes = st.data_editor(df_recipes, num_rows="dynamic", use_container_width=True, key="recipe_ed_k")
+        
+        if st.button("💾 配合マスタをスプレッドシートに保存", type="primary"):
+            cleaned_recipes = []
+            for _, r in edited_recipes.iterrows():
+                p_name_val = str(r.get("品名", "")).strip()
+                if p_name_val:
+                    cleaned_recipes.append({
+                        "品名": p_name_val,
+                        "こんにゃく精粉(kg)": str(sheets._f(r.get("こんにゃく精粉(kg)", 0.0))),
+                        "海藻粉(kg)": str(sheets._f(r.get("海藻粉(kg)", 0.0))),
+                        "デンプン(kg)": str(sheets._f(r.get("デンプン(kg)", 0.0))),
+                        "石灰(kg)": str(sheets._f(r.get("石灰(kg)", 0.0)))
+                    })
+            sheets.save_recipes(cleaned_recipes)
+            st.success("配合基準マスタを保存しました。")
+            refresh()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with m_tab5:
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
         with st.form("new_sup_form"):
             c_s1, c_s2 = st.columns(2)
