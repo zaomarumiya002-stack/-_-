@@ -21,74 +21,125 @@ st.set_page_config(
 )
 
 # ════════════════════════════════════════════════════════════════
-#  モバイル対応 CSS
+#  レスポンシブ & 視視認性超強化 CSS
 # ════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
 :root {
-    --c-bg: #f8fafc;
+    --c-bg: #f1f5f9;
     --c-surface: #ffffff;
     --c-primary: #1e3a8a;
-    --c-border: #cbd5e1;
+    --c-accent: #2563eb;
+    --c-border: #475569; /* よりはっきり見える濃いボーダーに変更 */
 }
 .stApp { background: var(--c-bg); }
 
+/* サイドバーの文字サイズを大幅拡大＆太字化 */
+[data-testid="stSidebar"] {
+    background-color: #0f172a !important; /* ダークネイビーで引き締め */
+}
+[data-testid="stSidebar"] *, [data-testid="stSidebar"] label, [data-testid="stSidebar"] p {
+    color: #f1f5f9 !important;
+    font-size: 1.15rem !important; /* PCでも見やすい大きめサイズ */
+    font-weight: 750 !important;
+    line-height: 1.6 !important;
+}
+
+/* ラジオボタンなどの選択パーツをモバイルでもタップしやすく拡大 */
+[data-testid="stSidebar"] div[role="radiogroup"] label {
+    padding: 10px 14px !important;
+    border-radius: 8px !important;
+    margin-bottom: 6px !important;
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+}
+
+/* 入力フォームの枠線を太く強調し、現在アクティブな欄を分かりやすく */
 .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"], .stTextArea textarea, .stDateInput input {
     background-color: var(--c-surface) !important;
-    border: 2px solid var(--c-border) !important;
+    border: 3px solid var(--c-border) !important; /* 3pxに太くして存在感をアピール */
     border-radius: 8px !important;
     color: #0f172a !important;
-    font-size: 1rem !important;
-    padding: 10px !important;
-    min-height: 46px;
+    font-size: 1.1rem !important; /* 文字を少し大きく */
+    font-weight: 700 !important;
+    padding: 12px !important;
+    min-height: 50px;
+}
+.stTextInput input:focus, .stNumberInput input:focus, .stSelectbox div[data-baseweb="select"]:focus-within {
+    border-color: #2563eb !important;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2) !important;
 }
 
 label { 
-    color: #334155 !important; 
-    font-weight: 700 !important; 
-    font-size: 0.85rem !important; 
-    margin-bottom: 4px;
+    color: #0f172a !important; 
+    font-weight: 800 !important; /* ラベルを極太に */
+    font-size: 1rem !important; 
+    margin-bottom: 6px;
+    display: inline-block;
 }
 
+/* ヘッダーデザイン */
 .main-header {
     background: linear-gradient(135deg, #1e3a8a, #2563eb);
-    padding: 18px 24px;
+    padding: 24px;
     border-radius: 12px;
-    margin-bottom: 20px;
+    margin-bottom: 24px;
     color: white;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
 }
 .main-header h1 {
-    font-size: 1.6rem !important;
+    font-size: 1.8rem !important;
     margin: 0 !important;
-    font-weight: 800 !important;
+    font-weight: 850 !important;
 }
 
 .form-card {
     background: var(--c-surface);
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 16px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    border: 2px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.02);
 }
 
 .section-title {
-    font-size: 1rem;
-    font-weight: 800;
+    font-size: 1.15rem;
+    font-weight: 850;
     color: var(--c-primary);
-    margin-bottom: 12px;
-    border-left: 4px solid var(--c-primary);
-    padding-left: 8px;
+    margin-bottom: 16px;
+    border-left: 6px solid var(--c-primary);
+    padding-left: 10px;
+}
+
+/* 登録・保存系プライマリボタンの超強化 */
+.stButton button[kind="primary"] {
+    background: linear-gradient(135deg, #059669, #10b981) !important; /* 鮮やかなグリーン */
+    color: white !important;
+    border: none !important;
+    border-radius: 10px !important;
+    font-size: 1.2rem !important; /* ひと目でわかる大きさ */
+    font-weight: 850 !important;
+    padding: 14px 28px !important;
+    min-height: 56px !important;
+    width: 100% !important;
+    box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2) !important;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.stButton button[kind="primary"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(16, 185, 129, 0.3) !important;
 }
 
 .alert-warning {
-    background-color: #fef3c7;
-    border-left: 5px solid #f59e0b;
-    color: #92400e;
-    padding: 12px;
-    border-radius: 6px;
-    margin-bottom: 10px;
-    font-size: 0.85rem;
+    background-color: #fffbeb;
+    border-left: 6px solid #f59e0b;
+    color: #78350f;
+    padding: 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 0.95rem;
+    font-weight: bold;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -119,7 +170,7 @@ try:
     order_points = sheets.load_order_points()
     recipes_raw = sheets.load_recipes()
 except Exception as e:
-    st.error("🚨 スプレッドシートからのデータ読込に失敗しました。")
+    st.error("🚨 データの読み込みに失敗しました。接続設定を確認してください。")
     st.code(traceback.format_exc())
     st.stop()
 
@@ -299,14 +350,13 @@ elif page == "📦 原料入荷登録":
             st.info("過去の入荷記録はありません。")
 
 # ═══════════════════════════════════════════════════════════════
-#  3. 仕込み・配合記録（仕込み重量から、水を抜いた実原料比率を動的算出）
+#  3. 仕込み・配合記録（TypeError防止＋動的％比率計算）
 # ═══════════════════════════════════════════════════════════════
 elif page == "🧪 仕込み・配合記録":
     st.markdown('<div class="main-header"><h1>🧪 製造仕込み・配合計算</h1><p>全体比率（％）から水を除外した実粉末原料の配合重量（kg）を算出</p></div>', unsafe_allow_html=True)
     
     tab_brw1, tab_brw2 = st.tabs(["🧪 配合計算・登録", "📋 仕込み履歴"])
     
-    # 配合データの安全な展開
     p_recipes = {}
     for r in recipes_raw:
         try:
@@ -327,7 +377,12 @@ elif page == "🧪 仕込み・配合記録":
             active_recipe = [{"原料名": "こんにゃく粉（国産）", "比率": 2.50}, {"原料名": "石灰", "比率": 0.14}, {"原料名": "水", "比率": 97.36}]
         else:
             p_name = selected_p
-            active_recipe = p_recipes[selected_p]
+            active_recipe = p_recipes.get(selected_p, [])
+
+        # ーーー TypeError安全ガード ーーー
+        # active_recipeがリストではない、または空などの異常値を完全に保護
+        if not isinstance(active_recipe, list):
+            active_recipe = []
 
         st.markdown('<div class="form-card"><div class="section-title">実投入原料の自動算出（水を除外）</div>', unsafe_allow_html=True)
         
@@ -335,9 +390,16 @@ elif page == "🧪 仕込み・配合記録":
         any_mismatch = False
         water_weight = 0.0
 
+        # 直近入荷データの準備
+        recent_arrivals = sorted(arrivals, key=lambda x: x.get("入荷日", ""), reverse=True)
+
+        # 確実かつ安全なイテレーション（active_recipeを先頭最大10個に保護制限）
         for i, item in enumerate(active_recipe[:10]):
+            if not isinstance(item, dict):
+                continue
+                
             r_name = item.get("原料名", "未定義原料")
-            r_ratio = float(item.get("比率", 0.0) or 0.0)  # TypeError防止のための安全なフロートキャスト
+            r_ratio = float(item.get("比率", 0.0) or 0.0)
 
             # 水は粉体投入ロット追跡の対象外とし、必要量のみ表示
             if "水" == r_name.strip() or "お湯" in r_name:
@@ -354,12 +416,11 @@ elif page == "🧪 仕込み・配合記録":
             # 実投入量の入力
             act_kg = col_kg.number_input(f"実投入量 (kg)", min_value=0.0, value=rec_kg, step=0.01, key=f"act_kg_{i}_val", format="%.3f")
             
-            # ーーー 劇的改善：その原料種別に合致する直近5件のロットのみフィルタリング ーーー
-            raw_arr_matches = [a for a in arrivals if str(a.get("原料種別", "")).strip() == r_name.strip()]
-            sorted_matches = sorted(raw_arr_matches, key=lambda x: x.get("入荷日", ""), reverse=True)
+            # その原料種別に合致する直近5件のロットのみフィルタリング
+            raw_arr_matches = [a for a in recent_arrivals if str(a.get("原料種別", "")).strip() == r_name.strip()]
             
             recent_filtered_lots = []
-            for a in sorted_matches:
+            for a in raw_arr_matches:
                 l_no = str(a.get("ロットNo", "")).strip()
                 if l_no and l_no not in recent_filtered_lots:
                     recent_filtered_lots.append(l_no)
@@ -396,7 +457,6 @@ elif page == "🧪 仕込み・配合記録":
             if not p_name:
                 st.error("品名が設定されていません。")
             else:
-                # 互換性維持のためのマッピング
                 k_kg = s_kg = st_kg = lime_kg = 0.0
                 k_lot = s_lot = st_lot = "─"
                 
@@ -419,7 +479,7 @@ elif page == "🧪 仕込み・配合記録":
                     "メーカー": "自社", "主原料ロット": k_lot, "仕込量(kg)": target_size,
                     "こんにゃく精粉(kg)": k_kg, "海藻粉(kg)": s_kg, "海藻粉ロット": s_lot,
                     "デンプン(kg)": st_kg, "デンプンロット": st_lot, "デンプン種別": "-",
-                    "石灰(kg)": lime_kg, "石灰水(L)": water_weight, # 差し引いた水の量をここに格納
+                    "石灰(kg)": lime_kg, "石灰水(L)": water_weight, 
                     "その他添加物": json.dumps(submitted_ingredients, ensure_ascii=False),
                     "備考": "多成分パーセント比率動的登録",
                     "登録日時": datetime.now().isoformat()
@@ -529,7 +589,7 @@ elif page == "🧹 資材備品管理":
             st.markdown("---")
             st.markdown('<div class="section-title">🚨 特定ログの取り消し・削除</div>', unsafe_allow_html=True)
             log_id_to_del = st.text_input("削除するログIDを入力してください")
-            if st.button("🗑️ このログIDを完全に削除する"):
+            if st.button("🗑️ このログIDを完全に削除する", type="primary"):
                 if log_id_to_del:
                     sheets.delete_supply_log(log_id_to_del)
                     st.success("ログを削除しました。")
@@ -643,7 +703,7 @@ elif page == "⚙️ マスタ設定":
             st.markdown('<div class="form-card"><div class="section-title">取引先メーカー</div>', unsafe_allow_html=True)
             df_makers = pd.DataFrame({"メーカー名": makers})
             edited_makers = st.data_editor(df_makers, num_rows="dynamic", use_container_width=True, key="maker_ed_k")
-            if st.button("💾 メーカーリストを保存する"):
+            if st.button("💾 メーカーリストを保存する", type="primary"):
                 sheets.save_makers([str(x).strip() for x in edited_makers["メーカー名"].tolist() if str(x).strip()])
                 st.success("メーカー情報を保存しました。")
                 refresh()
@@ -653,7 +713,7 @@ elif page == "⚙️ マスタ設定":
             st.markdown('<div class="form-card"><div class="section-title">検査・調整担当者</div>', unsafe_allow_html=True)
             df_inspectors = pd.DataFrame({"担当者名": inspectors})
             edited_inspectors = st.data_editor(df_inspectors, num_rows="dynamic", use_container_width=True, key="inspector_ed_k")
-            if st.button("💾 担当者リストを保存する"):
+            if st.button("💾 担当者リストを保存する", type="primary"):
                 sheets.save_inspectors([str(x).strip() for x in edited_inspectors["担当者名"].tolist() if str(x).strip()])
                 st.success("担当者情報を保存しました。")
                 refresh()
@@ -671,7 +731,6 @@ elif page == "⚙️ マスタ設定":
             refresh()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ーーー パーセンテージ（％）ベースの多成分レシピエディタ ーーー
     with m_tab4:
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
         st.write("製品の品名ごとに、水を含む各配合原料の全体比率(％)を定義します。合計が100％になるように調整してください。")
@@ -683,7 +742,6 @@ elif page == "⚙️ マスタ設定":
             cols_recipe_inputs = []
             for j in range(10):
                 c_n, c_w = st.columns([2, 1])
-                # 「水」も選べるようにmaterialsリストに「水」を補完
                 ing_mat = c_n.selectbox(f"配合原料 {j+1}", ["(未設定)", "水"] + materials, key=f"rec_builder_mat_{j}_val")
                 ing_ratio = c_w.number_input("比率 (％)", min_value=0.00, max_value=100.00, step=0.01, key=f"rec_builder_ratio_{j}_val", format="%.2f")
                 cols_recipe_inputs.append({"name": ing_mat, "ratio": ing_ratio})
@@ -701,15 +759,6 @@ elif page == "⚙️ マスタ設定":
                     
                     if not valid_items:
                         st.error("有効な配合成分が定義されていません。")
-                    elif abs(total_pct - 100.0) > 0.1:
-                        st.warning(f"⚠️ 合計が {total_pct}% です。基本は100%に調整してください（必要に応じてそのまま登録可能です）。")
-                        # 登録は続行
-                        new_recipe_entry = {"品名": new_p_name, "配合JSON": json.dumps(valid_items, ensure_ascii=False)}
-                        updated_recipes = [r for r in recipes_raw if r["品名"] != new_p_name]
-                        updated_recipes.append(new_recipe_entry)
-                        sheets.save_recipes(updated_recipes)
-                        st.success(f"配合比レシピ: {new_p_name} を保存しました。")
-                        refresh()
                     else:
                         new_recipe_entry = {"品名": new_p_name, "配合JSON": json.dumps(valid_items, ensure_ascii=False)}
                         updated_recipes = [r for r in recipes_raw if r["品名"] != new_p_name]
@@ -728,7 +777,7 @@ elif page == "⚙️ マスタ設定":
                 except:
                     st.write("配合データの読み出しに失敗しました。")
                 
-                if st.button("🗑️ この製品レシピを削除する", key=f"del_rec_btn_{idx}_pct"):
+                if st.button("🗑️ この製品レシピを削除する", key=f"del_rec_btn_{idx}_pct", type="primary"):
                     updated_recipes = [r for r in recipes_raw if r["品名"] != rec["品名"]]
                     sheets.save_recipes(updated_recipes)
                     st.success("削除しました。")
