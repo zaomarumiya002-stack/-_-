@@ -6,6 +6,7 @@ import json
 from datetime import datetime, date, timedelta
 import traceback
 
+# 画像アップロードサポート
 try:
     from PIL import Image
     import base64
@@ -14,10 +15,15 @@ try:
 except ImportError:
     HAS_PIL = False
 
-st.set_page_config(page_title="原料管理ERP", page_icon="🏭", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(
+    page_title="原料・資材管理システム",
+    page_icon="🏭",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 # ════════════════════════════════════════════════════════════════
-#  デザイントークン & モバイル対応CSS
+#  デザイントークン & モバイルレスポンシブ最適化CSS
 # ════════════════════════════════════════════════════════════════
 WARN_BUFFER = 0.3
 
@@ -31,7 +37,7 @@ st.markdown("""
 }
 .stApp { background: var(--c-bg); }
 
-/* モバイルフレンドリーなフォーム要素 */
+/* モバイルの入力欄を太く、指先で押しやすく調整 */
 .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"], .stTextArea textarea, .stDateInput input {
     background-color: var(--c-surface) !important;
     border: 2px solid var(--c-border) !important;
@@ -39,47 +45,51 @@ st.markdown("""
     color: #0f172a !important;
     font-size: 1rem !important;
     padding: 10px !important;
-    min-height: 48px; /* 指で押しやすいサイズ */
+    min-height: 46px;
 }
 
-/* ボタンの大型化 */
-.stButton button {
-    min-height: 48px;
-    font-weight: 700 !important;
-    border-radius: 8px !important;
-    font-size: 1rem !important;
+.stTextInput input:focus, .stNumberInput input:focus {
+    border-color: var(--c-primary) !important;
 }
 
 label { 
     color: #334155 !important; 
     font-weight: 700 !important; 
-    font-size: 0.9rem !important; 
+    font-size: 0.85rem !important; 
     margin-bottom: 4px;
 }
 
+/* ヘッダーデザイン */
 .main-header {
-    background: linear-gradient(135deg, #1e3a8a, #3b82f6);
-    padding: 20px;
+    background: linear-gradient(135deg, #1e3a8a, #2563eb);
+    padding: 18px 24px;
     border-radius: 12px;
     margin-bottom: 20px;
     color: white;
 }
 .main-header h1 {
-    font-size: 1.8rem !important;
-    margin: 0 0 5px 0 !important;
+    font-size: 1.6rem !important;
+    margin: 0 !important;
+    font-weight: 800 !important;
+}
+.main-header p {
+    font-size: 0.85rem !important;
+    margin: 4px 0 0 0 !important;
+    opacity: 0.9;
 }
 
+/* コンポーネント用カードデザイン */
 .form-card {
     background: var(--c-surface);
     border: 1px solid #e2e8f0;
     border-radius: 12px;
-    padding: 18px;
+    padding: 16px;
     margin-bottom: 16px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
 }
 
 .section-title {
-    font-size: 1.05rem;
+    font-size: 1rem;
     font-weight: 800;
     color: var(--c-primary);
     margin-bottom: 12px;
@@ -87,24 +97,25 @@ label {
     padding-left: 8px;
 }
 
-/* アラート用スタイル */
+/* アラート関係 */
 .alert-ng {
     background-color: #fee2e2;
-    border: 1px solid #fca5a5;
+    border-left: 5px solid #ef4444;
     color: #991b1b;
     padding: 12px;
-    border-radius: 8px;
+    border-radius: 6px;
     margin-bottom: 10px;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
+    font-weight: bold;
 }
 .alert-warning {
     background-color: #fef3c7;
-    border: 1px solid #fcd34d;
+    border-left: 5px solid #f59e0b;
     color: #92400e;
     padding: 12px;
-    border-radius: 8px;
+    border-radius: 6px;
     margin-bottom: 10px;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
 }
 
 /* 在庫ゲージ用 */
@@ -124,14 +135,14 @@ label {
 }
 .gauge-track {
     background: #e2e8f0;
-    height: 12px;
-    border-radius: 6px;
+    height: 10px;
+    border-radius: 5px;
     position: relative;
     overflow: hidden;
 }
 .gauge-fill {
     height: 100%;
-    border-radius: 6px;
+    border-radius: 5px;
 }
 .gauge-fill.ok { background: #10b981; }
 .gauge-fill.warn { background: #f59e0b; }
@@ -147,7 +158,7 @@ label {
 """, unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════════
-#  接続確認
+#  接続確認およびデータロード
 # ════════════════════════════════════════════════════════════════
 try:
     from sheets import (
@@ -157,61 +168,27 @@ try:
         load_order_points, save_order_points, next_arrival_no, next_brewing_no, update_supply_log, delete_supply_log
     )
     SHEETS_OK = True
-    HAS_LOG_EDIT = True
 except Exception:
-    st.error(f"🚨 システム接続エラー\n\n```\n{traceback.format_exc()}\n```")
+    st.error(f"🚨 スプレッドシート連携モジュールのロードに失敗しました。\n\n```\n{traceback.format_exc()}\n```")
     st.stop()
 
 def refresh():
     st.cache_data.clear()
     st.rerun()
 
-# ════════════════════════════════════════════════════════════════
-#  共通データ処理
-# ════════════════════════════════════════════════════════════════
-STATUS_LABEL = {"ok": "正常", "warn": "注意", "ng": "要発注", "none": "未設定"}
-
-def calc_status(current, threshold):
-    if threshold is None or threshold <= 0: return "none"
-    if current < threshold: return "ng"
-    if current < threshold * (1 + WARN_BUFFER): return "warn"
-    return "ok"
-
-def gauge_html(label, current, threshold, unit="袋"):
-    status = calc_status(current, threshold)
-    scale_max = max(current * 1.15, threshold * 1.5, 1)
-    fill_pct = max(min(current / scale_max * 100, 100), 0)
-    
-    status_class = "ok"
-    if status == "ng": status_class = "ng"
-    elif status == "warn": status_class = "warn"
-
-    return f"""
-    <div class="gauge-card">
-        <div class="gauge-head">
-            <span>{label}</span>
-            <span class="gauge-fill {status_class}" style="padding: 2px 6px; border-radius: 4px; color: white; font-size: 0.75rem;">
-                {STATUS_LABEL[status]}
-            </span>
-        </div>
-        <div class="gauge-track">
-            <div class="gauge-fill {status_class}" style="width: {fill_pct}%;"></div>
-        </div>
-        <div class="gauge-numbers">
-            <span>現在: {current:,.1f} {unit}</span>
-            <span>基準: {threshold:,.1f} {unit}</span>
-        </div>
-    </div>
-    """
-
-# データ一括取得
-(arrivals, brewing, adjustments, supplies, supply_logs, materials, makers, inspectors, order_points) = (
-    load_arrivals(), load_brewing(), load_adjustments(), load_supplies(), load_supply_logs(),
-    load_materials(), load_makers(), load_inspectors(), load_order_points()
-)
+# データの読込
+arrivals = load_arrivals()
+brewing = load_brewing()
+adjustments = load_adjustments()
+supplies = load_supplies()
+supply_logs = load_supply_logs()
+materials = load_materials()
+makers = load_makers()
+inspectors = load_inspectors()
+order_points = load_order_points()
 
 # ════════════════════════════════════════════════════════════════
-#  現在庫（こんにゃく原料など）の算出
+#  現在庫計算ロジック
 # ════════════════════════════════════════════════════════════════
 def get_inventory():
     inv = {}
@@ -224,12 +201,24 @@ def get_inventory():
             "入荷袋数": float(a.get("袋数") or 0), "使用量(kg)": 0.0, "調整袋数": 0.0
         }
 
+    # 各仕込みでの消費量をロットごとに集計
     for b in brewing:
-        main_lot = str(b.get("主原料ロット", "")).strip()
-        main_kg = float(b.get("こんにゃく精粉(kg)") or 0)
+        # 主原料
+        m_lot = str(b.get("主原料ロット", "")).strip()
+        m_kg = float(b.get("こんにゃく精粉(kg)") or 0)
+        
+        # 海藻粉
+        s_lot = str(b.get("海藻粉ロット", "")).strip()
+        s_kg = float(b.get("海藻粉(kg)") or 0)
+        
+        # デンプン
+        st_lot = str(b.get("デンプンロット", "")).strip()
+        st_kg = float(b.get("デンプン(kg)") or 0)
+
         for v in inv.values():
-            if v["ロットNo"] == main_lot:
-                v["使用量(kg)"] += main_kg
+            if m_lot and v["ロットNo"] == m_lot: v["使用量(kg)"] += m_kg
+            if s_lot and v["ロットNo"] == s_lot: v["使用量(kg)"] += s_kg
+            if st_lot and v["ロットNo"] == st_lot: v["使用量(kg)"] += st_kg
 
     for adj in adjustments:
         ano = str(adj.get("入荷No", ""))
@@ -244,338 +233,516 @@ def get_inventory():
     return inv
 
 inventory_data = get_inventory()
+
+# 原料種別ごとの合計在庫
 type_totals = {}
 for v in inventory_data.values():
     type_totals[v["原料種別"]] = type_totals.get(v["原料種別"], 0) + v["現在庫(袋)"]
 
-raw_alerts = [f"⚠️ {m} の在庫（{c:,.1f}袋）が発注点（{order_points.get(m, 0):,.1f}袋）を下回っています。" for m, c in type_totals.items() if m in order_points and c < order_points[m]]
-
 # ════════════════════════════════════════════════════════════════
-#  サイドバーナビゲーション
+#  サイドバー
 # ════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("### 🏭 原料管理 ERP")
-    page = st.radio("メニュー", ["🏠 ダッシュボード", "📦 原料入荷記録", "🧪 仕込み・配合記録", "🏭 原料在庫一覧", "🧹 資材備品管理", "🔍 履歴トレース", "⚙️ マスタ設定"])
+    st.markdown("### 🏭 製造管理 ERP")
+    page = st.radio("機能メニュー", [
+        "🏠 ダッシュボード", 
+        "📦 原料入荷登録", 
+        "🧪 仕込み・配合記録", 
+        "🏭 原料在庫・棚卸", 
+        "🧹 資材備品管理", 
+        "🔍 双方向トレース", 
+        "⚙️ マスタ設定"
+    ])
     st.markdown("---")
-    if st.button("🔄 表示データを更新", use_container_width=True):
+    if st.button("🔄 データを手動更新", use_container_width=True):
         refresh()
 
 # ════════════════════════════════════════════════════════════════
 #  1. ダッシュボード
 # ════════════════════════════════════════════════════════════════
 if page == "🏠 ダッシュボード":
-    st.markdown('<div class="main-header"><h1>📊 工場稼働・在庫モニター</h1><p>現在の重要アラートおよび在庫状況</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><h1>📊 生産・在庫ダッシュボード</h1><p>工場の在庫状況およびアラート監視</p></div>', unsafe_allow_html=True)
     
-    if raw_alerts:
-        for al in raw_alerts:
+    # アラート検知
+    alerts = []
+    for m, current_bags in type_totals.items():
+        point = order_points.get(m, 0.0)
+        if current_bags < point:
+            alerts.append(f"🚨 【発注警告】{m} の在庫（{current_bags:.1f} 袋）が発注基準値（{point:.1f} 袋）を下回っています。")
+            
+    if alerts:
+        for al in alerts:
             st.markdown(f'<div class="alert-ng">{al}</div>', unsafe_allow_html=True)
     else:
-        st.success("✅ すべての主原料在庫は基準値を満たしています。")
+        st.success("🟢 すべての原料在庫は安全基準値を超えています。")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown('<div class="section-title">⚗️ 原料在庫モニター</div>', unsafe_allow_html=True)
-        for m, val in type_totals.items():
-            st.markdown(gauge_html(m, val, order_points.get(m, 0)), unsafe_allow_html=True)
+    col_g1, col_g2 = st.columns(2)
+    with col_g1:
+        st.markdown('<div class="section-title">⚖️ 原料・添加物 在庫ゲージ</div>', unsafe_allow_html=True)
+        for m in materials:
+            current_val = type_totals.get(m, 0.0)
+            threshold_val = order_points.get(m, 0.0)
+            st.markdown(gauge_html(m, current_val, threshold_val), unsafe_allow_html=True)
 
-    with col2:
-        st.markdown('<div class="section-title">🧪 最新の仕込み状況 (直近5件)</div>', unsafe_allow_html=True)
+    with col_g2:
+        st.markdown('<div class="section-title">⏱️ 直近の製造仕込み（最新5件）</div>', unsafe_allow_html=True)
         if brewing:
-            df_b = pd.DataFrame(brewing)[["仕込日", "品名", "仕込量(kg)", "主原料ロット"]].tail(5)
-            st.dataframe(df_b, use_container_width=True, hide_index=True)
+            df_brw = pd.DataFrame(brewing)[["仕込No", "仕込日", "品名", "仕込量(kg)", "主原料ロット"]]
+            st.dataframe(df_brw.tail(5)[::-1], use_container_width=True, hide_index=True)
         else:
-            st.info("仕込み記録がまだありません。")
+            st.info("登録済みの製造履歴はありません。")
 
 # ════════════════════════════════════════════════════════════════
-#  2. 原料入荷記録
+#  2. 原料入荷登録
 # ════════════════════════════════════════════════════════════════
-elif page == "📦 原料入荷記録":
-    st.markdown('<div class="main-header"><h1>📦 原料入荷記録</h1><p>入荷時の品質検査と保存</p></div>', unsafe_allow_html=True)
+elif page == "📦 原料入荷登録":
+    st.markdown('<div class="main-header"><h1>📦 原料入荷品質記録</h1><p>入荷時の確認・検査情報の一括登録と編集</p></div>', unsafe_allow_html=True)
     
-    tab1, tab2 = st.tabs(["➕ 新規入荷登録", "📋 入荷履歴一覧"])
+    tab_a, tab_b = st.tabs(["➕ 新規入荷登録", "📋 入荷・品質検査履歴"])
     
-    with tab1:
-        st.markdown('<div class="form-card"><div class="section-title">基本情報</div>', unsafe_allow_html=True)
+    with tab_a:
+        st.markdown('<div class="form-card"><div class="section-title">原料入荷情報</div>', unsafe_allow_html=True)
         new_no = next_arrival_no(arrivals)
         
-        # モバイル環境（縦一列）になりがちな箇所は、小分けにして横並びに
         c1, c2 = st.columns(2)
-        a_date = c1.date_input("入荷日", value=date.today())
-        maker = c2.selectbox("メーカー", makers + ["その他"])
-        if maker == "other":
-            maker = st.text_input("メーカー名を入力")
-
+        arr_no = c1.text_input("入荷No", value=new_no, disabled=True)
+        arr_date = c2.date_input("入荷日", value=date.today())
+        
         c3, c4 = st.columns(2)
-        lot_no = c3.text_input("ロットNo ＊")
-        m_type = c4.selectbox("原料種別", materials)
+        maker_sel = c3.selectbox("メーカー", makers + ["その他"])
+        if maker_sel == "その他":
+            maker_val = st.text_input("メーカー名を入力")
+        else:
+            maker_val = maker_sel
+            
+        lot_val = c4.text_input("ロットNo ＊")
 
         c5, c6 = st.columns(2)
-        bags = c5.number_input("袋数", min_value=1, step=1, value=10)
-        b_per = c6.number_input("1袋の重量 (kg)", min_value=1.0, value=20.0, step=0.5)
+        m_type = c5.selectbox("原料種別", materials)
+        bags_qty = c6.number_input("入荷袋数", min_value=1, step=1, value=10)
         
-        st.info(f"💡 合計重量: {(bags * b_per):,.1f} kg")
+        weight_per_bag = st.number_input("1袋重量 (kg)", min_value=1.0, value=20.0, step=0.5)
+        st.info(f"💡 自動算出 合計重量: {bags_qty * weight_per_bag:,.1f} kg")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown('<div class="form-card"><div class="section-title">品質検査</div>', unsafe_allow_html=True)
-        ch1, ch2 = st.columns(2)
-        v_app = ch1.selectbox("外観", ["OK（正常）", "NG（異常あり）"])
-        v_name = ch2.selectbox("品名・規格確認", ["OK（一致）", "NG（不一致）"])
-        v_exp = ch1.selectbox("賞味期限", ["OK（期限内）", "NG（期限外・不明）"])
-        v_dmg = ch2.selectbox("異物確認", ["OK（なし）", "NG（あり）"])
+        st.markdown('<div class="form-card"><div class="section-title">🔍 品質確認・受け入れ受入検査</div>', unsafe_allow_html=True)
+        cc1, cc2 = st.columns(2)
+        chk_app = cc1.selectbox("① 外観", ["OK（正常）", "NG（異常あり）"])
+        chk_spec = cc2.selectbox("② 品名・規格確認", ["OK（一致）", "NG（不一致）"])
+        chk_exp = cc1.selectbox("③ 賞味期限", ["OK（期限内）", "NG（期限切れ）"])
+        chk_dmg = cc2.selectbox("④ 異物・破損混入確認", ["OK（なし）", "NG（あり）"])
         
-        ins = st.selectbox("検査担当者", inspectors)
-        rem = st.text_input("備考")
+        abn_desc = ""
+        if "NG" in [chk_app, chk_spec, chk_exp, chk_dmg]:
+            abn_desc = st.text_input("⚠️ 異常内容の詳細", placeholder="異常があった部位や対応について記入")
+            
+        inspector_val = st.selectbox("受入検査担当者", inspectors)
+        remarks_val = st.text_input("備考")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        if st.button("✅ 入荷記録を保存する", type="primary", use_container_width=True):
-            if not lot_no:
-                st.error("ロットNoを入力してください。")
+        if st.button("✅ 入荷レコードを登録する", type="primary", use_container_width=True):
+            if not lot_val:
+                st.error("ロットNoはトレーサビリティ確保のため必須項目です。")
             else:
                 append_arrival({
-                    "入荷No": new_no, "入荷日": str(a_date), "メーカー": maker, "ロットNo": lot_no,
-                    "原料種別": m_type, "袋数": bags, "1袋重量(kg)": b_per, "総量(kg)": bags * b_per,
-                    "外観": v_app, "品名・規格確認": v_name, "賞味期限": v_exp, "異物": v_dmg,
+                    "入荷No": new_no, "入荷日": str(arr_date), "メーカー": maker_val, "ロットNo": lot_val,
+                    "原料種別": m_type, "袋数": bags_qty, "1袋重量(kg)": weight_per_bag, "総量(kg)": bags_qty * weight_per_bag,
+                    "外観": chk_app, "品名・規格確認": chk_spec, "賞味期限": chk_exp, "異物": chk_dmg,
                     "搬入温度": "-", "臭い": "OK", "包装": "OK", "色調": "OK", "水分": "OK",
-                    "異常内容": "", "担当者": ins, "備考": rem, "登録日時": datetime.now().isoformat()
+                    "異常内容": abn_desc, "担当者": inspector_val, "備考": remarks_val, "登録日時": datetime.now().isoformat()
                 })
-                st.success(f"入荷記録 {new_no} を保存しました。")
+                st.success("入荷品質検査記録を保存しました。")
                 refresh()
 
-    with tab2:
+    with tab_b:
         if arrivals:
-            df_arr = pd.DataFrame(arrivals)[["入荷No", "入荷日", "メーカー", "ロットNo", "原料種別", "袋数", "外観", "担当者"]]
+            df_arr = pd.DataFrame(arrivals)[["入荷No", "入荷日", "メーカー", "ロットNo", "原料種別", "袋数", "外観", "品名・規格確認", "賞味期限", "異物", "担当者"]]
             st.dataframe(df_arr[::-1], use_container_width=True, hide_index=True)
         else:
-            st.info("入荷データはありません。")
+            st.info("入荷記録はありません。")
 
-# ════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 #  3. 仕込み・配合記録（マスタ連動＆警告機能）
-# ════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 elif page == "🧪 仕込み・配合記録":
-    st.markdown('<div class="main-header"><h1>🧪 仕込み・配合計算</h1><p>マスタの配合比率に基づく自動計算と実績入力</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><h1>🧪 製造仕込み・配合計算</h1><p>マスタの配合比率に基づく投入量の自動算出と実績調整</p></div>', unsafe_allow_html=True)
     
-    # 配合マスタの定義
+    # デフォルト配合マスタ
     if "recipe_master" not in st.session_state:
         st.session_state.recipe_master = {
-            "通常こんにゃく (国産)": {"こんにゃく精粉(kg)": 25.0, "海藻粉(kg)": 1.0, "デンプン(kg)": 5.0, "石灰(kg)": 2.0},
-            "白こんにゃく": {"こんにゃく精粉(kg)": 24.0, "海藻粉(kg)": 0.0, "デンプン(kg)": 4.0, "石灰(kg)": 1.8},
-            "特製手延べ": {"こんにゃく精粉(kg)": 30.0, "海藻粉(kg)": 2.0, "デンプン(kg)": 8.0, "石灰(kg)": 2.5}
+            "通常こんにゃく (国産原料)": {"こんにゃく精粉(kg)": 25.0, "海藻粉(kg)": 1.0, "デンプン(kg)": 5.0, "石灰(kg)": 2.0},
+            "白こんにゃく (海藻不使用)": {"こんにゃく精粉(kg)": 24.0, "海藻粉(kg)": 0.0, "デンプン(kg)": 4.0, "石灰(kg)": 1.8},
+            "手延べ風太麺": {"こんにゃく精粉(kg)": 30.0, "海藻粉(kg)": 1.5, "デンプン(kg)": 8.0, "石灰(kg)": 2.5}
         }
 
-    tab_brew1, tab_brew2 = st.tabs(["🧪 配合計算・登録", "📋 仕込み履歴"])
+    tab_brw1, tab_brw2 = st.tabs(["🧪 配合計算・登録", "📋 仕込み履歴"])
     
-    with tab_brew1:
-        st.markdown('<div class="form-card"><div class="section-title">品名と仕込量指定</div>', unsafe_allow_html=True)
+    with tab_brw1:
+        st.markdown('<div class="form-card"><div class="section-title">製品名と希望仕込み量の指定</div>', unsafe_allow_html=True)
         
-        # 品名選択（自由記述も可能）
-        p_opt = list(st.session_state.recipe_master.keys()) + ["直接入力（マスタ外）"]
-        p_select = st.selectbox("品名を選択", p_opt)
+        recipe_opts = list(st.session_state.recipe_master.keys()) + ["直接入力（マスタ外）"]
+        selected_p = st.selectbox("製品名", recipe_opts)
         
-        if p_select == "直接入力（マスタ外）":
-            p_name = st.text_input("品名を入力してください")
-            # デフォルト値
-            base_recipe = {"こんにゃく精粉(kg)": 25.0, "海藻粉(kg)": 1.0, "デンプン(kg)": 5.0, "石灰(kg)": 2.0}
+        if selected_p == "直接入力（マスタ外）":
+            p_name = st.text_input("品名を手動で入力してください")
+            standard_recipe = {"こんにゃく精粉(kg)": 25.0, "海藻粉(kg)": 1.0, "デンプン(kg)": 5.0, "石灰(kg)": 2.0}
         else:
-            p_name = p_select
-            base_recipe = st.session_state.recipe_master[p_select]
+            p_name = selected_p
+            standard_recipe = st.session_state.recipe_master[selected_p]
 
-        # 基準（例: 製品合計仕込量 100kg あたりの配合）
-        base_total = sum(base_recipe.values())
+        standard_sum = sum(standard_recipe.values())
+        target_size = st.number_input("希望仕込製品量 (kg)", min_value=1.0, value=100.0, step=10.0)
         
-        target_kg = st.number_input("希望製品仕込み量 (kg)", min_value=1.0, value=100.0, step=10.0)
+        # 100kgあたりの標準比率をもとに各分量を算出
+        scale_ratio = target_size / 100.0 if selected_p != "直接入力（マスタ外）" else 1.0
         
-        # 比率に応じた推奨自動計算
-        ratio = target_kg / 100.0 if p_select != "直接入力（マスタ外）" else 1.0
-        
-        rec_konjac = base_recipe.get("こんにゃく精粉(kg)", 0.0) * ratio
-        rec_seaweed = base_recipe.get("海藻粉(kg)", 0.0) * ratio
-        rec_starch = base_recipe.get("デンプン(kg)", 0.0) * ratio
-        rec_lime = base_recipe.get("石灰(kg)", 0.0) * ratio
+        rec_k = standard_recipe.get("こんにゃく精粉(kg)", 0.0) * scale_ratio
+        rec_s = standard_recipe.get("海藻粉(kg)", 0.0) * scale_ratio
+        rec_st = standard_recipe.get("デンプン(kg)", 0.0) * scale_ratio
+        rec_l = standard_recipe.get("石灰(kg)", 0.0) * scale_ratio
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown('<div class="form-card"><div class="section-title">実際の配合量実績（手動調整可能）</div>', unsafe_allow_html=True)
-        st.write("※ 計算された推奨値をベースに、実際の投入量を微調整できます。")
+        st.markdown('<div class="form-card"><div class="section-title">投入量実績値 (微調整可能)</div>', unsafe_allow_html=True)
+        st.write("実際の投入量に応じて値を編集できます。標準値からズレがある場合は自動警告されます。")
         
-        col_m1, col_m2 = st.columns(2)
-        act_konjac = col_m1.number_input("こんにゃく精粉投入量 (kg)", min_value=0.0, value=rec_konjac, step=0.5)
-        act_seaweed = col_m2.number_input("海藻粉投入量 (kg)", min_value=0.0, value=rec_seaweed, step=0.1)
-        act_starch = col_m1.number_input("加工デンプン投入量 (kg)", min_value=0.0, value=rec_starch, step=0.5)
-        act_lime = col_m2.number_input("石灰投入量 (kg)", min_value=0.0, value=rec_lime, step=0.1)
+        cx1, cx2 = st.columns(2)
+        actual_k = cx1.number_input("こんにゃく精粉投入量 (kg)", min_value=0.0, value=rec_k, step=0.5)
+        actual_s = cx2.number_input("海藻粉投入量 (kg)", min_value=0.0, value=rec_s, step=0.1)
+        actual_st = cx1.number_input("加工デンプン投入量 (kg)", min_value=0.0, value=rec_st, step=0.5)
+        actual_l = cx2.number_input("石灰投入量 (kg)", min_value=0.0, value=rec_l, step=0.1)
 
-        # ロット紐付け（入荷データから選択）
-        st.markdown("<br><b>ロット選択</b>", unsafe_allow_html=True)
-        lots_in_stock = ["─"] + list(set([str(a.get("ロットNo", "")) for a in arrivals if a.get("ロットNo")]))
+        st.markdown("<br><b>投入原料ロットの紐付け</b>", unsafe_allow_html=True)
+        lots_list = ["─"] + sorted(list(set([str(a.get("ロットNo", "")) for a in arrivals if a.get("ロットNo")])), reverse=True)
         
-        col_l1, col_l2 = st.columns(2)
-        lot_konjac = col_l1.selectbox("主原料ロットNo", lots_in_stock)
-        lot_seaweed = col_l2.selectbox("海藻粉ロットNo", lots_in_stock)
-        lot_starch = col_l1.selectbox("デンプンロットNo", lots_in_stock)
-        
+        col_lot1, col_lot2 = st.columns(2)
+        lot_k_val = col_lot1.selectbox("主原料ロット", lots_list, key="b_lot_k")
+        lot_s_val = col_lot2.selectbox("海藻粉ロット", lots_list, key="b_lot_s")
+        lot_st_val = col_lot1.selectbox("加工デンプンロット", lots_list, key="b_lot_st")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # ════ 配合比率のズレ警告 ════
-        if p_select != "直接入力（マスタ外）":
-            # 基準配合比に対する現在の入力比率のズレをチェック
-            expected_total = act_konjac + act_seaweed + act_starch + act_lime
-            if expected_total > 0:
-                # 基準となる各項目の構成比率
-                base_konjac_pct = (base_recipe.get("こんにゃく精粉(kg)", 0) / base_total)
-                act_konjac_pct = (act_konjac / expected_total)
+        # ════ 配合比率のズレ検出 ════
+        if selected_p != "直接入力（マスタ外）":
+            actual_total = actual_k + actual_s + actual_st + actual_l
+            if actual_total > 0:
+                expected_pct = standard_recipe.get("こんにゃく精粉(kg)", 0.0) / standard_sum
+                actual_pct = actual_k / actual_total
                 
-                # 乖離率（5% 以上のズレがあるか）
-                if abs(act_konjac_pct - base_konjac_pct) > 0.05:
-                    st.warning("⚠️ 警告: 基準の配合比率から5%以上の乖離が発生しています。投入量および希望仕込み量の設定に誤りがないか今一度ご確認ください。")
+                # 5%以上の比率誤差を検出
+                if abs(actual_pct - expected_pct) > 0.05:
+                    st.markdown("""
+                    <div class="alert-warning">
+                        ⚠️ <b>配合比率警告:</b><br>
+                        標準マスタの配合バランスと乖離しています。誤入力や秤量間違いがないか、配合分量を再確認してください。
+                    </div>
+                    """, unsafe_allow_html=True)
 
-        if st.button("✅ この配合で仕込み記録を登録", type="primary", use_container_width=True):
+        if st.button("✅ この実績で仕込み記録を登録する", type="primary", use_container_width=True):
             if not p_name:
-                st.error("品名がありません。")
+                st.error("品名が設定されていません。")
             else:
                 append_brewing({
-                    "仕込No": next_brewing_no(brewing),
-                    "仕込日": str(date.today()),
-                    "品名": p_name,
-                    "メーカー": "自社製造",
-                    "主原料ロット": lot_konjac,
-                    "仕込量(kg)": target_kg,
-                    "こんにゃく精粉(kg)": act_konjac,
-                    "海藻粉(kg)": act_seaweed,
-                    "海藻粉ロット": lot_seaweed,
-                    "デンプン(kg)": act_starch,
-                    "デンプンロット": lot_starch,
-                    "デンプン種別": "-",
-                    "石灰(kg)": act_lime,
-                    "石灰水(L)": 0.0,
-                    "その他添加物": "[]",
-                    "備考": "配合自動計算登録",
+                    "仕込No": next_brewing_no(brewing), "仕込日": str(date.today()), "品名": p_name,
+                    "メーカー": "自社", "主原料ロット": lot_k_val, "仕込量(kg)": target_size,
+                    "こんにゃく精粉(kg)": actual_k, "海藻粉(kg)": actual_s, "海藻粉ロット": lot_s_val,
+                    "デンプン(kg)": actual_st, "デンプンロット": lot_st_val, "デンプン種別": "-",
+                    "石灰(kg)": actual_l, "石灰水(L)": 0, "その他添加物": "[]", "備考": "配合マスタ連動",
                     "登録日時": datetime.now().isoformat()
                 })
-                st.success(f"仕込み記録: {p_name} ({target_kg}kg) の登録を完了しました。")
+                st.success("仕込み実績を記録しました。")
                 refresh()
 
-    with tab_brew2:
+    with tab_brw2:
         if brewing:
-            df_b_show = pd.DataFrame(brewing)[["仕込No", "仕込日", "品名", "仕込量(kg)", "こんにゃく精粉(kg)", "主原料ロット"]]
-            st.dataframe(df_b_show[::-1], use_container_width=True, hide_index=True)
+            df_brw_all = pd.DataFrame(brewing)[["仕込No", "仕込日", "品名", "仕込量(kg)", "こんにゃく精粉(kg)", "主原料ロット", "海藻粉ロット"]]
+            st.dataframe(df_brw_all[::-1], use_container_width=True, hide_index=True)
         else:
-            st.info("仕込み履歴データはありません。")
+            st.info("仕込み記録がありません。")
 
-# ════════════════════════════════════════════════════════════════
-#  4. 原料在庫一覧
-# ════════════════════════════════════════════════════════════════
-elif page == "🏭 原料在庫一覧":
-    st.markdown('<div class="main-header"><h1>🏭 原料在庫一覧</h1><p>入荷記録と仕込み消費に基づき自動算出</p></div>', unsafe_allow_html=True)
+# ═══════════════════════════════════════════════════════════════
+#  4. 原料在庫・棚卸
+# ═══════════════════════════════════════════════════════════════
+elif page == "🏭 原料在庫・棚卸":
+    st.markdown('<div class="main-header"><h1>🏭 原料在庫状況と調整</h1><p>入荷・仕込み消費の履歴から現在庫をロット別に一元算出</p></div>', unsafe_allow_html=True)
     
-    col_t1, col_t2 = st.tabs(["📊 ロット別現在庫", "⚖️ 在庫調整（棚卸）"])
+    tab_inv1, tab_inv2 = st.tabs(["📋 ロット別現在庫一覧", "⚖️ 棚卸し在庫調整"])
     
-    with col_t1:
-        inv_rows = []
-        for k, v in inventory_data.items():
-            if v["現在庫(袋)"] != 0:
-                inv_rows.append(v)
-        
-        if inv_rows:
-            df_inv = pd.DataFrame(inv_rows)[["入荷No", "原料種別", "ロットNo", "メーカー", "入荷袋数", "使用袋数", "調整袋数", "現在庫(袋)"]]
-            st.dataframe(df_inv, use_container_width=True, hide_index=True)
+    with tab_inv1:
+        st.markdown('<div class="section-title">ロットごとの詳細現在庫</div>', unsafe_allow_html=True)
+        active_inv = [v for v in inventory_data.values() if abs(v["現在庫(袋)"]) > 0.001]
+        if active_inv:
+            df_curr_inv = pd.DataFrame(active_inv)[["入荷No", "原料種別", "ロットNo", "メーカー", "入荷袋数", "使用袋数", "調整袋数", "現在庫(袋)"]]
+            st.dataframe(df_curr_inv, use_container_width=True, hide_index=True)
         else:
-            st.info("現在庫はありません。")
+            st.info("現在、理論在庫があるロットはありません。")
 
-    with col_t2:
-        st.markdown('<div class="form-card"><div class="section-title">在庫の微調整</div>', unsafe_allow_html=True)
+    with tab_inv2:
+        st.markdown('<div class="form-card"><div class="section-title">棚卸による理論在庫ズレ調整</div>', unsafe_allow_html=True)
         if not inventory_data:
-            st.info("入荷データがないため調整できません。")
+            st.warning("調整対象となる入荷情報が存在しません。")
         else:
-            target_opts = {f"{v['入荷No']} - {v['原料種別']} (ロット:{v['ロットNo']})": v["入荷No"] for v in inventory_data.values()}
-            sel_label = st.selectbox("調整対象ロット", list(target_opts.keys()))
-            sel_ano = target_opts[sel_label]
-            
-            diff_bags = st.number_input("調整する袋数 (+/-入力可能)", step=1.0, value=0.0)
-            reason = st.text_input("調整の理由", placeholder="例: 棚卸誤差の修正")
-            
-            if st.button("⚖️ 在庫数を保存する", type="primary", use_container_width=True):
+            tgt_list = {f"{v['入荷No']} - {v['原料種別']} (ロット:{v['ロットNo']})": v["入荷No"] for v in inventory_data.values()}
+            selected_tgt = st.selectbox("調整対象ロット", list(tgt_list.keys()))
+            target_ano = tgt_list[selected_tgt]
+
+            diff_bags = st.number_input("理論在庫との差分（袋数単位。増加はプラス、減少はマイナスで入力）", step=1.0, value=0.0)
+            reason_txt = st.text_input("調整の理由", placeholder="例: 実地棚卸との差分修正")
+            operator = st.selectbox("調整実施者", inspectors)
+
+            if st.button("⚖️ 在庫データを上書き調整する", type="primary", use_container_width=True):
                 append_adjustment({
                     "調整ID": f"ADJ-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                    "入荷No": sel_ano,
+                    "入荷No": target_ano,
                     "調整日": str(date.today()),
                     "調整袋数": diff_bags,
-                    "理由": reason,
-                    "担当者": "管理者",
+                    "理由": reason_txt,
+                    "担当者": operator,
                     "登録日時": datetime.now().isoformat()
                 })
-                st.success("調整記録を書き込みました。")
+                st.success("調整情報を書き込みました。在庫表を再構築します。")
                 refresh()
         st.markdown('</div>', unsafe_allow_html=True)
 
-# ════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 #  5. 資材備品管理
-# ════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 elif page == "🧹 資材備品管理":
-    st.markdown('<div class="main-header"><h1>🧹 資材備品管理</h1><p>梱包・衛生などの備品管理</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><h1>🧹 資材・消耗品在庫管理</h1><p>資材の残量管理および入出庫の登録・削除</p></div>', unsafe_allow_html=True)
     
-    # 簡易表示
-    if supplies:
-        df_sup = pd.DataFrame(supplies)[["資材ID", "資材名", "カテゴリ", "初期在庫", "発注点"]]
-        st.dataframe(df_sup, use_container_width=True, hide_index=True)
-    else:
-        st.info("現在、資材マスターデータは設定されていません。")
-
-# ════════════════════════════════════════════════════════════════
-#  6. 履歴トレース
-# ════════════════════════════════════════════════════════════════
-elif page == "🔍 履歴トレース":
-    st.markdown('<div class="main-header"><h1>🔍 双方向トレース</h1><p>主原料ロットに紐づく製品・入荷情報の追跡</p></div>', unsafe_allow_html=True)
+    tab_s1, tab_s2 = st.tabs(["📥 入出庫登録", "🕒 ログ管理と調整"])
     
-    search_lot = st.text_input("検索するロットNoを入力してください（例: 1-109）")
-    if search_lot:
-        st.markdown(f"### ロット番号: **{search_lot}** の追跡結果")
-        
-        # 1. 入荷追跡
-        match_arr = [a for a in arrivals if search_lot.lower() in str(a.get("ロットNo", "")).lower()]
-        if match_arr:
-            st.subheader("📦 該当原料の入荷記録")
-            st.dataframe(pd.DataFrame(match_arr)[["入荷No", "入荷日", "原料種別", "ロットNo", "メーカー"]], use_container_width=True, hide_index=True)
+    with tab_s1:
+        if not supplies:
+            st.warning("資材マスターが未登録です。マスタ設定よりご登録ください。")
         else:
-            st.info("対応する原料入荷情報は見つかりませんでした。")
+            st.markdown('<div class="form-card"><div class="section-title">資材入出庫の記録</div>', unsafe_allow_html=True)
+            col_sc1, col_sc2 = st.columns(2)
+            sup_name = col_sc1.selectbox("資材名", [s.get("資材名") for s in supplies])
+            action_type = col_sc2.selectbox("処理内容", ["➕ 補充する (入荷)", "➖ 使用する (出庫)"])
             
-        # 2. 仕込み追跡
-        match_brw = [b for b in brewing if search_lot.lower() in str(b.get("主原料ロット", "")).lower()]
-        if match_brw:
-            st.subheader("🧪 該当原料を使用した仕込み実績")
-            st.dataframe(pd.DataFrame(match_brw)[["仕込No", "仕込日", "品名", "仕込量(kg)", "主原料ロット"]], use_container_width=True, hide_index=True)
-        else:
-            st.info("このロット原料を使用した仕込み実績はありません。")
+            qty_val = st.number_input("数量", min_value=1.0, value=1.0, step=1.0)
+            operator_val = st.selectbox("作業担当者", inspectors, key="op_sup")
+            notes_val = st.text_input("備考情報")
+            
+            if st.button("💾 資材変動を保存する", type="primary", use_container_width=True):
+                target_sup = next(s for s in supplies if s.get("資材名") == sup_name)
+                append_supply_log({
+                    "ログID": f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+                    "登録日": str(date.today()),
+                    "資材ID": target_sup.get("資材ID"),
+                    "処理": "入荷" if "補充" in action_type else "使用",
+                    "数量": qty_val,
+                    "作業者": operator_val,
+                    "備考": notes_val,
+                    "登録日時": datetime.now().isoformat()
+                })
+                st.success("資材情報を記録しました。")
+                refresh()
+            st.markdown('</div>', unsafe_allow_html=True)
 
-# ════════════════════════════════════════════════════════════════
-#  7. マスタ設定
-# ════════════════════════════════════════════════════════════════
-elif page == "⚙️ マスタ設定":
-    st.markdown('<div class="main-header"><h1>⚙️ システムマスタ設定</h1><p>プルダウンメニューの選択肢および製品ごとの配合比基準</p></div>', unsafe_allow_html=True)
+    with tab_s2:
+        st.markdown('<div class="section-title">入出庫ログ一覧（最新20件）</div>', unsafe_allow_html=True)
+        if supply_logs:
+            id_name_map = {s.get("資材ID"): s.get("資材名") for s in supplies}
+            df_logs = pd.DataFrame(supply_logs).copy()
+            df_logs["資材名"] = df_logs["資材ID"].map(id_name_map)
+            
+            st.dataframe(df_logs.tail(20)[::-1], use_container_width=True, hide_index=True)
+            
+            # 個別ログ削除機能
+            st.markdown("---")
+            st.markdown('<div class="section-title">🚨 特定ログの取り消し・削除</div>', unsafe_allow_html=True)
+            log_id_to_del = st.text_input("削除するログIDを入力してください")
+            if st.button("🗑️ このログIDを完全に削除する"):
+                if log_id_to_del:
+                    delete_supply_log(log_id_to_del)
+                    st.success("ログを削除しました。")
+                    refresh()
+                else:
+                    st.error("有効なログIDを入力してください。")
+        else:
+            st.info("資材入出庫履歴はありません。")
+
+# ═══════════════════════════════════════════════════════════════
+#  6. 双方向トレース (復活・強化版)
+# ═══════════════════════════════════════════════════════════════
+elif page == "🔍 双方向トレース":
+    st.markdown('<div class="main-header"><h1>🔍 双方向原料トレース (HACCP対応)</h1><p>原料の入荷情報から製造製品、あるいは製品から使用した原料を特定します</p></div>', unsafe_allow_html=True)
     
-    m_tab1, m_tab2 = st.tabs(["⚗️ 原料マスタ", "🧪 配合比マスタ設定"])
+    trace_dir = st.radio("トレース方向", ["➡️ 原料ロットから製品を追跡（フォワード）", "⬅️ 製品から原料を遡及（バックワード）"])
+    
+    if "フォワード" in trace_dir:
+        st.markdown('<div class="form-card">', unsafe_allow_html=True)
+        lots_to_search = sorted(list(set([str(a.get("ロットNo", "")) for a in arrivals if a.get("ロットNo")])), reverse=True)
+        target_lot = st.selectbox("検索する原料ロット番号", lots_to_search)
+        
+        if st.button("➡️ 追跡を開始する", type="primary", use_container_width=True):
+            # 原料の入荷情報を検索
+            match_arr = [a for a in arrivals if a.get("ロットNo") == target_lot]
+            if match_arr:
+                st.markdown("##### 📦 入荷・受け入れ情報")
+                st.dataframe(pd.DataFrame(match_arr)[["入荷No", "入荷日", "原料種別", "メーカー", "袋数", "外観", "担当者"]], use_container_width=True, hide_index=True)
+            
+            # 使用されている製造実績を特定
+            match_brw = []
+            for b in brewing:
+                if (b.get("主原料ロット") == target_lot or 
+                    b.get("海藻粉ロット") == target_lot or 
+                    b.get("デンプンロット") == target_lot):
+                    match_brw.append(b)
+                    
+            if match_brw:
+                st.markdown("##### 🧪 製造仕込み消費実績")
+                st.dataframe(pd.DataFrame(match_brw)[["仕込No", "仕込日", "品名", "仕込量(kg)", "こんにゃく精粉(kg)", "主原料ロット"]], use_container_width=True, hide_index=True)
+            else:
+                st.warning("⚠️ このロットを使用した仕込み履歴は存在しません。")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    else:
+        st.markdown('<div class="form-card">', unsafe_allow_html=True)
+        if not brewing:
+            st.info("製造記録が存在しません。")
+        else:
+            brw_opts = {f"No.{b.get('仕込No')} - {b.get('品名')} ({b.get('仕込日')})": b for b in brewing}
+            selected_brw_label = st.selectbox("対象の製造仕込み記録", list(brw_opts.keys()))
+            selected_b = brw_opts[selected_brw_label]
+            
+            if st.button("⬅️ 遡及を開始する", type="primary", use_container_width=True):
+                st.markdown("##### 🧪 製造の基本情報")
+                st.json({
+                    "仕込No": selected_b.get("仕込No"),
+                    "製造日": selected_b.get("仕込日"),
+                    "品名": selected_b.get("品名"),
+                    "製造量 (kg)": selected_b.get("仕込量(kg)")
+                })
+                
+                # 使用されたロットの抽出
+                used_lots = []
+                for k, label in [("主原料ロット", "主原料"), ("海藻粉ロット", "海藻粉"), ("デンプンロット", "加工デンプン")]:
+                    lot_num = selected_b.get(k)
+                    if lot_num and lot_num != "─":
+                        used_lots.append({"原料種別": label, "ロットNo": lot_num})
+                
+                if used_lots:
+                    st.markdown("##### 📦 使用原料の入荷元情報")
+                    details = []
+                    for u in used_lots:
+                        # 入荷情報との突合
+                        arr_match = next((a for a in arrivals if a.get("ロットNo") == u["ロットNo"]), None)
+                        if arr_match:
+                            details.append({
+                                "原料種別": u["原料種別"],
+                                "ロットNo": u["ロットNo"],
+                                "入荷No": arr_match.get("入荷No"),
+                                "入荷日": arr_match.get("入荷日"),
+                                "メーカー": arr_match.get("メーカー"),
+                                "外観検査": arr_match.get("外観")
+                            })
+                        else:
+                            details.append({
+                                "原料種別": u["原料種別"],
+                                "ロットNo": u["ロットNo"],
+                                "入荷No": "不明（直接調達など）",
+                                "入荷日": "不明",
+                                "メーカー": "不明",
+                                "外観検査": "不明"
+                            })
+                    st.dataframe(pd.DataFrame(details), use_container_width=True, hide_index=True)
+                else:
+                    st.warning("この製造ロットで使用された原料ロットの記録はありません。")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# ═══════════════════════════════════════════════════════════════
+#  7. マスタ設定 (復活・強化版)
+# ═══════════════════════════════════════════════════════════════
+elif page == "⚙️ マスタ設定":
+    st.markdown('<div class="main-header"><h1>⚙️ マスターデータ設定</h1><p>原料マスタ、メーカー、担当者リスト、発注基準値、資材設定の登録・削除</p></div>', unsafe_allow_html=True)
+    
+    m_tab1, m_tab2, m_tab3, m_tab4 = st.tabs(["⚗️ 原料マスタ", "🏢 メーカー・担当者", "🚨 原料発注点", "📦 新規資材登録"])
     
     with m_tab1:
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
-        st.write("プルダウンに表示される主原料名称の一覧です。")
-        df_m = pd.DataFrame({"原料名": materials})
-        edited_m = st.data_editor(df_m, num_rows="dynamic", use_container_width=True)
-        if st.button("💾 原料マスタを保存", type="primary"):
-            save_materials([str(x).strip() for x in edited_m["原料名"].tolist() if str(x).strip()])
-            st.success("保存が完了しました。")
+        st.write("プルダウン等の選択リストに並ぶ原料種別の名称リストです。")
+        df_materials = pd.DataFrame({"原料名": materials})
+        edited_materials = st.data_editor(df_materials, num_rows="dynamic", use_container_width=True, key="mat_ed_k")
+        
+        if st.button("💾 原料マスタを更新する", type="primary"):
+            cleaned_list = [str(x).strip() for x in edited_materials["原料名"].tolist() if str(x).strip()]
+            save_materials(cleaned_list)
+            st.success("原料マスター情報を保存しました。")
             refresh()
         st.markdown('</div>', unsafe_allow_html=True)
 
     with m_tab2:
-        st.markdown('<div class="form-card"><div class="section-title">製品別 配合基準値</div>', unsafe_allow_html=True)
-        st.write("各製品 100kg に対する標準配合量（kg）を設定します。")
+        col_sub1, col_sub2 = st.columns(2)
+        with col_sub1:
+            st.markdown('<div class="form-card"><div class="section-title">取引先メーカー</div>', unsafe_allow_html=True)
+            df_makers = pd.DataFrame({"メーカー名": makers})
+            edited_makers = st.data_editor(df_makers, num_rows="dynamic", use_container_width=True, key="maker_ed_k")
+            if st.button("💾 メーカーリストを保存する"):
+                cleaned_makers = [str(x).strip() for x in edited_makers["メーカー名"].tolist() if str(x).strip()]
+                save_makers(cleaned_makers)
+                st.success("メーカー情報を保存しました。")
+                refresh()
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+        with col_sub2:
+            st.markdown('<div class="form-card"><div class="section-title">検査・調整担当者</div>', unsafe_allow_html=True)
+            df_inspectors = pd.DataFrame({"担当者名": inspectors})
+            edited_inspectors = st.data_editor(df_inspectors, num_rows="dynamic", use_container_width=True, key="inspector_ed_k")
+            if st.button("💾 担当者リストを保存する"):
+                cleaned_inspectors = [str(x).strip() for x in edited_inspectors["担当者名"].tolist() if str(x).strip()]
+                save_inspectors(cleaned_inspectors)
+                st.success("担当者情報を保存しました。")
+                refresh()
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    with m_tab3:
+        st.markdown('<div class="form-card">', unsafe_allow_html=True)
+        st.write("原料ごとに、アラートを発生させる在庫の閾値（袋数単位）を定義します。")
+        op_rows = [{"原料名": m, "発注点(袋)": float(order_points.get(m, 0.0))} for m in materials]
+        df_op = pd.DataFrame(op_rows)
+        edited_op = st.data_editor(df_op, use_container_width=True, key="op_ed_k")
         
-        for p_key, recipe in list(st.session_state.recipe_master.items()):
-            with st.expander(p_key):
-                col_r1, col_r2 = st.columns(2)
-                recipe["こんにゃく精粉(kg)"] = col_r1.number_number = col_r1.number_input(f"{p_key} - こんにゃく精粉 (kg)", min_value=0.0, value=recipe.get("こんにゃく精粉(kg)", 0.0), key=f"{p_key}_m1")
-                recipe["海藻粉(kg)"] = col_r2.number_input(f"{p_key} - 海藻粉 (kg)", min_value=0.0, value=recipe.get("海藻粉(kg)", 0.0), key=f"{p_key}_m2")
-                recipe["デンプン(kg)"] = col_r1.number_input(f"{p_key} - デンプン (kg)", min_value=0.0, value=recipe.get("デンプン(kg)", 0.0), key=f"{p_key}_m3")
-                recipe["石灰(kg)"] = col_r2.number_input(f"{p_key} - 石灰 (kg)", min_value=0.0, value=recipe.get("石灰(kg)", 0.0), key=f"{p_key}_m4")
-        
-        if st.button("💾 配合比マスタ設定を確定", type="primary", use_container_width=True):
-            st.success("設定をセッションに一時保存しました。")
+        if st.button("💾 発注点設定を更新する", type="primary"):
+            new_op_dict = {}
+            for _, r in edited_op.iterrows():
+                name_val = str(r["原料名"]).strip()
+                val_float = float(r["発注点(袋)"] or 0.0)
+                if name_val:
+                    new_op_dict[name_val] = val_float
+            save_order_points(new_op_dict)
+            st.success("発注点設定を保存しました。")
+            refresh()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with m_tab4:
+        st.markdown('<div class="form-card">', unsafe_allow_html=True)
+        st.write("消耗品、フィルム、外箱などの資材マスターを新しく追加します。")
+        with st.form("new_sup_form"):
+            c_s1, c_s2 = st.columns(2)
+            new_s_name = c_s1.text_input("資材名称 ＊")
+            new_s_cat = c_s2.text_input("カテゴリ (例: 包材, ダンボール)")
+            
+            c_s3, c_s4 = st.columns(2)
+            new_s_stock = c_s3.number_input("初期在庫数量", min_value=0.0, value=0.0)
+            new_s_point = c_s4.number_input("アラート発注点", min_value=0.0, value=10.0)
+            
+            if st.form_submit_button("➕ この資材をマスターに登録する"):
+                if not new_s_name:
+                    st.error("資材名称は必須入力項目です。")
+                else:
+                    current_supplies = supplies.copy()
+                    current_supplies.append({
+                        "資材ID": f"SUP-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                        "資材名": new_s_name,
+                        "カテゴリ": new_s_cat,
+                        "画像URL": "",
+                        "初期在庫": new_s_stock,
+                        "発注点": new_s_point,
+                        "登録日": str(date.today())
+                    })
+                    save_supplies(current_supplies)
+                    st.success(f"資材: {new_s_name} の登録が完了しました。")
+                    refresh()
         st.markdown('</div>', unsafe_allow_html=True)
