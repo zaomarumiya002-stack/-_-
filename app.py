@@ -13,7 +13,7 @@ st.set_page_config(
 )
 
 # ════════════════════════════════════════════════════════════════
-#  モバイル対応 CSS
+#  CSS スタイル定義（モバイル・タブレット最適化）
 # ════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
@@ -92,7 +92,7 @@ try:
     import sheets
     SHEETS_OK = True
 except Exception as e:
-    st.error("🚨 `sheets.py` の読み込みに失敗しました。")
+    st.error("🚨 `sheets.py` のインポート時にプログラムエラーが発生しました。")
     st.code(traceback.format_exc())
     st.stop()
 
@@ -100,7 +100,7 @@ def refresh():
     st.cache_data.clear()
     st.rerun()
 
-# API制限（429）発生時の自動リカバリ付きロード
+# 例外エラーの詳細表示化
 try:
     arrivals = sheets.load_arrivals()
     brewing = sheets.load_brewing()
@@ -112,10 +112,29 @@ try:
     inspectors = sheets.load_inspectors()
     order_points = sheets.load_order_points()
 except Exception as e:
-    st.error("🚨 Google API接続制限(429)または認証エラーが発生しました。30秒ほど待ってから「手動更新」ボタンを押してください。")
-    st.info("キャッシュシステムにより、通常操作でのAPI制限発生を大幅に抑えていますが、連続したプログラム再起動時に発生することがあります。")
-    if st.button("🔄 接続を再試行する"):
+    st.error("🚨 データベース（Googleスプレッドシート）への接続時にエラーが発生しました。")
+    
+    st.markdown("### 🔍 発生しているエラー内容:")
+    st.code(str(e))
+    
+    st.markdown("### 🛠 解決手順のガイド:")
+    
+    # 代表的なエラー別の対応策
+    e_str = str(e)
+    if "APIError: [403]" in e_str or "PERMISSION_DENIED" in e_str:
+        st.warning("👉 **原因: 共有権限がありません。**\n\nGoogleスプレッドシートの右上にある「共有」ボタンを押し、ご使用のサービスアカウントのメールアドレス（Secretsに設定されている `client_email`）に対して「編集者」としてアクセス権限を追加してください。")
+    elif "APIError: [404]" in e_str or "requested entity was not found" in e_str:
+        st.warning("👉 **原因: スプレッドシートIDが見つかりません。**\n\nSecrets内の `sheet_id` に指定されているIDが、GoogleスプレッドシートのURLと一致しているか確認してください。")
+    elif "APIError: [429]" in e_str:
+        st.warning("👉 **原因: 一時的なAPI制限に達しました。**\n\n短時間に連続して再読み込みを行うと発生します。API制限解除まで数秒〜30秒ほど待ってから「手動更新」を押してください。")
+    else:
+        st.info("Secretsに記載された接続設定情報、またはGCP側の認証キーの内容に誤りがないか確認してください。")
+
+    if st.button("🔄 設定を確認後、再接続を試みる"):
         refresh()
+        
+    st.write("詳細なスタックトレース:")
+    st.code(traceback.format_exc())
     st.stop()
 
 # ════════════════════════════════════════════════════════════════
@@ -556,7 +575,7 @@ elif page == "⚙️ マスタ設定":
         op_rows = [{"原料名": m, "発注点(袋)": float(order_points.get(m, 0.0))} for m in materials]
         df_op = pd.DataFrame(op_rows)
         edited_op = st.data_editor(df_op, use_container_width=True, key="op_ed_k")
-        if st.button("💾 发注点設定を更新する", type="primary"):
+        if st.button("💾 発注点設定を更新する", type="primary"):
             new_op_dict = {str(r["原料名"]).strip(): float(r["発注点(袋)"] or 0.0) for _, r in edited_op.iterrows() if str(r["原料名"]).strip()}
             sheets.save_order_points(new_op_dict)
             st.success("発注点設定を保存しました。")
