@@ -1,4 +1,3 @@
-# --- START OF FILE sheets.py ---
 import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
@@ -146,8 +145,8 @@ def load_supply_logs():
 
 def append_supply_log(r): 
     _append("資材入出庫", COLS_LOG, r)
+
 def update_supply_log(log_id, data):
-    """資材入出庫ログを1件だけ更新する（指定したフィールドのみ差し替え、他は保持）"""
     rows = load_supply_logs()
     target = next((r for r in rows if str(r.get("ログID")) == str(log_id)), None)
     if target is None:
@@ -156,11 +155,11 @@ def update_supply_log(log_id, data):
     _update("資材入出庫", COLS_LOG, "ログID", log_id, merged)
 
 def delete_supply_log(log_id):
-    """資材入出庫ログを1件だけ削除する"""
     w = _ws("資材入出庫", COLS_LOG)
     cvals = w.col_values(COLS_LOG.index("ログID") + 1)
     if str(log_id) in cvals:
         w.delete_rows(cvals.index(str(log_id)) + 1)
+
 def _lcol(n, d):
     try: 
         vals = _ws(n, ["name"]).col_values(1)[1:]
@@ -193,4 +192,3 @@ def save_order_points(d):
     w = _ws("発注点マスター", ["material","order_point"])
     w.clear()
     w.update(range_name="A1", values=[["material","order_point"]] + [[k,str(v)] for k,v in d.items()])
-# --- END OF FILE sheets.py ---
