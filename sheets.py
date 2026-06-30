@@ -15,7 +15,7 @@ COLS_LOG = ["ログID", "登録日", "資材ID", "処理", "数量", "作業者"
 @st.cache_resource(ttl=3600)
 def _client():
     if "gcp_service_account" not in st.secrets:
-        raise ValueError("Secretsに 'gcp_service_account' がありません。")
+        raise ValueError("Streamlit Secrets に 'gcp_service_account' が設定されていません。")
     info = dict(st.secrets["gcp_service_account"])
     if "private_key" in info:
         pk = info["private_key"].replace("\\n", "\n")
@@ -24,13 +24,20 @@ def _client():
         info["private_key"] = pk.replace("\n\n\n", "\n").replace("\n\n", "\n")
     return gspread.authorize(Credentials.from_service_account_info(info, scopes=SCOPES))
 
-def _ws(name, cols):
+# API節約：スプレッドシートインスタンス全体を一度開いたら10分間保持
+@st.cache_resource(ttl=600)
+def _get_spreadsheet():
     if "spreadsheet" not in st.secrets or "sheet_id" not in st.secrets["spreadsheet"]:
-        raise ValueError("Secretsに 'spreadsheet.sheet_id' がありません。")
+        raise ValueError("Streamlit Secrets に 'spreadsheet.sheet_id' が設定されていません。")
+    client = _client()
+    return client.open_by_key(st.secrets["spreadsheet"]["sheet_id"])
+
+def _ws(name, cols):
+    sh = _get_spreadsheet()
     try:
-        return _client().open_by_key(st.secrets["spreadsheet"]["sheet_id"]).worksheet(name)
+        return sh.worksheet(name)
     except gspread.WorksheetNotFound:
-        w = _client().open_by_key(st.secrets["spreadsheet"]["sheet_id"]).add_worksheet(title=name, rows=2000, cols=max(10, len(cols)))
+        w = sh.add_worksheet(title=name, rows=2000, cols=max(10, len(cols)))
         w.update(range_name="A1", values=[cols])
         return w
 
@@ -55,7 +62,7 @@ def _read(name, cols):
 
 def _append(name, cols, rec): 
     _ws(name, cols).append_row([str(rec.get(c, "")) for c in cols])
-    st.cache_data.clear() # 書き込み時はキャッシュをクリア
+    st.cache_data.clear() 
 
 def _update(name, cols, kcol, kval, rec):
     w = _ws(name, cols)
@@ -80,8 +87,22 @@ def _i(v, d=0):
     try: return int(float(str(v).replace(",",""))) if str(v).strip() else d
     except: return d
 
-# 頻繁なAPI制限(429)を回避するため、読み出し系関数にキャッシュを設定
-@st.cache_data(ttl=30)
+# ーーー 抜けていたマスタ読込・書込ヘルパーの復活 ーーー
+def _lcol(n, d):
+    try: 
+        vals = _ws(n, ["name"]).col_values(1)[1:]
+        return [v for v in vals if v] or d
+    except: 
+        return d
+
+def _scol(n, vs):
+    w = _ws(n, ["name"])
+    w.clear()
+    w.update(range_name="A1", values=[["name"]] + [[v] for v in vs])
+    st.cache_data.clear()
+# ーーーーーーーーーーーーーーーーーーーーーーーーーーー
+
+@st.cache_data(ttl=20)
 def load_arrivals():
     rows = _read("入荷記録", COLS_ARR)
     for r in rows: 
@@ -100,7 +121,7 @@ def next_arrival_no(arr):
     nums = [int(a.get('入荷No','A-0').split('-')[1]) for a in arr if '入荷No' in a and '-' in str(a.get('入荷No',''))]
     return f"A-{(max(nums + [0]) + 1):04d}"
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=20)
 def load_brewing():
     rows = _read("仕込み記録", COLS_BRW)
     for r in rows:
@@ -123,7 +144,7 @@ def next_brewing_no(brw):
     nums = [_i(b.get("仕込No")) for b in brw]
     return max(nums + [0]) + 1
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=20)
 def load_adjustments():
     rows = _read("在庫調整", COLS_ADJ)
     for r in rows: 
@@ -133,7 +154,7 @@ def load_adjustments():
 def append_adjustment(r): 
     _append("在庫調整", COLS_ADJ, r)
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=20)
 def load_supplies():
     rows = _read("資材マスター", COLS_SUP)
     for r in rows: 
@@ -144,7 +165,7 @@ def load_supplies():
 def save_supplies(rs): 
     _over("資材マスター", COLS_SUP, rs)
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=20)
 def load_supply_logs():
     rows = _read("資材入出庫", COLS_LOG)
     for r in rows: 
@@ -168,19 +189,19 @@ def delete_supply_log(log_id):
         w.delete_rows(cvals.index(str(log_id)) + 1)
     st.cache_data.clear()
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=30)
 def load_materials(): return _lcol("原料マスター", ["こんにゃく粉（国産）","こんにゃく粉（輸入）","海藻粉","加工デンプン","石灰","食塩"])
 def save_materials(v): _scol("原料マスター", v)
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=30)
 def load_makers(): return _lcol("メーカーマスター", ["滝田商店","荻野","オリヒロ","その他"])
 def save_makers(v): _scol("メーカーマスター", v)
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=30)
 def load_inspectors(): return _lcol("担当者マスター", ["若槻","志村","斎藤"])
 def save_inspectors(v): _scol("担当者マスター", v)
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=30)
 def load_order_points():
     try: 
         rows = _ws("発注点マスター", ["material", "order_point"]).get_all_values()[1:]
