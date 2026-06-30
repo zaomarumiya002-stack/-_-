@@ -1,176 +1,203 @@
-"""
-report_generator.py  ─  Excel帳票出力モジュール（完全同期版）
-"""
-from pathlib import Path
-from datetime import date, datetime
-import json
-import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from openpyxl.utils import get_column_letter
+# sheets.py
+import streamlit as st
+import gspread
+from google.oauth2.service_account import Credentials
+import pandas as pd
+from datetime import datetime
 
-OUTPUT_DIR = Path("data/reports")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
-C_HDR_BG  = "1e3a8a"
-C_HDR_FG  = "ffffff"
-C_TITLE   = "1e1b4b"
-C_ROW_ALT = "f8fafc"
-C_TOTAL   = "fef08a"
-C_WARN    = "fee2e2"
-C_BORDER  = "cbd5e1"
+COLS_ARR = ["入荷No", "入荷日", "メーカー", "ロットNo", "原料種別", "袋数", "1袋重量(kg)", "総量(kg)", "搬入温度", "外観", "臭い", "包装", "色調", "異物", "水分", "賞味期限", "異常内容", "担当者", "備考", "登録日時", "品名・規格確認"]
+COLS_BRW = ["仕込No", "仕込日", "品名", "メーカー", "主原料ロット", "仕込量(kg)", "こんにゃく精粉(kg)", "海藻粉(kg)", "海藻粉ロット", "デンプン(kg)", "デンプンロット", "デンプン種別", "石灰(kg)", "石灰水(L)", "その他添加物", "備考", "登録日時"]
+COLS_ADJ = ["調整ID", "入荷No", "調整日", "調整袋数", "理由", "担当者", "登録日時"]
+COLS_SUP = ["資材ID", "資材名", "カテゴリ", "画像URL", "初期在庫", "発注点", "登録日"]
+COLS_LOG = ["ログID", "登録日", "資材ID", "処理", "数量", "作業者", "備考", "登録日時"]
 
-def _side(): return Side(style="thin", color=C_BORDER)
-def _border(): return Border(left=_side(), right=_side(), top=_side(), bottom=_side())
+@st.cache_resource(ttl=0)
+def _client():
+    # secretsの存在チェック
+    if "gcp_service_account" not in st.secrets:
+        raise ValueError("Streamlit Secrets に 'gcp_service_account' が設定されていません。")
+    
+    info = dict(st.secrets["gcp_service_account"])
+    if "private_key" in info:
+        pk = info["private_key"].replace("\\n", "\n")
+        pk = pk.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
+        pk = pk.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----\n")
+        info["private_key"] = pk.replace("\n\n\n", "\n").replace("\n\n", "\n")
+    return gspread.authorize(Credentials.from_service_account_info(info, scopes=SCOPES))
 
-def _hdr(ws, row, col, val, width=None):
-    c = ws.cell(row=row, column=col, value=val)
-    c.font      = Font(name="Segoe UI", bold=True, color=C_HDR_FG, size=10)
-    c.fill      = PatternFill("solid", fgColor=C_HDR_BG)
-    c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    c.border    = _border()
-    if width:
-        ws.column_dimensions[get_column_letter(col)].width = width
-    return c
+def _ws(name, cols):
+    if "spreadsheet" not in st.secrets or "sheet_id" not in st.secrets["spreadsheet"]:
+        raise ValueError("Streamlit Secrets に 'spreadsheet.sheet_id' が設定されていません。")
+    
+    try:
+        return _client().open_by_key(st.secrets["spreadsheet"]["sheet_id"]).worksheet(name)
+    except gspread.WorksheetNotFound:
+        w = _client().open_by_key(st.secrets["spreadsheet"]["sheet_id"]).add_worksheet(title=name, rows=2000, cols=max(10, len(cols)))
+        w.update(range_name="A1", values=[cols])
+        return w
 
-def _cell(ws, row, col, val, align="left", bg=None, num_fmt=None, bold=False):
-    c = ws.cell(row=row, column=col, value=val)
-    c.font      = Font(name="Segoe UI", size=9, bold=bold)
-    c.alignment = Alignment(horizontal=align, vertical="center", wrap_text=True)
-    c.border    = _border()
-    if bg:      c.fill = PatternFill("solid", fgColor=bg)
-    if num_fmt: c.number_format = num_fmt
-    return c
-
-def _title(ws, title, subtitle=""):
-    ws.row_dimensions[1].height = 32
-    ws.row_dimensions[2].height = 16
-    t = ws.cell(row=1, column=1, value=title)
-    t.font = Font(name="Segoe UI", bold=True, size=14, color=C_TITLE)
-    if subtitle:
-        s = ws.cell(row=2, column=1, value=subtitle)
-        s.font = Font(name="Segoe UI", size=9, color="475569")
-    d = ws.cell(row=2, column=8, value=f"出力日: {date.today().strftime('%Y/%m/%d')}")
-    d.font = Font(name="Segoe UI", size=9, color="475569")
-    d.alignment = Alignment(horizontal="right")
-
-def _ts() -> str:
-    return datetime.now().strftime("%Y%m%d_%H%M%S")
-
-# ═══════════════════════════════════════════════════════════════
-# 入荷記録帳票
-# ═══════════════════════════════════════════════════════════════
-def generate_arrival_report(arrivals: list) -> Path:
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "入荷記録"
-    ws.sheet_view.showGridLines = True
-    ws.column_dimensions["A"].width = 2
-
-    _title(ws, "📦 原料入荷記録一覧", f"総件数: {len(arrivals)} 件")
-
-    HDRS = [
-        ("入荷No",12),("入荷日",12),("メーカー",16),("ロットNo",16),
-        ("原料種別",16),("袋数",8),("1袋重量(kg)",12),("総量(kg)",12),
-        ("外観",10),("品名・規格確認",14),("賞味期限",12),("異物",10),
-        ("異常内容",20),("担当者",10),("備考",20)
-    ]
-    HR = 4
-    ws.row_dimensions[HR].height = 26
-    for ci, (h, w) in enumerate(HDRS, start=2):
-        _hdr(ws, HR, ci, h, w)
-
-    for ri, a in enumerate(reversed(arrivals), start=HR + 1):
-        bg = C_ROW_ALT if ri % 2 == 0 else None
-        ws.row_dimensions[ri].height = 20
+def _read(name, cols):
+    try:
+        w = _ws(name, cols)
+        all_vals = w.get_all_values()
+        if not all_vals:
+            w.update(range_name="A1", values=[cols])
+            return []
         
-        row = [
-            (a.get("入荷No",""), "center", None),
-            (a.get("入荷日",""), "center", None),
-            (a.get("メーカー",""), "left", None),
-            (a.get("ロットNo",""), "center", None),
-            (a.get("原料種別",""), "left", None),
-            (float(a.get("袋数", 0)), "right", "#,##0"),
-            (float(a.get("1袋重量(kg)", 20)), "right", "#,##0.0"),
-            (float(a.get("総量(kg)", 0)), "right", "#,##0.0"),
-            (a.get("外観",""), "center", None),
-            (a.get("品名・規格確認",""), "center", None),
-            (a.get("賞味期限",""), "center", None),
-            (a.get("異物",""), "center", None),
-            (a.get("異常内容","") or "─", "left", None),
-            (a.get("担当者",""), "center", None),
-            (a.get("備考","") or "─", "left", None),
-        ]
-        
-        for ci, (val, align, nf) in enumerate(row, start=2):
-            row_bg = C_WARN if "NG" in str(val) else bg
-            _cell(ws, ri, ci, val, align, bg=row_bg, num_fmt=nf)
+        if all_vals[0][:len(cols)] != cols:
+            w.update(range_name="A1", values=[cols])
+            
+        data_rows = all_vals[1:]
+        records = []
+        for row in data_rows:
+            row_data = row + [""] * (len(cols) - len(row))
+            records.append({cols[i]: row_data[i] for i in range(len(cols))})
+        return records
+    except Exception as e:
+        # 接続エラーなどが発生した場合は空配列を返し、親側でエラー処理する
+        raise e
 
-    ws.freeze_panes = f"B{HR+1}"
-    path = OUTPUT_DIR / f"入荷記録_{_ts()}.xlsx"
-    wb.save(path)
-    return path
+def _append(name, cols, rec): 
+    _ws(name, cols).append_row([str(rec.get(c, "")) for c in cols])
 
-# ═══════════════════════════════════════════════════════════════
-# 仕込み記録帳票
-# ═══════════════════════════════════════════════════════════════
-def generate_brewing_report(brewing: list) -> Path:
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "仕込み記録"
-    ws.sheet_view.showGridLines = True
-    ws.column_dimensions["A"].width = 2
+def _update(name, cols, kcol, kval, rec):
+    w = _ws(name, cols)
+    cvals = w.col_values(cols.index(kcol)+1)
+    if str(kval) in cvals: 
+        w.update(range_name=f"A{cvals.index(str(kval))+1}", values=[[str(rec.get(c, "")) for c in cols]])
+    else: 
+        _append(name, cols, rec)
 
-    _title(ws, "🧪 仕込み・製造実績記録", f"総件数: {len(brewing)} 件")
+def _over(name, cols, recs):
+    w = _ws(name, cols)
+    w.clear()
+    w.update(range_name="A1", values=[cols] + [[str(r.get(c, "")) for c in cols] for r in recs])
 
-    HDRS = [
-        ("仕込No",10),("仕込日",12),("品名",20),("メーカー",14),("主原料ロット",16),
-        ("仕込量(kg)",12),("こんにゃく精粉(kg)",16),("海藻粉(kg)",12),("海藻粉ロット",16),
-        ("デンプン(kg)",12),("デンプンロット",16),("石灰(kg)",10),("備考",20)
-    ]
-    HR = 4
-    ws.row_dimensions[HR].height = 26
-    for ci, (h, w) in enumerate(HDRS, start=2):
-        _hdr(ws, HR, ci, h, w)
+def _f(v, d=0.0):
+    try: 
+        return float(str(v).replace(",","")) if str(v).strip() else d
+    except: 
+        return d
 
-    tot_brew = tot_konjac = tot_seaweed = 0.0
-    for ri, b in enumerate(reversed(brewing), start=HR + 1):
-        bg = C_ROW_ALT if ri % 2 == 0 else None
-        ws.row_dimensions[ri].height = 20
-        
-        b_val = float(b.get("仕込量(kg)", 0) or 0)
-        k_val = float(b.get("こんにゃく精粉(kg)", 0) or 0)
-        s_val = float(b.get("海藻粉(kg)", 0) or 0)
-        tot_brew += b_val
-        tot_konjac += k_val
-        tot_seaweed += s_val
+def _i(v, d=0):
+    try: 
+        return int(float(str(v).replace(",",""))) if str(v).strip() else d
+    except: 
+        return d
 
-        row = [
-            (b.get("仕込No",""), "center", None),
-            (b.get("仕込日",""), "center", None),
-            (b.get("品名",""), "left", None),
-            (b.get("メーカー",""), "left", None),
-            (b.get("主原料ロット",""), "center", None),
-            (b_val, "right", "#,##0.0"),
-            (k_val, "right", "#,##0.0"),
-            (s_val, "right", "#,##0.0"),
-            (b.get("海藻粉ロット","") or "─", "center", None),
-            (float(b.get("デンプン(kg)", 0) or 0), "right", "#,##0.0"),
-            (b.get("デンプンロット","") or "─", "center", None),
-            (float(b.get("石灰(kg)", 0) or 0), "right", "#,##0.00"),
-            (b.get("備考","") or "─", "left", None),
-        ]
-        for ci, (val, align, nf) in enumerate(row, start=2):
-            _cell(ws, ri, ci, val, align, bg=bg, num_fmt=nf)
+def load_arrivals():
+    rows = _read("入荷記録", COLS_ARR)
+    for r in rows: 
+        r["袋数"] = _f(r.get("袋数"))
+        r["1袋重量(kg)"] = _f(r.get("1袋重量(kg)", 20.0))
+        r["総量(kg)"] = _f(r.get("総量(kg)"))
+    return rows
 
-    # 合計行
-    tr = HR + len(brewing) + 1
-    ws.row_dimensions[tr].height = 22
-    _cell(ws, tr, 2, "総合計", "center", bg=C_TOTAL, bold=True)
-    _cell(ws, tr, 7, tot_brew, "right", bg=C_TOTAL, num_fmt="#,##0.0", bold=True)
-    _cell(ws, tr, 8, tot_konjac, "right", bg=C_TOTAL, num_fmt="#,##0.0", bold=True)
-    _cell(ws, tr, 9, tot_seaweed, "right", bg=C_TOTAL, num_fmt="#,##0.0", bold=True)
+def append_arrival(r): 
+    _append("入荷記録", COLS_ARR, r)
 
-    ws.freeze_panes = f"B{HR+1}"
-    path = OUTPUT_DIR / f"仕込み記録_{_ts()}.xlsx"
-    wb.save(path)
-    return path
+def update_arrival(no, r): 
+    _update("入荷記録", COLS_ARR, "入荷No", no, r)
+
+def next_arrival_no(arr): 
+    nums = [int(a.get('入荷No','A-0').split('-')[1]) for a in arr if '入荷No' in a and '-' in str(a.get('入荷No',''))]
+    return f"A-{(max(nums + [0]) + 1):04d}"
+
+def load_brewing():
+    rows = _read("仕込み記録", COLS_BRW)
+    for r in rows:
+        r["仕込量(kg)"] = _f(r.get("仕込量(kg)"))
+        r["こんにゃく精粉(kg)"] = _f(r.get("こんにゃく精粉(kg)"))
+        r["海藻粉(kg)"] = _f(r.get("海藻粉(kg)"))
+        r["デンプン(kg)"] = _f(r.get("デンプン(kg)"))
+        r["石灰(kg)"] = _f(r.get("石灰(kg)"))
+        r["石灰水(L)"] = _f(r.get("石灰水(L)"))
+        r["仕込No"] = _i(r.get("仕込No"))
+    return rows
+
+def append_brewing(r): 
+    _append("仕込み記録", COLS_BRW, r)
+
+def update_brewing(no, r): 
+    _update("仕込み記録", COLS_BRW, "仕込No", str(no), r)
+
+def next_brewing_no(brw): 
+    nums = [_i(b.get("仕込No")) for b in brw]
+    return max(nums + [0]) + 1
+
+def load_adjustments():
+    rows = _read("在庫調整", COLS_ADJ)
+    for r in rows: 
+        r["調整袋数"] = _f(r.get("調整袋数"))
+    return rows
+
+def append_adjustment(r): 
+    _append("在庫調整", COLS_ADJ, r)
+
+def load_supplies():
+    rows = _read("資材マスター", COLS_SUP)
+    for r in rows: 
+        r["初期在庫"] = _f(r.get("初期在庫"))
+        r["発注点"] = _f(r.get("発注点"))
+    return rows
+
+def save_supplies(rs): 
+    _over("資材マスター", COLS_SUP, rs)
+
+def load_supply_logs():
+    rows = _read("資材入出庫", COLS_LOG)
+    for r in rows: 
+        r["数量"] = _f(r.get("数量"))
+    return rows
+
+def append_supply_log(r): 
+    _append("資材入出庫", COLS_LOG, r)
+
+def update_supply_log(log_id, data):
+    rows = load_supply_logs()
+    target = next((r for r in rows if str(r.get("ログID")) == str(log_id)), None)
+    if target is None:
+        return
+    merged = {**target, **data}
+    _update("資材入出庫", COLS_LOG, "ログID", log_id, merged)
+
+def delete_supply_log(log_id):
+    w = _ws("資材入出庫", COLS_LOG)
+    cvals = w.col_values(COLS_LOG.index("ログID") + 1)
+    if str(log_id) in cvals:
+        w.delete_rows(cvals.index(str(log_id)) + 1)
+
+def _lcol(n, d):
+    try: 
+        vals = _ws(n, ["name"]).col_values(1)[1:]
+        return [v for v in vals if v] or d
+    except: 
+        return d
+
+def _scol(n, vs):
+    w = _ws(n, ["name"])
+    w.clear()
+    w.update(range_name="A1", values=[["name"]] + [[v] for v in vs])
+
+def load_materials(): return _lcol("原料マスター", ["こんにゃく粉（国産）","こんにゃく粉（輸入）","海藻粉","加工デンプン","石灰","食塩"])
+def save_materials(v): _scol("原料マスター", v)
+
+def load_makers(): return _lcol("メーカーマスター", ["滝田商店","荻野","オリヒロ","その他"])
+def save_makers(v): _scol("メーカーマスター", v)
+
+def load_inspectors(): return _lcol("担当者マスター", ["若槻","志村","斎藤"])
+def save_inspectors(v): _scol("担当者マスター", v)
+
+def load_order_points():
+    try: 
+        rows = _ws("発注点マスター", ["material", "order_point"]).get_all_values()[1:]
+        return {r[0]: _f(r[1]) for r in rows if r and r[0]}
+    except: 
+        return {}
+
+def save_order_points(d):
+    w = _ws("発注点マスター", ["material","order_point"])
+    w.clear()
+    w.update(range_name="A1", values=[["material","order_point"]] + [[k,str(v)] for k,v in d.items()])
