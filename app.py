@@ -22,7 +22,7 @@ st.set_page_config(
 )
 
 # ════════════════════════════════════════════════════════════════
-#  モバイル・タブレット特化 UI/UX 最適化 CSS
+#  モバイル・タブレット特化 UI/UX 修正版 CSS (文字欠け防止)
 # ════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
@@ -40,196 +40,141 @@ st.markdown("""
 }
 .stApp { background-color: var(--c-bg); color: var(--c-text); font-family: 'Helvetica Neue', Arial, sans-serif; }
 
-/* サイドバー */
 [data-testid="stSidebar"] {
     background-color: var(--c-secondary) !important;
     padding-top: 1rem;
 }
 [data-testid="stSidebar"] * { color: #f8fafc !important; }
 
-/* ラジオボタン(サイドバー用)のタップ領域拡大 */
 [data-testid="stSidebar"] div[role="radiogroup"] label {
-    padding: 16px 20px !important;
-    border-radius: 12px !important;
-    margin-bottom: 10px !important;
+    padding: 12px 16px !important;
+    border-radius: 10px !important;
+    margin-bottom: 8px !important;
     background: #1e293b !important;
     border: 1px solid #334155 !important;
     cursor: pointer;
-    transition: all 0.2s ease;
-    font-size: 1.15rem !important;
+    font-size: 1.05rem !important;
     font-weight: 700 !important;
-}
-[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
-    background: #334155 !important;
-    transform: translateX(3px);
 }
 [data-testid="stSidebar"] button {
     background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
     border: none !important;
-    border-radius: 12px !important;
+    border-radius: 10px !important;
     font-weight: 800 !important;
-    font-size: 1.1rem !important;
-    padding: 16px !important;
-    margin-top: 24px;
+    font-size: 1.05rem !important;
+    padding: 14px !important;
+    margin-top: 20px;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
 }
 
-/* メインヘッダー */
 .main-header {
     background: var(--c-surface);
-    padding: 28px 32px;
-    border-radius: 16px;
+    padding: 24px 28px;
+    border-radius: 14px;
     margin-bottom: 24px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.03);
-    border-left: 10px solid var(--c-primary);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+    border-left: 8px solid var(--c-primary);
 }
 .main-header h1 {
     color: var(--c-secondary) !important;
-    font-size: 2.0rem !important;
+    font-size: 1.8rem !important;
     margin: 0 0 8px 0 !important;
     font-weight: 850 !important;
 }
 .main-header p {
     color: #64748b !important;
-    font-size: 1.05rem !important;
+    font-size: 1rem !important;
     margin: 0 !important;
     font-weight: 600;
 }
 
-/* カードレイアウト */
 .form-card {
     background: var(--c-surface);
     border: 1px solid var(--c-border);
-    border-radius: 16px;
-    padding: 28px;
+    border-radius: 14px;
+    padding: 24px;
     margin-bottom: 24px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.02);
 }
 .section-title {
-    font-size: 1.3rem;
+    font-size: 1.2rem;
     font-weight: 850;
     color: var(--c-secondary);
-    margin-bottom: 24px;
+    margin-bottom: 20px;
     display: flex;
     align-items: center;
     gap: 10px;
 }
 .section-title::before {
-    content: '';
-    display: block;
-    width: 6px;
-    height: 24px;
-    background-color: var(--c-primary);
-    border-radius: 4px;
+    content: ''; display: block; width: 6px; height: 22px; background-color: var(--c-primary); border-radius: 4px;
 }
 
-/* 入力フォーム（スマホ・タブレット完全対応） */
+/* 文字欠け・レイアウト崩れを修正した入力フォーム */
 .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"], .stDateInput input {
     background-color: #f8fafc !important;
     border: 2px solid var(--c-border) !important;
-    border-radius: 12px !important;
+    border-radius: 8px !important;
     color: var(--c-text) !important;
-    font-size: 1.15rem !important;
+    font-size: 1.05rem !important; /* 大きすぎない安全なサイズ */
     font-weight: 700 !important;
-    padding: 14px 18px !important;
-    min-height: 56px !important; /* タップしやすい高さ */
+    padding: 10px 12px !important; /* 余白を調整し文字欠け防止 */
+    min-height: 48px !important; 
+    box-sizing: border-box !important;
+    width: 100% !important;
 }
 .stTextInput input:focus, .stNumberInput input:focus, .stSelectbox div[data-baseweb="select"]:focus-within {
     border-color: var(--c-primary) !important;
     background-color: var(--c-surface) !important;
-    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15) !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
 }
 label { 
     color: #475569 !important; 
     font-weight: 800 !important; 
-    font-size: 1.05rem !important; 
-    margin-bottom: 8px;
+    font-size: 0.95rem !important; 
+    margin-bottom: 6px;
 }
 
-/* 🌟 メインコンテンツ内のラジオボタン(カテゴリ選択等)の押しやすさ超強化 */
-div[data-testid="stRadio"] > div {
-    gap: 16px !important;
-    flex-wrap: wrap !important;
-}
+div[data-testid="stRadio"] > div { gap: 12px !important; flex-wrap: wrap !important; }
 div[data-testid="stRadio"] label {
-    font-size: 1.1rem !important; 
+    font-size: 1.05rem !important; 
     color: var(--c-secondary) !important;
     background-color: #f8fafc;
-    padding: 16px 24px !important; /* ボタン状に巨大化 */
-    border-radius: 12px;
+    padding: 12px 18px !important; 
+    border-radius: 8px;
     border: 2px solid var(--c-border);
     font-weight: 800 !important;
     cursor: pointer;
 }
-div[data-testid="stRadio"] label:hover {
-    background-color: #e2e8f0;
-}
 
-/* メインボタン */
 .stButton button[kind="primary"] {
     background: var(--c-primary) !important;
     color: white !important;
     border: none !important;
-    border-radius: 14px !important;
-    font-size: 1.25rem !important;
+    border-radius: 10px !important;
+    font-size: 1.2rem !important;
     font-weight: 800 !important;
-    padding: 18px 24px !important;
-    min-height: 60px !important;
-    width: 100% !important;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2) !important;
-    transition: all 0.2s ease;
-}
-.stButton button[kind="primary"]:hover {
-    background: var(--c-primary-hover) !important;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.3) !important;
-}
-
-.stDownloadButton button {
-    background-color: #10b981 !important;
-    color: white !important;
-    font-size: 1.1rem !important;
-    font-weight: 800 !important;
-    border-radius: 12px !important;
-    border: none !important;
+    padding: 14px 20px !important;
     min-height: 56px !important;
-    width: 100%;
+    width: 100% !important;
+    box-shadow: 0 4px 8px rgba(37, 99, 235, 0.2) !important;
 }
-.stDownloadButton button:hover { background-color: #059669 !important; }
-
-/* KPIカード */
-.kpi-card {
-    background: var(--c-surface);
-    border: 1px solid var(--c-border);
-    border-radius: 16px;
-    padding: 24px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.03);
-    text-align: center;
-    margin-bottom: 16px;
-}
-.kpi-card.alert { border-color: var(--c-danger); background-color: #fef2f2; }
-.kpi-title { font-size: 1.1rem; color: #64748b; font-weight: 800; margin-bottom: 8px; }
-.kpi-val { font-size: 1.8rem; font-weight: 900; color: var(--c-secondary); }
-.kpi-val.alert { color: var(--c-danger); }
-.kpi-sub { font-size: 0.95rem; color: #94a3b8; font-weight: 700; margin-top: 6px; }
 
 /* アラートバッジ */
 .alert-box {
     background-color: #fffbeb;
     border-left: 6px solid var(--c-warning);
     color: #92400e;
-    padding: 18px;
-    border-radius: 10px;
-    margin-bottom: 18px;
-    font-size: 1.05rem;
+    padding: 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 1rem;
     font-weight: 700;
 }
 .alert-box.danger { background-color: #fef2f2; border-left-color: var(--c-danger); color: #991b1b; }
 .alert-box.info { background-color: #f0fdf4; border-left-color: var(--c-success); color: #065f46; }
 
-/* トグルスイッチの巨大化 */
 div[data-testid="stCheckbox"] label span {
-    font-size: 1.15rem !important;
+    font-size: 1.1rem !important;
     font-weight: 800 !important;
     color: var(--c-secondary) !important;
 }
@@ -372,10 +317,10 @@ if page == "📊 ダッシュボード":
         alert_class = "alert" if pt > 0 and curr < pt else ""
         with cols[idx % 4]:
             st.markdown(f"""
-            <div class="kpi-card {alert_class}">
-                <div class="kpi-title">{m}</div>
-                <div class="kpi-val {alert_class}">{curr:,.2f} <span style="font-size:1rem;">袋</span></div>
-                <div class="kpi-sub">発注基準: {pt:,.2f} 袋</div>
+            <div style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; text-align:center; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); { 'border-color:#ef4444; background:#fef2f2;' if pt > 0 and curr < pt else '' }">
+                <div style="font-size:1rem; color:#64748b; font-weight:700; margin-bottom:8px;">{m}</div>
+                <div style="font-size:1.8rem; font-weight:900; color:{'#ef4444' if pt > 0 and curr < pt else '#0f172a'};">{curr:,.2f} <span style="font-size:1rem;">袋</span></div>
+                <div style="font-size:0.85rem; color:#94a3b8; font-weight:600; margin-top:4px;">発注基準: {pt:,.2f} 袋</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -453,7 +398,6 @@ elif page == "🧪 仕込み・配合計算":
     p_recipes = {}
     for r in recipes_raw:
         try:
-            # 万が一JSON文字列でなく辞書などなら対応、文字列ならパース
             j_data = r["配合JSON"] if isinstance(r["配合JSON"], str) else json.dumps(r["配合JSON"])
             p_recipes[r["品名"]] = {
                 "大カテゴリ": r.get("大カテゴリ", "その他"),
@@ -488,8 +432,7 @@ elif page == "🧪 仕込み・配合計算":
             filtered_opts = []
             for k, v in p_recipes.items():
                 if v["大カテゴリ"] == cat_str:
-                    if cat_str == "プラント" and v["中カテゴリ"] != sub_str:
-                        continue
+                    if cat_str == "プラント" and v["中カテゴリ"] != sub_str: continue
                     filtered_opts.append(k)
             
             st.write("##### **▶ 製造する製品名を選択**")
@@ -521,19 +464,21 @@ elif page == "🧪 仕込み・配合計算":
                 r_name = item.get("原料名", "未定義原料")
                 base_ratio = float(item.get("比率", 0.0))
 
+                # 1. 水（追跡対象外）
                 if "水" == r_name.strip() or "お湯" in r_name:
                     water_weight = target_size * (base_ratio / 100.0)
                     st.markdown(f'<div style="background:#e0f2fe; padding:12px; border-radius:8px; margin-bottom:16px; border:1px solid #bae6fd; color:#0369a1; font-weight:bold;">💧 [参考] 配合加水量: {water_weight:.2f} kg (マスタ比率: {base_ratio:.2f}%)</div>', unsafe_allow_html=True)
                     continue
 
+                # 2. 石灰水（夏季増量＋粉末逆算）
                 if "石灰" in r_name or "カルシウム" in r_name:
                     if is_summer:
                         orig_ratio = base_ratio
-                        base_ratio += 0.1
-                        st.markdown(f'<div style="background:#fefce8; padding:8px 12px; border-radius:6px; color:#a16207; font-weight:bold; margin-bottom:8px; border-left:4px solid #eab308;">☀️ 夏季自動調整: 石灰比率を +0.1% 増量 ({orig_ratio:.2f}% → {base_ratio:.2f}%)</div>', unsafe_allow_html=True)
+                        base_ratio += 0.01 # 修正: 夏季は +0.01% (0.14 -> 0.15)
+                        st.markdown(f'<div style="background:#fefce8; padding:8px 12px; border-radius:6px; color:#a16207; font-weight:bold; margin-bottom:8px; border-left:4px solid #eab308;">☀️ 夏季自動調整: 石灰比率を +0.01% 増量 ({orig_ratio:.2f}% → {base_ratio:.2f}%)</div>', unsafe_allow_html=True)
                     
                     st.markdown(f"#### 🧪 {r_name}")
-                    col_l1, col_l2 = st.columns(2)
+                    col_l1, col_l2 = st.columns([1, 1])
                     act_ratio = col_l1.number_input("適用比率 (%)", value=base_ratio, step=0.01, format="%.2f", key=f"ratio_{i}")
                     lime_water_l = col_l2.number_input("作りたい石灰水の量 (L)", min_value=0.0, value=float(target_size), step=1.0, format="%.2f", key=f"lime_l_{i}")
                     
@@ -547,22 +492,24 @@ elif page == "🧪 仕込み・配合計算":
                         if l_no and l_no not in recent_filtered_lots: recent_filtered_lots.append(l_no)
                         if len(recent_filtered_lots) >= 5: break
                     
-                    lots_choices = ["手入力する"] + recent_filtered_lots + ["─"]
+                    # 修正: 文言の変更
+                    lots_choices = ["─ (ロットを選択)", "✏️ 手入力 (リスト外)"] + recent_filtered_lots
                     col_l_sel, col_l_txt = st.columns(2)
-                    lot_sel = col_l_sel.selectbox("直近5件ロット", lots_choices, key=f"lot_sel_{i}")
-                    lot_txt = col_l_txt.text_input("ロット手入力", value="" if lot_sel == "手入力する" else lot_sel, disabled=(lot_sel != "手入力する"), key=f"lot_txt_{i}")
+                    lot_sel = col_l_sel.selectbox("入荷ロットの選択", lots_choices, key=f"lot_sel_{i}")
+                    lot_txt = col_l_txt.text_input("ロット手入力", value="" if lot_sel == "✏️ 手入力 (リスト外)" else lot_sel, disabled=(lot_sel != "✏️ 手入力 (リスト外)"), key=f"lot_txt_{i}")
                     
-                    final_lot = lot_txt if lot_sel == "手入力する" else lot_sel
+                    final_lot = lot_txt if lot_sel == "✏️ 手入力 (リスト外)" else lot_sel
+                    if final_lot == "─ (ロットを選択)": final_lot = "─"
                     submitted_ingredients.append({"原料名": r_name, "kg": calc_kg, "lot": final_lot})
                     st.markdown("<hr style='margin:20px 0;'>", unsafe_allow_html=True)
                     continue
 
+                # 3. 通常の粉体原料
                 st.markdown(f"#### 🍏 {r_name}")
-                col_rat, col_kg_show = st.columns(2)
+                col_rat, col_kg_show = st.columns([1, 1])
                 act_ratio = col_rat.number_input("適用割合 (%)", value=base_ratio, step=0.01, format="%.2f", key=f"ratio_{i}")
                 
                 calc_kg = target_size * (act_ratio / 100.0)
-                col_kg_show.metric("✅ 実投入量 (自動計算)", f"{calc_kg:.3f} kg")
                 
                 raw_arr_matches = [a for a in recent_arrivals if str(a.get("原料種別", "")).strip() == r_name.strip()]
                 recent_filtered_lots = []
@@ -570,83 +517,103 @@ elif page == "🧪 仕込み・配合計算":
                     l_no = str(a.get("ロットNo", "")).strip()
                     if l_no and l_no not in recent_filtered_lots: recent_filtered_lots.append(l_no)
                     if len(recent_filtered_lots) >= 5: break
-                lots_choices = ["手入力する"] + recent_filtered_lots + ["─"]
+                lots_choices = ["─ (ロットを選択)", "✏️ 手入力 (リスト外)"] + recent_filtered_lots
 
+                # --- 修正: ブレンド機能（こんにゃく粉限定・割合ベース計算） ---
                 if "こんにゃく" in r_name:
-                    use_blend = st.toggle("🔀 こんにゃく粉をブレンドする（複数ロット入力）", key=f"blend_{i}")
+                    use_blend = st.toggle("🔀 こんにゃく粉をブレンドする（複数ロット）", key=f"blend_{i}")
+                    
+                    # 実投入量の合計入力（ブレンド時もここを基準に割り振る）
+                    act_kg_total = col_kg_show.number_input(f"実投入量 合計(kg)", min_value=0.0, value=calc_kg, step=0.01, key=f"act_kg_total_{i}", format="%.3f")
+                    
                     if use_blend:
                         st.markdown('<div style="background:#f8fafc; padding:16px; border-radius:8px; border:2px dashed #cbd5e1; margin-bottom:10px;">', unsafe_allow_html=True)
-                        st.write(f"**ブレンド内訳**（合計が {calc_kg:.3f} kg になるよう割り振ってください）")
-                        col_b1, col_b2 = st.columns(2)
+                        st.write(f"**ブレンド割合指定**（実投入量 {act_kg_total:.3f} kg を各ロットに割り振ります）")
+                        
+                        col_r1, col_r2 = st.columns([1, 1])
                         
                         st.write("▼ ロット A")
-                        act_kg_1 = col_b1.number_input("投入量 A (kg)", min_value=0.0, value=calc_kg/2, step=0.1, format="%.3f", key=f"kg_{i}_b1")
-                        lot_sel_1 = col_b2.selectbox("ロット選択 A", lots_choices, key=f"lot_sel_{i}_b1")
-                        lot_txt_1 = col_b2.text_input("ロット手入力 A", value="" if lot_sel_1 == "手入力する" else lot_sel_1, disabled=(lot_sel_1 != "手入力する"), key=f"lot_txt_{i}_b1")
-                        final_lot_1 = lot_txt_1 if lot_sel_1 == "手入力する" else lot_sel_1
+                        pct_A = col_r1.number_input("ロットA 割合 (%)", min_value=0.0, max_value=100.0, value=50.0, step=1.0, format="%.1f", key=f"pct_A_{i}")
+                        act_kg_1 = act_kg_total * (pct_A / 100.0)
+                        col_r1.markdown(f"**算出された投入量 A:** <span style='color:#2563eb; font-size:1.1rem; font-weight:bold;'>{act_kg_1:.3f} kg</span>", unsafe_allow_html=True)
+                        
+                        lot_sel_1 = col_r2.selectbox("ロット選択 A", lots_choices, key=f"lot_sel_{i}_b1")
+                        lot_txt_1 = col_r2.text_input("ロット手入力 A", value="" if lot_sel_1 == "✏️ 手入力 (リスト外)" else lot_sel_1, disabled=(lot_sel_1 != "✏️ 手入力 (リスト外)"), key=f"lot_txt_{i}_b1")
+                        final_lot_1 = lot_txt_1 if lot_sel_1 == "✏️ 手入力 (リスト外)" else lot_sel_1
+                        if final_lot_1 == "─ (ロットを選択)": final_lot_1 = "─"
 
+                        st.markdown("<br>", unsafe_allow_html=True)
                         st.write("▼ ロット B")
-                        act_kg_2 = col_b1.number_input("投入量 B (kg)", min_value=0.0, value=calc_kg/2, step=0.1, format="%.3f", key=f"kg_{i}_b2")
-                        lot_sel_2 = col_b2.selectbox("ロット選択 B", lots_choices, key=f"lot_sel_{i}_b2")
-                        lot_txt_2 = col_b2.text_input("ロット手入力 B", value="" if lot_sel_2 == "手入力する" else lot_sel_2, disabled=(lot_sel_2 != "手入力する"), key=f"lot_txt_{i}_b2")
-                        final_lot_2 = lot_txt_2 if lot_sel_2 == "手入力する" else lot_sel_2
+                        pct_B = 100.0 - pct_A
+                        col_r1.markdown(f"ロットB 割合 (%): <span style='font-size:1.1rem; font-weight:bold;'>{pct_B:.1f} %</span> (自動計算)", unsafe_allow_html=True)
+                        act_kg_2 = act_kg_total * (pct_B / 100.0)
+                        col_r1.markdown(f"**算出された投入量 B:** <span style='color:#2563eb; font-size:1.1rem; font-weight:bold;'>{act_kg_2:.3f} kg</span>", unsafe_allow_html=True)
+                        
+                        lot_sel_2 = col_r2.selectbox("ロット選択 B", lots_choices, key=f"lot_sel_{i}_b2")
+                        lot_txt_2 = col_r2.text_input("ロット手入力 B", value="" if lot_sel_2 == "✏️ 手入力 (リスト外)" else lot_sel_2, disabled=(lot_sel_2 != "✏️ 手入力 (リスト外)"), key=f"lot_txt_{i}_b2")
+                        final_lot_2 = lot_txt_2 if lot_sel_2 == "✏️ 手入力 (リスト外)" else lot_sel_2
+                        if final_lot_2 == "─ (ロットを選択)": final_lot_2 = "─"
+                        
                         st.markdown('</div>', unsafe_allow_html=True)
                         
                         if act_kg_1 > 0: submitted_ingredients.append({"原料名": r_name, "kg": act_kg_1, "lot": final_lot_1})
                         if act_kg_2 > 0: submitted_ingredients.append({"原料名": r_name, "kg": act_kg_2, "lot": final_lot_2})
                         
-                        if abs((act_kg_1 + act_kg_2) - calc_kg) > 0.05:
-                            st.warning(f"⚠️ 投入量の合計（{act_kg_1 + act_kg_2:.2f} kg）が、算出された実投入量（{calc_kg:.2f} kg）と一致していません。")
-                        
                     else:
                         col_s, col_t = st.columns(2)
-                        lot_sel = col_s.selectbox("直近5件ロット", lots_choices, key=f"lot_sel_{i}")
-                        lot_txt = col_t.text_input("ロット手入力", value="" if lot_sel == "手入力する" else lot_sel, disabled=(lot_sel != "手入力する"), key=f"lot_txt_{i}")
-                        final_lot = lot_txt if lot_sel == "手入力する" else lot_sel
-                        submitted_ingredients.append({"原料名": r_name, "kg": calc_kg, "lot": final_lot})
+                        lot_sel = col_s.selectbox("入荷ロットの選択", lots_choices, key=f"lot_sel_{i}_val")
+                        lot_txt = col_t.text_input("ロット手入力", value="" if lot_sel == "✏️ 手入力 (リスト外)" else lot_sel, disabled=(lot_sel != "✏️ 手入力 (リスト外)"), key=f"lot_txt_{i}_val")
+                        final_lot = lot_txt if lot_sel == "✏️ 手入力 (リスト外)" else lot_sel
+                        if final_lot == "─ (ロットを選択)": final_lot = "─"
+                        
+                        submitted_ingredients.append({"原料名": r_name, "kg": act_kg_total, "lot": final_lot})
                 else:
+                    act_kg = col_kg_show.number_input(f"実投入量 (kg)", min_value=0.0, value=calc_kg, step=0.01, key=f"act_kg_{i}_val", format="%.3f")
                     col_s, col_t = st.columns(2)
-                    lot_sel = col_s.selectbox("直近5件ロット", lots_choices, key=f"lot_sel_{i}")
-                    lot_txt = col_t.text_input("ロット手入力", value="" if lot_sel == "手入力する" else lot_sel, disabled=(lot_sel != "手入力する"), key=f"lot_txt_{i}")
-                    final_lot = lot_txt if lot_sel == "手入力する" else lot_sel
-                    submitted_ingredients.append({"原料名": r_name, "kg": calc_kg, "lot": final_lot})
+                    lot_sel = col_s.selectbox("入荷ロットの選択", lots_choices, key=f"lot_sel_{i}_val")
+                    lot_txt = col_t.text_input("ロット手入力", value="" if lot_sel == "✏️ 手入力 (リスト外)" else lot_sel, disabled=(lot_sel != "✏️ 手入力 (リスト外)"), key=f"lot_txt_{i}_val")
+                    final_lot = lot_txt if lot_sel == "✏️ 手入力 (リスト外)" else lot_sel
+                    if final_lot == "─ (ロットを選択)": final_lot = "─"
+                    submitted_ingredients.append({"原料名": r_name, "kg": act_kg, "lot": final_lot})
 
                 st.markdown("<hr style='margin:20px 0;'>", unsafe_allow_html=True)
 
             st.markdown('</div>', unsafe_allow_html=True)
 
             if st.button("💾 この実績で製造記録を保存する", type="primary", use_container_width=True):
-                k_kg = s_kg = st_kg = lime_kg = 0.0
-                k_lot = s_lot = st_lot = "─"
-                
-                for ing in submitted_ingredients:
-                    n = ing["原料名"]
-                    if "こんにゃく" in n:
-                        k_kg += ing["kg"]
-                        if k_lot == "─": k_lot = ing["lot"]
-                        elif ing["lot"] not in k_lot: k_lot += f", {ing['lot']}"
-                    elif "海藻" in n:
-                        s_kg += ing["kg"]
-                        if s_lot == "─": s_lot = ing["lot"]
-                        elif ing["lot"] not in s_lot: s_lot += f", {ing['lot']}"
-                    elif "デンプン" in n or "でんぷん" in n:
-                        st_kg += ing["kg"]
-                        if st_lot == "─": st_lot = ing["lot"]
-                        elif ing["lot"] not in st_lot: st_lot += f", {ing['lot']}"
-                    elif "石灰" in n or "カルシウム" in n:
-                        lime_kg += ing["kg"]
+                if not p_name: st.error("品名が設定されていません。")
+                else:
+                    k_kg = s_kg = st_kg = lime_kg = 0.0
+                    k_lot = s_lot = st_lot = "─"
+                    
+                    for ing in submitted_ingredients:
+                        n = ing["原料名"]
+                        if "こんにゃく" in n:
+                            k_kg += ing["kg"]
+                            if k_lot == "─": k_lot = ing["lot"]
+                            elif ing["lot"] not in k_lot: k_lot += f", {ing['lot']}"
+                        elif "海藻" in n:
+                            s_kg += ing["kg"]
+                            if s_lot == "─": s_lot = ing["lot"]
+                            elif ing["lot"] not in s_lot: s_lot += f", {ing['lot']}"
+                        elif "デンプン" in n or "でんぷん" in n:
+                            st_kg += ing["kg"]
+                            if st_lot == "─": st_lot = ing["lot"]
+                            elif ing["lot"] not in st_lot: st_lot += f", {ing['lot']}"
+                        elif "石灰" in n or "カルシウム" in n:
+                            lime_kg += ing["kg"]
 
-                sheets.append_brewing({
-                    "仕込No": sheets.next_brewing_no(brewing), "仕込日": str(date.today()), "品名": p_name,
-                    "メーカー": "自社", "主原料ロット": k_lot, "仕込量(kg)": target_size,
-                    "こんにゃく精粉(kg)": k_kg, "海藻粉(kg)": s_kg, "海藻粉ロット": s_lot,
-                    "デンプン(kg)": st_kg, "デンプンロット": st_lot, "デンプン種別": "-",
-                    "石灰(kg)": lime_kg, "石灰水(L)": water_weight, 
-                    "その他添加物": json.dumps(submitted_ingredients, ensure_ascii=False),
-                    "備考": "割合ベース動的登録", "登録日時": datetime.now().isoformat()
-                })
-                st.success("仕込み・製造実績を登録しました。")
-                refresh()
+                    sheets.append_brewing({
+                        "仕込No": sheets.next_brewing_no(brewing), "仕込日": str(date.today()), "品名": p_name,
+                        "メーカー": "自社", "主原料ロット": k_lot, "仕込量(kg)": target_size,
+                        "こんにゃく精粉(kg)": k_kg, "海藻粉(kg)": s_kg, "海藻粉ロット": s_lot,
+                        "デンプン(kg)": st_kg, "デンプンロット": st_lot, "デンプン種別": "-",
+                        "石灰(kg)": lime_kg, "石灰水(L)": water_weight, 
+                        "その他添加物": json.dumps(submitted_ingredients, ensure_ascii=False),
+                        "備考": "割合ベース動的登録", "登録日時": datetime.now().isoformat()
+                    })
+                    st.success("仕込み・製造実績を登録しました。")
+                    refresh()
 
     with tab_brw2:
         st.markdown('<div class="section-title">📋 過去の製造記録</div>', unsafe_allow_html=True)
@@ -667,13 +634,10 @@ elif page == "🧪 仕込み・配合計算":
                 for b in brewing:
                     try:
                         b_date = datetime.strptime(b.get("仕込日", "").replace("/","-"), "%Y-%m-%d").date()
-                        if date_from <= b_date <= date_to:
-                            filtered_brewing.append(b)
-                    except:
-                        pass
+                        if date_from <= b_date <= date_to: filtered_brewing.append(b)
+                    except: pass
                 
-                if not filtered_brewing:
-                    st.warning("指定された期間の製造記録が見つかりません。")
+                if not filtered_brewing: st.warning("指定された期間の製造記録が見つかりません。")
                 else:
                     try:
                         file_path = report_generator.generate_brewing_report(filtered_brewing)
@@ -698,10 +662,8 @@ elif page == "🧪 仕込み・配合計算":
             target_b = brw_opts[selected_brw_label]
             
             col_e1, col_e2 = st.columns(2)
-            try:
-                dt_val = datetime.strptime(target_b.get("仕込日", date.today().strftime("%Y-%m-%d")).replace("/","-"), "%Y-%m-%d").date()
-            except:
-                dt_val = date.today()
+            try: dt_val = datetime.strptime(target_b.get("仕込日", date.today().strftime("%Y-%m-%d")).replace("/","-"), "%Y-%m-%d").date()
+            except: dt_val = date.today()
             edit_date = col_e1.date_input("製造日", value=dt_val)
             edit_name = col_e2.text_input("品名", value=target_b.get("品名", ""))
             edit_target_kg = col_e1.number_input("仕込量 (kg)", min_value=0.0, value=float(target_b.get("仕込量(kg)", 0)), step=1.0)
@@ -774,7 +736,7 @@ elif page == "📦 原料在庫・棚卸":
                 fig = go.Figure()
                 fig.add_trace(go.Bar(x=df_trend["month"], y=df_trend["入荷量(kg)"], name="入荷量 (kg)", marker_color="#10b981"))
                 fig.add_trace(go.Bar(x=df_trend["month"], y=df_trend["消費量(kg)"], name="消費量 (kg)", marker_color="#f43f5e"))
-                fig.update_layout(barmode="group", xaxis_title="年月", yaxis_title="重量 (kg)", plot_bgcolor="#f8fafc", margin=dict(t=30, l=10, r=10, b=30))
+                fig.update_layout(barmode="group", xaxis_title="年月", yaxis_title="重量 (kg)", plot_bgcolor="#f8fafc")
                 st.plotly_chart(fig, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -913,10 +875,9 @@ elif page == "🔍 履歴トレース":
                 try:
                     items = json.loads(selected_b.get("その他添加物", "[]"))
                     for ing in items:
-                        l_nums = str(ing.get("lot", "")).strip().split(",")
-                        for l in l_nums:
-                            if l.strip() and l.strip() != "─":
-                                used_lots.append({"原料種別": ing.get("原料名", "副資材"), "ロットNo": l.strip()})
+                        l_num = str(ing.get("lot", "")).strip()
+                        if l_num and l_num != "─" and l_num != "":
+                            used_lots.append({"原料種別": ing.get("原料名", "副資材"), "ロットNo": l_num})
                 except:
                     pass
                 
@@ -935,7 +896,7 @@ elif page == "🔍 履歴トレース":
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════
-#  7. マスタ設定
+#  7. マスタ設定（安全なJSONパース処理対応版）
 # ═══════════════════════════════════════════════════════════════
 elif page == "⚙️ マスタ設定":
     st.markdown('<div class="main-header"><h1>⚙️ マスターデータ管理</h1><p>システム全体で共有されるリストや配合基準、資材の定義を行います。</p></div>', unsafe_allow_html=True)
@@ -996,8 +957,8 @@ elif page == "⚙️ マスタ設定":
         
         def get_recipe_diff(old_json, new_json):
             try:
-                old_items = json.loads(old_json) if old_json else []
-                new_items = json.loads(new_json) if new_json else []
+                old_items = json.loads(old_json) if isinstance(old_json, str) else old_json
+                new_items = json.loads(new_json) if isinstance(new_json, str) else new_json
                 old_dict = {i["原料名"]: float(i["比率"]) for i in old_items}
                 new_dict = {i["原料名"]: float(i["比率"]) for i in new_items}
                 changes = []
@@ -1028,8 +989,11 @@ elif page == "⚙️ マスタ設定":
             init_name = target_recipe["品名"] if target_recipe else ""
             init_cat_m = "OKM" if target_recipe and target_recipe.get("大カテゴリ") == "OKM" else "プラント"
             init_cat_s = target_recipe.get("中カテゴリ", "黒") if target_recipe else "黒"
-            try: init_items = json.loads(old_json) if target_recipe else []
-            except: init_items = []
+            try: 
+                init_items = json.loads(old_json) if isinstance(old_json, str) else old_json
+                if not isinstance(init_items, list): init_items = []
+            except: 
+                init_items = []
                 
             def_mats = ["(未設定)", "水"] + materials
 
@@ -1085,11 +1049,14 @@ elif page == "⚙️ マスタ設定":
                 for idx, rec in enumerate(recipes_raw):
                     with st.expander(f"📦 {rec.get('品名')} (【{rec.get('大カテゴリ','')}】 {rec.get('中カテゴリ','')})"):
                         try:
-                            comp_list = json.loads(rec.get("配合JSON", "[]"))
+                            # 📝 安全な読み出し処理
+                            j_data = rec.get("配合JSON", "[]")
+                            comp_list = json.loads(j_data) if isinstance(j_data, str) else j_data
                             if comp_list: st.dataframe(pd.DataFrame(comp_list), use_container_width=True, hide_index=True)
                             else: st.write("成分データがありません")
-                        except:
-                            st.error("読み出しエラー（データ破損）")
+                        except Exception as e:
+                            st.error(f"読み出しエラー（データ破損）")
+                
                 st.markdown("---")
                 del_recipe_name = st.selectbox("削除するレシピを選択", [r["品名"] for r in recipes_raw])
                 if st.button("🗑️ 選択したレシピを完全に削除する", type="primary"):
