@@ -5,7 +5,6 @@ import json
 from datetime import datetime, date
 import traceback
 import plotly.graph_objects as go
-import plotly.express as px
 
 try:
     from PIL import Image
@@ -164,7 +163,6 @@ label {
     box-shadow: 0 6px 15px rgba(37, 99, 235, 0.3) !important;
 }
 
-/* ダウンロード等のセカンダリボタン */
 .stDownloadButton button {
     background-color: #10b981 !important;
     color: white !important;
@@ -216,7 +214,6 @@ except Exception as e:
     st.error("🚨 `sheets.py` のインポート時にエラーが発生しました。")
     st.stop()
 
-# 帳票出力ジェネレーターのロード試行
 try:
     import report_generator
     HAS_REPORT_GEN = True
@@ -440,7 +437,7 @@ elif page == "📥 原料入荷登録":
             st.info("過去の入荷記録はありません。")
 
 # ═══════════════════════════════════════════════════════════════
-#  3. 仕込み・配合記録（+帳票出力機能）
+#  3. 仕込み・配合記録（石灰自動増量＋水逆算）
 # ═══════════════════════════════════════════════════════════════
 elif page == "🧪 仕込み・配合計算":
     st.markdown('<div class="main-header"><h1>🧪 製造仕込み・配合計算</h1><p>水を除外した実粉末原料の算出と、石灰水の粉末逆算を行います。</p></div>', unsafe_allow_html=True)
@@ -591,7 +588,6 @@ elif page == "🧪 仕込み・配合計算":
             df_brw_all = pd.DataFrame(brewing)[["仕込No", "仕込日", "品名", "仕込量(kg)", "こんにゃく精粉(kg)", "主原料ロット"]]
             st.dataframe(df_brw_all[::-1], use_container_width=True, hide_index=True)
             
-            # --- Excel帳票出力機能 ---
             st.markdown("---")
             st.markdown('<div class="section-title">🖨️ 管理帳票出力</div>', unsafe_allow_html=True)
             st.info("食品工場向けの管理帳票として、製造記録のExcelファイルをダウンロードできます。PDF化する場合は、ダウンロードしたExcelファイルを開き「PDFとして保存（印刷）」を行ってください。")
@@ -627,18 +623,15 @@ elif page == "📦 原料在庫・棚卸":
         else:
             st.info("現在庫のあるロットはありません。")
 
-    # --- 追加: 入出庫トレンド推移のグラフ表示 ---
     with tab_inv_trend:
         st.markdown('<div class="form-card"><div class="section-title">📊 原料種別 月別入出庫トレンド</div>', unsafe_allow_html=True)
         st.write("各原料の月ごとの入荷重量と消費重量の推移を可視化します。")
-        
         target_mat = st.selectbox("グラフ表示する原料種別", materials)
         
         df_a = pd.DataFrame(arrivals)
         df_b = pd.DataFrame(brewing)
         
         if not df_a.empty and not df_b.empty:
-            # 入荷集計
             df_a["date"] = pd.to_datetime(df_a["入荷日"], errors="coerce")
             df_a = df_a.dropna(subset=["date"])
             df_a["month"] = df_a["date"].dt.to_period("M").astype(str)
@@ -646,7 +639,6 @@ elif page == "📦 原料在庫・棚卸":
             in_trend = df_a[df_a["原料種別"] == target_mat].groupby("month")["総量(kg)"].sum().reset_index()
             in_trend.rename(columns={"総量(kg)": "入荷量(kg)"}, inplace=True)
             
-            # 消費集計（JSONのその他添加物から消費を拾う）
             out_records = []
             for _, r in df_b.iterrows():
                 try:
@@ -654,15 +646,10 @@ elif page == "📦 原料在庫・棚卸":
                     if pd.isna(b_date): continue
                     m_str = b_date.to_period("M").astype(str)
                     
-                    # 主原料・海藻粉・デンプン・石灰の標準カラムから
-                    if "こんにゃく" in target_mat:
-                        out_records.append({"month": m_str, "消費量(kg)": float(r.get("こんにゃく精粉(kg)") or 0)})
-                    elif "海藻" in target_mat:
-                        out_records.append({"month": m_str, "消費量(kg)": float(r.get("海藻粉(kg)") or 0)})
-                    elif "デンプン" in target_mat or "でんぷん" in target_mat:
-                        out_records.append({"month": m_str, "消費量(kg)": float(r.get("デンプン(kg)") or 0)})
+                    if "こんにゃく" in target_mat: out_records.append({"month": m_str, "消費量(kg)": float(r.get("こんにゃく精粉(kg)") or 0)})
+                    elif "海藻" in target_mat: out_records.append({"month": m_str, "消費量(kg)": float(r.get("海藻粉(kg)") or 0)})
+                    elif "デンプン" in target_mat or "でんぷん" in target_mat: out_records.append({"month": m_str, "消費量(kg)": float(r.get("デンプン(kg)") or 0)})
                     
-                    # JSONの動的レシピから
                     oa = r.get("その他添加物", "")
                     if oa:
                         items = json.loads(oa)
@@ -673,12 +660,8 @@ elif page == "📦 原料在庫・棚卸":
                     pass
             
             df_out = pd.DataFrame(out_records)
-            if not df_out.empty:
-                out_trend = df_out.groupby("month")["消費量(kg)"].sum().reset_index()
-            else:
-                out_trend = pd.DataFrame(columns=["month", "消費量(kg)"])
+            out_trend = df_out.groupby("month")["消費量(kg)"].sum().reset_index() if not df_out.empty else pd.DataFrame(columns=["month", "消費量(kg)"])
 
-            # 結合して描画
             df_trend = pd.merge(in_trend, out_trend, on="month", how="outer").fillna(0).sort_values("month")
             if not df_trend.empty:
                 fig = go.Figure()
@@ -780,7 +763,7 @@ elif page == "🧹 資材・消耗品管理":
             st.info("資材入出庫履歴はありません。")
 
 # ═══════════════════════════════════════════════════════════════
-#  6. 双方向トレース（UI修繕済み）
+#  6. 双方向トレース（見やすいカードデザインへ改修）
 # ═══════════════════════════════════════════════════════════════
 elif page == "🔍 履歴トレース":
     st.markdown('<div class="main-header"><h1>🔍 双方向原料トレース</h1><p>原料ロットと製品製造ロットの関連付けを完全に追跡します。</p></div>', unsafe_allow_html=True)
@@ -834,9 +817,9 @@ elif page == "🔍 履歴トレース":
             
             if st.button("⬅️ 遡及を開始する", type="primary", use_container_width=True):
                 st.markdown("##### 🧪 製造の基本情報")
-                # ーーー 修正：生JSON表示をやめ、美しいカード形式に変更 ーーー
+                # 生のJSONではなく、見やすいHTMLカードに変更
                 st.markdown(f"""
-                <div style="background-color: #f8fafc; padding: 20px; border-radius: 12px; border-left: 6px solid #2563eb; margin-bottom: 20px; border-top: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;">
+                <div style="background-color: #f8fafc; padding: 20px; border-radius: 12px; border-left: 6px solid #2563eb; margin-bottom: 20px; border: 1px solid #e2e8f0;">
                     <h3 style="margin-top:0; color:#1e293b;">{selected_b.get('品名')}</h3>
                     <div style="display: flex; gap: 20px; flex-wrap: wrap;">
                         <p style="margin-bottom:0; font-size:1.1rem;"><strong>仕込No:</strong> {selected_b.get('仕込No')}</p>
@@ -873,7 +856,7 @@ elif page == "🔍 履歴トレース":
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════
-#  7. マスタ設定
+#  7. マスタ設定（一括削除ボタンUI搭載）
 # ═══════════════════════════════════════════════════════════════
 elif page == "⚙️ マスタ設定":
     st.markdown('<div class="main-header"><h1>⚙️ マスターデータ管理</h1><p>システム全体で共有されるリストや配合基準、資材の定義を行います。</p></div>', unsafe_allow_html=True)
@@ -961,18 +944,26 @@ elif page == "⚙️ マスタ設定":
                         st.success(f"配合レシピ: {new_p_name} を保存しました。")
                         refresh()
         
-        st.write("📋 **登録済み配合レシピ一覧**")
-        for idx, rec in enumerate(recipes_raw):
-            with st.expander(f"📦 {rec['品名']}"):
-                try:
-                    comp_list = json.loads(rec["配合JSON"])
-                    st.dataframe(pd.DataFrame(comp_list), use_container_width=True, hide_index=True)
-                except:
-                    st.write("読出しエラー")
-                if st.button("🗑️ 削除", key=f"del_rec_btn_{idx}_pct"):
-                    updated_recipes = [r for r in recipes_raw if r["品名"] != rec["品名"]]
-                    sheets.save_recipes(updated_recipes)
-                    refresh()
+        st.write("📋 **登録済み配合レシピ一覧と削除**")
+        if recipes_raw:
+            for idx, rec in enumerate(recipes_raw):
+                with st.expander(f"📦 {rec['品名']}"):
+                    try:
+                        comp_list = json.loads(rec["配合JSON"])
+                        st.dataframe(pd.DataFrame(comp_list), use_container_width=True, hide_index=True)
+                    except:
+                        st.write("読出しエラー")
+            
+            st.markdown("---")
+            # --- 削除ボタンの集中管理によるAPIクラッシュ回避 ---
+            del_recipe_name = st.selectbox("削除するレシピを選択してください", [r["品名"] for r in recipes_raw])
+            if st.button("🗑️ 選択したレシピを完全に削除する"):
+                updated_recipes = [r for r in recipes_raw if r["品名"] != del_recipe_name]
+                sheets.save_recipes(updated_recipes)
+                st.success(f"{del_recipe_name} を削除しました。")
+                refresh()
+        else:
+            st.info("登録済みの配合レシピはありません。")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with m_tab5:
