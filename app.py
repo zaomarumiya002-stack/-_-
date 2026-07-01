@@ -25,7 +25,6 @@ st.set_page_config(
 # ════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
-/* 全体テーマ（クリーン＆モダン） */
 :root {
     --c-bg: #f3f4f6;
     --c-surface: #ffffff;
@@ -40,7 +39,7 @@ st.markdown("""
 }
 .stApp { background-color: var(--c-bg); color: var(--c-text); font-family: 'Helvetica Neue', Arial, sans-serif; }
 
-/* --- サイドバー --- */
+/* サイドバー */
 [data-testid="stSidebar"] {
     background-color: var(--c-secondary) !important;
     padding-top: 1rem;
@@ -61,7 +60,6 @@ st.markdown("""
     background: #334155 !important;
     transform: translateX(3px);
 }
-/* 手動更新ボタン */
 [data-testid="stSidebar"] button {
     background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
     border: none !important;
@@ -72,7 +70,7 @@ st.markdown("""
     box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
 }
 
-/* --- メインコンテンツ --- */
+/* メインヘッダー */
 .main-header {
     background: var(--c-surface);
     padding: 24px 30px;
@@ -121,7 +119,7 @@ st.markdown("""
     border-radius: 4px;
 }
 
-/* --- 入力フォーム（タッチデバイス最適化） --- */
+/* 入力フォーム */
 .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"], .stDateInput input {
     background-color: #f8fafc !important;
     border: 2px solid var(--c-border) !important;
@@ -130,8 +128,7 @@ st.markdown("""
     font-size: 1.05rem !important;
     font-weight: 600 !important;
     padding: 12px 16px !important;
-    min-height: 52px; /* スマホで押しやすい高さ */
-    transition: all 0.2s ease;
+    min-height: 52px;
 }
 .stTextInput input:focus, .stNumberInput input:focus, .stSelectbox div[data-baseweb="select"]:focus-within {
     border-color: var(--c-primary) !important;
@@ -145,7 +142,7 @@ label {
     margin-bottom: 6px;
 }
 
-/* --- メインボタン --- */
+/* メインボタン */
 .stButton button[kind="primary"] {
     background: var(--c-primary) !important;
     color: white !important;
@@ -165,13 +162,7 @@ label {
     box-shadow: 0 6px 15px rgba(37, 99, 235, 0.3) !important;
 }
 
-/* --- ダッシュボード用 KPIカード --- */
-.kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 16px;
-    margin-bottom: 20px;
-}
+/* KPIカード（Streamlitのcolumns内で安全に描画するため調整） */
 .kpi-card {
     background: var(--c-surface);
     border: 1px solid var(--c-border);
@@ -179,15 +170,16 @@ label {
     padding: 20px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.03);
     text-align: center;
+    margin-bottom: 16px;
 }
 .kpi-card.alert {
     border-color: var(--c-danger);
     background-color: #fef2f2;
 }
-.kpi-title { font-size: 0.9rem; color: #64748b; font-weight: 700; margin-bottom: 8px; }
-.kpi-val { font-size: 1.8rem; font-weight: 900; color: var(--c-secondary); }
+.kpi-title { font-size: 1rem; color: #64748b; font-weight: 700; margin-bottom: 8px; }
+.kpi-val { font-size: 1.6rem; font-weight: 900; color: var(--c-secondary); }
 .kpi-val.alert { color: var(--c-danger); }
-.kpi-sub { font-size: 0.8rem; color: #94a3b8; font-weight: 600; margin-top: 4px; }
+.kpi-sub { font-size: 0.85rem; color: #94a3b8; font-weight: 600; margin-top: 4px; }
 
 /* アラートバッジ */
 .alert-box {
@@ -209,7 +201,7 @@ label {
 """, unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════════
-#  データロード・安全確認
+#  データロード
 # ════════════════════════════════════════════════════════════════
 try:
     import sheets
@@ -221,7 +213,6 @@ def refresh():
     st.cache_data.clear()
     st.rerun()
 
-# 起動時の高速一括ロード（キャッシュ活用）
 @st.cache_data(ttl=60)
 def load_all_datasets():
     return {
@@ -356,21 +347,21 @@ if page == "📊 ダッシュボード":
 
     st.markdown('<div class="section-title">📦 主要原料 在庫モニター</div>', unsafe_allow_html=True)
     
-    # カスタムHTMLによる美しいKPIカードグリッド
-    kpi_html = '<div class="kpi-grid">'
-    for m in materials:
+    # クラッシュしない Streamlit のネイティブ columns を使った安全なKPIグリッド
+    cols = st.columns(min(4, len(materials) if materials else 1))
+    for idx, m in enumerate(materials):
         curr = type_totals.get(m, 0.0)
         pt = order_points.get(m, 0.0)
         alert_class = "alert" if pt > 0 and curr < pt else ""
-        kpi_html += f"""
-        <div class="kpi-card {alert_class}">
-            <div class="kpi-title">{m}</div>
-            <div class="kpi-val {alert_class}">{curr:,.1f} <span style="font-size:1rem;">袋</span></div>
-            <div class="kpi-sub">発注基準: {pt:,.1f} 袋</div>
-        </div>
-        """
-    kpi_html += '</div>'
-    st.markdown(kpi_html, unsafe_allow_html=True)
+        
+        with cols[idx % 4]:
+            st.markdown(f"""
+            <div class="kpi-card {alert_class}">
+                <div class="kpi-title">{m}</div>
+                <div class="kpi-val {alert_class}">{curr:,.2f} <span style="font-size:1rem;">袋</span></div>
+                <div class="kpi-sub">発注基準: {pt:,.2f} 袋</div>
+            </div>
+            """, unsafe_allow_html=True)
 
     st.markdown('<div class="section-title">⏱️ 直近の製造仕込み履歴（最新5件）</div>', unsafe_allow_html=True)
     if brewing:
@@ -471,7 +462,6 @@ elif page == "🧪 仕込み・配合計算":
         if not isinstance(active_recipe, list):
             active_recipe = []
 
-        # 状態変更検知（リアルタイム更新用）
         if "last_target_size" not in st.session_state: st.session_state.last_target_size = target_size
         if "last_selected_p" not in st.session_state: st.session_state.last_selected_p = selected_p
 
@@ -482,7 +472,6 @@ elif page == "🧪 仕込み・配合計算":
 
         st.markdown('<div class="form-card"><div class="section-title">⚖️ 実投入原料の算出（石灰水・水は自動計算）</div>', unsafe_allow_html=True)
         
-        # ーーー ☀️ 夏季（6月〜9月）判定 ーーー
         current_month = date.today().month
         is_summer = 6 <= current_month <= 9
         
@@ -504,14 +493,13 @@ elif page == "🧪 仕込み・配合計算":
                 st.markdown(f'<div style="background:#e0f2fe; padding:10px; border-radius:8px; margin-bottom:10px;">💧 <b>[参考] 配合加水量: {water_weight:.2f} kg</b> (マスタ比率: {r_ratio:.2f}%)</div>', unsafe_allow_html=True)
                 continue
 
-            # ーーー 石灰の夏季自動増量ロジック ーーー
+            # 2. 石灰水
             if "石灰" in r_name or "カルシウム" in r_name:
                 if is_summer:
                     orig_ratio = r_ratio
                     r_ratio += 0.1
                     st.markdown(f'<div class="alert-box" style="padding:8px; margin-bottom:10px;">☀️ <b>夏季自動調整:</b> 石灰比率を +0.1% 増量しました ({orig_ratio:.2f}% → {r_ratio:.2f}%)</div>', unsafe_allow_html=True)
                 
-                # 石灰水 L数から粉末逆算
                 default_lime_water_l = float(target_size)
                 state_key_l = f"act_lime_water_l_{i}"
                 if is_changed or state_key_l not in st.session_state:
@@ -525,7 +513,6 @@ elif page == "🧪 仕込み・配合計算":
                 
                 col_l2.metric(label="必要な石灰粉末 (自動計算)", value=f"{calculated_powder_kg:.2f} kg")
                 
-                # ロット選択
                 raw_arr_matches = [a for a in recent_arrivals if str(a.get("原料種別", "")).strip() == r_name.strip()]
                 recent_filtered_lots = []
                 for a in raw_arr_matches:
@@ -542,7 +529,7 @@ elif page == "🧪 仕込み・配合計算":
                 st.markdown("---")
                 continue
 
-            # 3. 通常の粉体原料
+            # 3. 通常原料
             rec_kg = target_size * (r_ratio / 100.0)
             state_key_kg = f"act_kg_val_{i}"
             if is_changed or state_key_kg not in st.session_state:
@@ -722,7 +709,7 @@ elif page == "🧹 資材・消耗品管理":
 #  6. 双方向トレース
 # ═══════════════════════════════════════════════════════════════
 elif page == "🔍 履歴トレース":
-    st.markdown('<div class="main-header"><h1>🔍 双方向原料トレース</h1><p>原料ロットと製品製造ロットの関連付け追跡</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><h1>🔍 双方向原料トレース</h1><p>原料ロットと製品製造ロットの関連付けを完全に追跡します。</p></div>', unsafe_allow_html=True)
     trace_dir = st.radio("トレース方向", ["➡️ 原料ロットから製品を追跡（フォワード）", "⬅️ 製品から原料を遡及（バックワード）"])
     
     if "フォワード" in trace_dir:
@@ -802,7 +789,7 @@ elif page == "🔍 履歴トレース":
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════
-#  7. マスタ設定（資材マスタの編集機能を追加）
+#  7. マスタ設定（バグ修正済みのフォーマットエディタ）
 # ═══════════════════════════════════════════════════════════════
 elif page == "⚙️ マスタ設定":
     st.markdown('<div class="main-header"><h1>⚙️ マスターデータ管理</h1><p>システム全体で共有されるリストや配合基準、資材の定義を行います。</p></div>', unsafe_allow_html=True)
@@ -844,7 +831,16 @@ elif page == "⚙️ マスタ設定":
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
         op_rows = [{"原料名": m, "発注点(袋)": float(order_points.get(m, 0.0))} for m in materials]
         df_op = pd.DataFrame(op_rows)
-        edited_op = st.data_editor(df_op, use_container_width=True, key="op_ed_k", format="%.2f")
+        
+        # Format Error (TypeError) 修正：column_configで指定
+        edited_op = st.data_editor(
+            df_op, 
+            use_container_width=True, 
+            key="op_ed_k",
+            column_config={
+                "発注点(袋)": st.column_config.NumberColumn(format="%.2f")
+            }
+        )
         if st.button("💾 発注点設定を更新する", type="primary"):
             new_op_dict = {str(r["原料名"]).strip(): float(r["発注点(袋)"] or 0.0) for _, r in edited_op.iterrows() if str(r["原料名"]).strip()}
             sheets.save_order_points(new_op_dict)
@@ -906,7 +902,19 @@ elif page == "⚙️ マスタ設定":
         df_sup_list = pd.DataFrame(supplies)
         if not df_sup_list.empty:
             df_sup_edit = df_sup_list[["資材ID", "資材名", "カテゴリ", "初期在庫", "発注点"]]
-            edited_sup = st.data_editor(df_sup_edit, num_rows="dynamic", use_container_width=True, key="sup_master_ed", disabled=["資材ID"])
+            
+            # TypeError対策
+            edited_sup = st.data_editor(
+                df_sup_edit, 
+                num_rows="dynamic", 
+                use_container_width=True, 
+                key="sup_master_ed", 
+                disabled=["資材ID"],
+                column_config={
+                    "初期在庫": st.column_config.NumberColumn(format="%.2f"),
+                    "発注点": st.column_config.NumberColumn(format="%.2f")
+                }
+            )
             
             if st.button("💾 資材マスタの変更を保存", type="primary"):
                 new_supplies = []
