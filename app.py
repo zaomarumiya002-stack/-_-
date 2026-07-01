@@ -22,111 +22,227 @@ st.set_page_config(
 )
 
 # ════════════════════════════════════════════════════════════════
-#  クリーン＆モダン UI/UX CSS
+#  モバイル・タブレット特化 UI/UX 最適化 CSS
 # ════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
 :root {
-    --c-bg: #f8fafc;
+    --c-bg: #f3f4f6;
     --c-surface: #ffffff;
-    --c-primary: #3b82f6;
-    --c-primary-hover: #2563eb;
-    --c-secondary: #1e293b;
-    --c-border: #e2e8f0;
-    --c-text: #334155;
+    --c-primary: #2563eb;
+    --c-primary-hover: #1d4ed8;
+    --c-secondary: #0f172a;
+    --c-border: #cbd5e1;
+    --c-text: #1e293b;
+    --c-danger: #ef4444;
+    --c-success: #10b981;
+    --c-warning: #f59e0b;
 }
-.stApp { background-color: var(--c-bg); color: var(--c-text); }
+.stApp { background-color: var(--c-bg); color: var(--c-text); font-family: 'Helvetica Neue', Arial, sans-serif; }
 
-[data-testid="stSidebar"] { background-color: var(--c-secondary) !important; }
+/* サイドバー */
+[data-testid="stSidebar"] {
+    background-color: var(--c-secondary) !important;
+    padding-top: 1rem;
+}
 [data-testid="stSidebar"] * { color: #f8fafc !important; }
-[data-testid="stSidebar"] div[role="radiogroup"] label {
-    padding: 14px 18px !important;
-    border-radius: 8px !important;
-    margin-bottom: 8px !important;
-    background: #334155 !important;
-    border: none !important;
-    cursor: pointer;
-    font-size: 1.05rem !important;
-    font-weight: 600 !important;
-}
-[data-testid="stSidebar"] div[role="radiogroup"] label:hover { background: #475569 !important; }
 
+/* ラジオボタン(サイドバー用)のタップ領域拡大 */
+[data-testid="stSidebar"] div[role="radiogroup"] label {
+    padding: 16px 20px !important;
+    border-radius: 12px !important;
+    margin-bottom: 10px !important;
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 1.15rem !important;
+    font-weight: 700 !important;
+}
+[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
+    background: #334155 !important;
+    transform: translateX(3px);
+}
+[data-testid="stSidebar"] button {
+    background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+    border: none !important;
+    border-radius: 12px !important;
+    font-weight: 800 !important;
+    font-size: 1.1rem !important;
+    padding: 16px !important;
+    margin-top: 24px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
+}
+
+/* メインヘッダー */
 .main-header {
     background: var(--c-surface);
-    padding: 20px 24px;
-    border-radius: 12px;
+    padding: 28px 32px;
+    border-radius: 16px;
     margin-bottom: 24px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    border-left: 6px solid var(--c-primary);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+    border-left: 10px solid var(--c-primary);
 }
-.main-header h1 { color: var(--c-secondary) !important; font-size: 1.6rem !important; margin: 0 0 4px 0 !important; font-weight: 800 !important; }
+.main-header h1 {
+    color: var(--c-secondary) !important;
+    font-size: 2.0rem !important;
+    margin: 0 0 8px 0 !important;
+    font-weight: 850 !important;
+}
+.main-header p {
+    color: #64748b !important;
+    font-size: 1.05rem !important;
+    margin: 0 !important;
+    font-weight: 600;
+}
 
+/* カードレイアウト */
 .form-card {
     background: var(--c-surface);
     border: 1px solid var(--c-border);
-    border-radius: 12px;
-    padding: 24px;
-    margin-bottom: 20px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    border-radius: 16px;
+    padding: 28px;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.02);
 }
 .section-title {
-    font-size: 1.15rem;
-    font-weight: 800;
+    font-size: 1.3rem;
+    font-weight: 850;
     color: var(--c-secondary);
-    margin-bottom: 20px;
+    margin-bottom: 24px;
     display: flex;
     align-items: center;
-    gap: 8px;
-    border-bottom: 2px solid #f1f5f9;
-    padding-bottom: 8px;
+    gap: 10px;
+}
+.section-title::before {
+    content: '';
+    display: block;
+    width: 6px;
+    height: 24px;
+    background-color: var(--c-primary);
+    border-radius: 4px;
 }
 
+/* 入力フォーム（スマホ・タブレット完全対応） */
 .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"], .stDateInput input {
-    background-color: #f1f5f9 !important;
-    border: 1px solid #cbd5e1 !important;
-    border-radius: 8px !important;
+    background-color: #f8fafc !important;
+    border: 2px solid var(--c-border) !important;
+    border-radius: 12px !important;
     color: var(--c-text) !important;
-    font-size: 1.05rem !important;
-    font-weight: 600 !important;
-    padding: 12px !important;
-    min-height: 48px;
+    font-size: 1.15rem !important;
+    font-weight: 700 !important;
+    padding: 14px 18px !important;
+    min-height: 56px !important; /* タップしやすい高さ */
 }
 .stTextInput input:focus, .stNumberInput input:focus, .stSelectbox div[data-baseweb="select"]:focus-within {
     border-color: var(--c-primary) !important;
     background-color: var(--c-surface) !important;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15) !important;
 }
-label { color: #64748b !important; font-weight: 700 !important; font-size: 0.9rem !important; margin-bottom: 4px;}
+label { 
+    color: #475569 !important; 
+    font-weight: 800 !important; 
+    font-size: 1.05rem !important; 
+    margin-bottom: 8px;
+}
 
+/* 🌟 メインコンテンツ内のラジオボタン(カテゴリ選択等)の押しやすさ超強化 */
+div[data-testid="stRadio"] > div {
+    gap: 16px !important;
+    flex-wrap: wrap !important;
+}
+div[data-testid="stRadio"] label {
+    font-size: 1.1rem !important; 
+    color: var(--c-secondary) !important;
+    background-color: #f8fafc;
+    padding: 16px 24px !important; /* ボタン状に巨大化 */
+    border-radius: 12px;
+    border: 2px solid var(--c-border);
+    font-weight: 800 !important;
+    cursor: pointer;
+}
+div[data-testid="stRadio"] label:hover {
+    background-color: #e2e8f0;
+}
+
+/* メインボタン */
 .stButton button[kind="primary"] {
     background: var(--c-primary) !important;
     color: white !important;
     border: none !important;
-    border-radius: 8px !important;
-    font-size: 1.1rem !important;
-    font-weight: 700 !important;
-    padding: 14px !important;
-    min-height: 52px !important;
+    border-radius: 14px !important;
+    font-size: 1.25rem !important;
+    font-weight: 800 !important;
+    padding: 18px 24px !important;
+    min-height: 60px !important;
     width: 100% !important;
-    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2) !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2) !important;
+    transition: all 0.2s ease;
 }
-.stButton button[kind="primary"]:hover { background: var(--c-primary-hover) !important; }
+.stButton button[kind="primary"]:hover {
+    background: var(--c-primary-hover) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.3) !important;
+}
 
-/* トグルやラジオ等のカスタマイズ */
-div[data-testid="stRadio"] > div { gap: 12px; }
-.stRadio > label { font-size: 1rem !important; color: var(--c-primary) !important; }
+.stDownloadButton button {
+    background-color: #10b981 !important;
+    color: white !important;
+    font-size: 1.1rem !important;
+    font-weight: 800 !important;
+    border-radius: 12px !important;
+    border: none !important;
+    min-height: 56px !important;
+    width: 100%;
+}
+.stDownloadButton button:hover { background-color: #059669 !important; }
 
-[data-testid="stMetricValue"] { font-size: 1.8rem !important; font-weight: 800 !important; color: var(--c-secondary) !important; }
+/* KPIカード */
+.kpi-card {
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+    text-align: center;
+    margin-bottom: 16px;
+}
+.kpi-card.alert { border-color: var(--c-danger); background-color: #fef2f2; }
+.kpi-title { font-size: 1.1rem; color: #64748b; font-weight: 800; margin-bottom: 8px; }
+.kpi-val { font-size: 1.8rem; font-weight: 900; color: var(--c-secondary); }
+.kpi-val.alert { color: var(--c-danger); }
+.kpi-sub { font-size: 0.95rem; color: #94a3b8; font-weight: 700; margin-top: 6px; }
+
+/* アラートバッジ */
+.alert-box {
+    background-color: #fffbeb;
+    border-left: 6px solid var(--c-warning);
+    color: #92400e;
+    padding: 18px;
+    border-radius: 10px;
+    margin-bottom: 18px;
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+.alert-box.danger { background-color: #fef2f2; border-left-color: var(--c-danger); color: #991b1b; }
+.alert-box.info { background-color: #f0fdf4; border-left-color: var(--c-success); color: #065f46; }
+
+/* トグルスイッチの巨大化 */
+div[data-testid="stCheckbox"] label span {
+    font-size: 1.15rem !important;
+    font-weight: 800 !important;
+    color: var(--c-secondary) !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════════
-#  データロード・安全確認
+#  データロード
 # ════════════════════════════════════════════════════════════════
 try:
     import sheets
-except:
-    st.error("🚨 `sheets.py` のインポートエラー")
+except Exception as e:
+    st.error("🚨 `sheets.py` のインポート時にエラーが発生しました。")
     st.stop()
 
 try:
@@ -152,7 +268,7 @@ def load_all_datasets():
         "inspectors": sheets.load_inspectors(),
         "order_points": sheets.load_order_points(),
         "recipes": sheets.load_recipes(),
-        "recipe_logs": sheets.load_recipe_logs() # 履歴ログ追加
+        "recipe_logs": sheets.load_recipe_logs()
     }
 
 try:
@@ -166,7 +282,7 @@ except Exception as e:
     st.stop()
 
 # ════════════════════════════════════════════════════════════════
-#  現在庫算出
+#  現在庫算出ロジック
 # ════════════════════════════════════════════════════════════════
 def get_inventory():
     inv = {}
@@ -222,7 +338,7 @@ for v in inventory_data.values():
 #  サイドバー
 # ════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown('<div style="font-size:1.5rem; font-weight:900; margin-bottom:1rem; color:white;">🏭 製造管理 ERP</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:1.6rem; font-weight:900; margin-bottom:1.5rem; color:white; display:flex; align-items:center; gap:8px;">🏭 <span>製造管理 ERP</span></div>', unsafe_allow_html=True)
     page = st.radio("", [
         "📊 ダッシュボード", 
         "📥 原料入荷登録", 
@@ -232,7 +348,8 @@ with st.sidebar:
         "🔍 履歴トレース", 
         "⚙️ マスタ設定"
     ], label_visibility="collapsed")
-    if st.button("🔄 データを最新に更新"): refresh()
+    st.markdown("---")
+    if st.button("🔄 最新データに更新"): refresh()
 
 # ════════════════════════════════════════════════════════════════
 #  1. ダッシュボード
@@ -243,21 +360,22 @@ if page == "📊 ダッシュボード":
     alerts = [{"name": m, "current": type_totals.get(m, 0.0), "point": order_points.get(m, 0.0)} for m in materials if order_points.get(m, 0.0) > 0 and type_totals.get(m, 0.0) < order_points.get(m, 0.0)]
     if alerts:
         for al in alerts:
-            st.markdown(f'<div style="background:#fef2f2; border-left:6px solid #ef4444; padding:16px; border-radius:8px; margin-bottom:12px; color:#991b1b; font-weight:bold;">🚨 【発注警告】 {al["name"]} の在庫（{al["current"]:.2f} 袋）が発注点（{al["point"]:.2f} 袋）を下回っています！</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="alert-box danger">🚨 【発注警告】 <b>{al["name"]}</b> の在庫（{al["current"]:.2f} 袋）が発注点（{al["point"]:.2f} 袋）を下回っています！</div>', unsafe_allow_html=True)
     else:
-        st.markdown('<div style="background:#f0fdf4; border-left:6px solid #10b981; padding:16px; border-radius:8px; margin-bottom:12px; color:#065f46; font-weight:bold;">🟢 すべての原料在庫は発注基準値を満たし、安全な状態です。</div>', unsafe_allow_html=True)
+        st.markdown('<div class="alert-box info">🟢 すべての原料在庫は発注基準値を満たし、安全な状態です。</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="section-title">📦 主要原料 在庫モニター</div>', unsafe_allow_html=True)
     cols = st.columns(min(4, len(materials) if materials else 1))
     for idx, m in enumerate(materials):
         curr = type_totals.get(m, 0.0)
         pt = order_points.get(m, 0.0)
+        alert_class = "alert" if pt > 0 and curr < pt else ""
         with cols[idx % 4]:
             st.markdown(f"""
-            <div style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:20px; text-align:center; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); { 'border-color:#ef4444; background:#fef2f2;' if pt > 0 and curr < pt else '' }">
-                <div style="font-size:1rem; color:#64748b; font-weight:700; margin-bottom:8px;">{m}</div>
-                <div style="font-size:1.8rem; font-weight:900; color:{'#ef4444' if pt > 0 and curr < pt else '#0f172a'};">{curr:,.2f} <span style="font-size:1rem;">袋</span></div>
-                <div style="font-size:0.85rem; color:#94a3b8; font-weight:600; margin-top:4px;">発注基準: {pt:,.2f} 袋</div>
+            <div class="kpi-card {alert_class}">
+                <div class="kpi-title">{m}</div>
+                <div class="kpi-val {alert_class}">{curr:,.2f} <span style="font-size:1rem;">袋</span></div>
+                <div class="kpi-sub">発注基準: {pt:,.2f} 袋</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -331,20 +449,24 @@ elif page == "🧪 仕込み・配合計算":
     
     tab_brw1, tab_brw2, tab_brw3 = st.tabs(["➕ 新規配合・登録", "📋 履歴一覧・Excel出力", "✏️ 履歴の編集・削除"])
     
+    # マスタJSON破損対策付きパース
     p_recipes = {}
     for r in recipes_raw:
         try:
+            # 万が一JSON文字列でなく辞書などなら対応、文字列ならパース
+            j_data = r["配合JSON"] if isinstance(r["配合JSON"], str) else json.dumps(r["配合JSON"])
             p_recipes[r["品名"]] = {
                 "大カテゴリ": r.get("大カテゴリ", "その他"),
                 "中カテゴリ": r.get("中カテゴリ", "その他"),
-                "成分": json.loads(r["配合JSON"])
+                "成分": json.loads(j_data)
             }
         except:
             p_recipes[r["品名"]] = {"大カテゴリ": "その他", "中カテゴリ": "その他", "成分": []}
 
     with tab_brw1:
-        st.markdown('<div class="form-card"><div class="section-title">📝 製造製品のカテゴリと仕込み量の指定</div>', unsafe_allow_html=True)
-        st.write("##### **1. 大カテゴリを選択**")
+        st.markdown('<div class="form-card"><div class="section-title">📝 1. 製造製品のカテゴリと仕込み量の指定</div>', unsafe_allow_html=True)
+        
+        st.write("##### **▶ 大カテゴリを選択**")
         cat_main = st.radio("", ["🏭 プラント", "🟦 OKM", "📝 直接入力（マスタ外）"], horizontal=True, label_visibility="collapsed")
         
         selected_p = None
@@ -355,8 +477,9 @@ elif page == "🧪 仕込み・配合計算":
             active_recipe = [{"原料名": "こんにゃく粉（国産）", "比率": 2.50}, {"原料名": "石灰", "比率": 0.14}, {"原料名": "水", "比率": 97.36}]
         else:
             cat_str = "プラント" if "プラント" in cat_main else "OKM"
+            
             if cat_str == "プラント":
-                st.write("##### **2. ライン（中カテゴリ）を選択**")
+                st.write("##### **▶ ライン（中カテゴリ）を選択**")
                 cat_sub = st.radio("", ["⚪ 白", "⚫ 黒", "❄️ 耐冷", "🍽️ ショクカイ", "🍜 めん", "📦 その他"], horizontal=True, label_visibility="collapsed")
                 sub_str = cat_sub.split(" ")[1]
             else:
@@ -365,10 +488,11 @@ elif page == "🧪 仕込み・配合計算":
             filtered_opts = []
             for k, v in p_recipes.items():
                 if v["大カテゴリ"] == cat_str:
-                    if cat_str == "プラント" and v["中カテゴリ"] != sub_str: continue
+                    if cat_str == "プラント" and v["中カテゴリ"] != sub_str:
+                        continue
                     filtered_opts.append(k)
             
-            st.write("##### **3. 製造する製品名を選択**")
+            st.write("##### **▶ 製造する製品名を選択**")
             if not filtered_opts:
                 st.warning("選択したカテゴリに紐づく製品マスタがありません。")
             else:
@@ -383,7 +507,7 @@ elif page == "🧪 仕込み・配合計算":
         if not active_recipe:
             st.info("製品を選択してください。")
         else:
-            st.markdown('<div class="form-card"><div class="section-title">⚖️ 投入原料の算出と入力</div>', unsafe_allow_html=True)
+            st.markdown('<div class="form-card"><div class="section-title">⚖️ 2. 投入原料の算出と入力</div>', unsafe_allow_html=True)
             st.write("各原料の「割合(%)」を変更すると、実投入量(kg)が自動で再計算されます。")
             
             current_month = date.today().month
@@ -488,6 +612,7 @@ elif page == "🧪 仕込み・配合計算":
                     submitted_ingredients.append({"原料名": r_name, "kg": calc_kg, "lot": final_lot})
 
                 st.markdown("<hr style='margin:20px 0;'>", unsafe_allow_html=True)
+
             st.markdown('</div>', unsafe_allow_html=True)
 
             if st.button("💾 この実績で製造記録を保存する", type="primary", use_container_width=True):
@@ -614,8 +739,6 @@ elif page == "📦 原料在庫・棚卸":
                 use_container_width=True, hide_index=True,
                 column_config={"入荷袋数": st.column_config.NumberColumn(format="%.2f"), "使用袋数": st.column_config.NumberColumn(format="%.2f"), "調整袋数": st.column_config.NumberColumn(format="%.2f"), "現在庫(袋)": st.column_config.NumberColumn(format="%.2f")}
             )
-        else:
-            st.info("現在庫のあるロットはありません。")
 
     with tab_inv_trend:
         st.markdown('<div class="form-card"><div class="section-title">📊 原料種別 月別入出庫トレンド</div>', unsafe_allow_html=True)
@@ -867,12 +990,10 @@ elif page == "⚙️ マスタ設定":
             refresh()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ーーー 配合レシピの完全管理（新規・編集・履歴） ーーー
     with m_tab4:
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
         r_tab1, r_tab2, r_tab3 = st.tabs(["📝 新規登録・編集", "📋 登録済み一覧と削除", "🕒 変更履歴（監査ログ）"])
         
-        # 差分抽出関数
         def get_recipe_diff(old_json, new_json):
             try:
                 old_items = json.loads(old_json) if old_json else []
@@ -893,29 +1014,22 @@ elif page == "⚙️ マスタ設定":
 
         with r_tab1:
             st.write("水を含む各配合原料の全体比率(％)を定義します。")
-            
             edit_mode = st.radio("操作を選択", ["新規作成", "既存レシピの編集"], horizontal=True)
             
             target_recipe = None
             old_json = "[]"
             if edit_mode == "既存レシピの編集":
-                if not recipes_raw:
-                    st.warning("編集できるレシピがありません。")
+                if not recipes_raw: st.warning("編集できるレシピがありません。")
                 else:
                     target_name = st.selectbox("編集するレシピを選択", [r["品名"] for r in recipes_raw])
                     target_recipe = next((r for r in recipes_raw if r["品名"] == target_name), None)
-                    if target_recipe:
-                        old_json = target_recipe.get("配合JSON", "[]")
+                    if target_recipe: old_json = target_recipe.get("配合JSON", "[]")
             
-            # 初期値の決定
             init_name = target_recipe["品名"] if target_recipe else ""
             init_cat_m = "OKM" if target_recipe and target_recipe.get("大カテゴリ") == "OKM" else "プラント"
             init_cat_s = target_recipe.get("中カテゴリ", "黒") if target_recipe else "黒"
-            
-            try:
-                init_items = json.loads(old_json) if target_recipe else []
-            except:
-                init_items = []
+            try: init_items = json.loads(old_json) if target_recipe else []
+            except: init_items = []
                 
             def_mats = ["(未設定)", "水"] + materials
 
@@ -923,18 +1037,14 @@ elif page == "⚙️ マスタ設定":
                 cat_main = st.radio("大カテゴリ", ["🏭 プラント", "🟦 OKM"], index=0 if init_cat_m == "プラント" else 1, horizontal=True)
                 cat_sub = st.radio("中カテゴリ（プラントの場合のみ）", ["⚪ 白", "⚫ 黒", "❄️ 耐冷", "🍽️ ショクカイ", "🍜 めん", "📦 その他"], 
                                    index=["白","黒","耐冷","ショクカイ","めん","その他"].index(init_cat_s) if init_cat_s in ["白","黒","耐冷","ショクカイ","めん","その他"] else 1, horizontal=True)
-                
                 new_p_name = st.text_input("製品の名称 (例: こんにゃく極細白)", value=init_name, disabled=(target_recipe is not None))
                 
                 st.write("🧪 **各構成原料のパーセンテージ（％）比率**")
                 cols_recipe_inputs = []
                 for j in range(10):
                     c_n, c_w = st.columns([2, 1])
-                    
-                    # 編集時の初期値セット
                     def_mat_val = init_items[j]["原料名"] if j < len(init_items) else "(未設定)"
                     def_rat_val = float(init_items[j]["比率"]) if j < len(init_items) else 0.00
-                    
                     try: mat_idx = def_mats.index(def_mat_val)
                     except: mat_idx = 0
                     
@@ -945,13 +1055,10 @@ elif page == "⚙️ マスタ設定":
                 operator = st.selectbox("操作担当者", inspectors)
                 
                 if st.form_submit_button("💾 配合比率を保存する"):
-                    if not new_p_name:
-                        st.error("製品の名称は必須です。")
+                    if not new_p_name: st.error("製品の名称は必須です。")
                     else:
                         valid_items = [{"原料名": i["name"], "比率": float(i["ratio"])} for i in cols_recipe_inputs if i["name"] != "(未設定)" and i["ratio"] > 0]
-                        
-                        if not valid_items:
-                            st.error("有効な配合成分がありません。")
+                        if not valid_items: st.error("有効な配合成分がありません。")
                         else:
                             cat_str = "プラント" if "プラント" in cat_main else "OKM"
                             sub_str = cat_sub.split(" ")[1] if cat_str == "プラント" else "その他"
@@ -961,17 +1068,14 @@ elif page == "⚙️ マスタ設定":
                             updated_recipes = [r for r in recipes_raw if r["品名"] != new_p_name]
                             updated_recipes.append(new_recipe_entry)
                             
-                            # ログ記録
                             action = "新規" if not target_recipe else "更新"
                             diff_str = get_recipe_diff(old_json, new_json) if target_recipe else "新規作成"
                             try:
                                 sheets.append_recipe_log({
-                                    "ログID": f"RLOG-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                                    "変更日時": datetime.now().strftime('%Y/%m/%d %H:%M:%S'),
+                                    "ログID": f"RLOG-{datetime.now().strftime('%Y%m%d%H%M%S')}", "変更日時": datetime.now().strftime('%Y/%m/%d %H:%M:%S'),
                                     "品名": new_p_name, "処理": action, "変更内容": diff_str, "作業者": operator
                                 })
                             except: pass
-
                             sheets.save_recipes(updated_recipes)
                             st.success(f"配合レシピ: {new_p_name} を保存しました。")
                             refresh()
@@ -986,7 +1090,6 @@ elif page == "⚙️ マスタ設定":
                             else: st.write("成分データがありません")
                         except:
                             st.error("読み出しエラー（データ破損）")
-                
                 st.markdown("---")
                 del_recipe_name = st.selectbox("削除するレシピを選択", [r["品名"] for r in recipes_raw])
                 if st.button("🗑️ 選択したレシピを完全に削除する", type="primary"):
@@ -1006,10 +1109,8 @@ elif page == "⚙️ マスタ設定":
         with r_tab3:
             try:
                 recipe_logs = dataset.get("recipe_logs", [])
-                if recipe_logs:
-                    st.dataframe(pd.DataFrame(recipe_logs)[::-1], use_container_width=True, hide_index=True)
-                else:
-                    st.info("変更履歴はまだありません。")
+                if recipe_logs: st.dataframe(pd.DataFrame(recipe_logs)[::-1], use_container_width=True, hide_index=True)
+                else: st.info("変更履歴はまだありません。")
             except:
                 st.warning("履歴データの読み込みに失敗しました。")
         st.markdown('</div>', unsafe_allow_html=True)
