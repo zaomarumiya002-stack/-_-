@@ -5,6 +5,7 @@ import json
 from datetime import datetime, date
 import traceback
 import plotly.graph_objects as go
+import plotly.express as px
 
 try:
     from PIL import Image
@@ -40,7 +41,6 @@ st.markdown("""
 }
 .stApp { background-color: var(--c-bg); color: var(--c-text); font-family: 'Helvetica Neue', Arial, sans-serif; }
 
-/* サイドバー */
 [data-testid="stSidebar"] {
     background-color: var(--c-secondary) !important;
     padding-top: 1rem;
@@ -71,7 +71,6 @@ st.markdown("""
     box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
 }
 
-/* メインヘッダー */
 .main-header {
     background: var(--c-surface);
     padding: 24px 30px;
@@ -93,7 +92,6 @@ st.markdown("""
     font-weight: 500;
 }
 
-/* カードレイアウト */
 .form-card {
     background: var(--c-surface);
     border: 1px solid var(--c-border);
@@ -120,7 +118,6 @@ st.markdown("""
     border-radius: 4px;
 }
 
-/* 入力フォーム */
 .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"], .stDateInput input {
     background-color: #f8fafc !important;
     border: 2px solid var(--c-border) !important;
@@ -143,7 +140,6 @@ label {
     margin-bottom: 6px;
 }
 
-/* メインボタン */
 .stButton button[kind="primary"] {
     background: var(--c-primary) !important;
     color: white !important;
@@ -170,10 +166,10 @@ label {
     border-radius: 8px !important;
     border: none !important;
     min-height: 48px !important;
+    width: 100%;
 }
 .stDownloadButton button:hover { background-color: #059669 !important; }
 
-/* KPIカード */
 .kpi-card {
     background: var(--c-surface);
     border: 1px solid var(--c-border);
@@ -189,7 +185,6 @@ label {
 .kpi-val.alert { color: var(--c-danger); }
 .kpi-sub { font-size: 0.85rem; color: #94a3b8; font-weight: 600; margin-top: 4px; }
 
-/* アラートバッジ */
 .alert-box {
     background-color: #fffbeb;
     border-left: 6px solid var(--c-warning);
@@ -256,7 +251,7 @@ except Exception as e:
     st.stop()
 
 # ════════════════════════════════════════════════════════════════
-#  現在庫算出ロジック
+#  現在庫算出ロジック（マイナス値の下限ガードを実装）
 # ════════════════════════════════════════════════════════════════
 def get_inventory():
     inv = {}
@@ -308,7 +303,12 @@ def get_inventory():
     for v in inv.values():
         bpk = v["1袋重量"] if v["1袋重量"] > 0 else 20.0
         v["使用袋数"] = v["使用量(kg)"] / bpk
-        v["現在庫(袋)"] = v["入荷袋数"] - v["使用袋数"] + v["調整袋数"]
+        
+        # 理論在庫の算出
+        calc_bags = v["入荷袋数"] - v["使用袋数"] + v["調整袋数"]
+        
+        # 【重要】マイナス在庫の表示を下限 0.00 にガード
+        v["現在庫(袋)"] = max(calc_bags, 0.0)
         v["現在庫(kg)"] = v["現在庫(袋)"] * bpk
     return inv
 
@@ -432,12 +432,18 @@ elif page == "📥 原料入荷登録":
     with tab_b:
         if arrivals:
             df_arr = pd.DataFrame(arrivals)[["入荷No", "入荷日", "メーカー", "ロットNo", "原料種別", "袋数", "外観", "担当者"]]
-            st.dataframe(df_arr[::-1], use_container_width=True, hide_index=True)
+            # 小数点第2位表示にフォーマット
+            st.dataframe(
+                df_arr[::-1], 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={"袋数": st.column_config.NumberColumn(format="%.2f")}
+            )
         else:
             st.info("過去の入荷記録はありません。")
 
 # ═══════════════════════════════════════════════════════════════
-#  3. 仕込み・配合記録（石灰自動増量＋水逆算）
+#  3. 仕込み・配合記録（石灰自動増量＋範囲指定Excel出力）
 # ═══════════════════════════════════════════════════════════════
 elif page == "🧪 仕込み・配合計算":
     st.markdown('<div class="main-header"><h1>🧪 製造仕込み・配合計算</h1><p>水を除外した実粉末原料の算出と、石灰水の粉末逆算を行います。</p></div>', unsafe_allow_html=True)
@@ -588,38 +594,72 @@ elif page == "🧪 仕込み・配合計算":
             df_brw_all = pd.DataFrame(brewing)[["仕込No", "仕込日", "品名", "仕込量(kg)", "こんにゃく精粉(kg)", "主原料ロット"]]
             st.dataframe(df_brw_all[::-1], use_container_width=True, hide_index=True)
             
+            # --- Excel帳票出力機能（範囲指定付き） ---
             st.markdown("---")
-            st.markdown('<div class="section-title">🖨️ 管理帳票出力</div>', unsafe_allow_html=True)
-            st.info("食品工場向けの管理帳票として、製造記録のExcelファイルをダウンロードできます。PDF化する場合は、ダウンロードしたExcelファイルを開き「PDFとして保存（印刷）」を行ってください。")
+            st.markdown('<div class="section-title">🖨️ 管理帳票の範囲指定ダウンロード</div>', unsafe_allow_html=True)
+            st.info("期間を指定して、食品工場向けの製造管理帳票（Excel）を一括出力します。")
+            
+            col_d1, col_d2 = st.columns(2)
+            # 初期値：今月の1日から今日まで
+            today = date.today()
+            start_val = date(today.year, today.month, 1)
+            date_from = col_d1.date_input("開始日", value=start_val)
+            date_to = col_d2.date_input("終了日", value=today)
+
             if HAS_REPORT_GEN:
-                try:
-                    file_path = report_generator.generate_brewing_report(brewing)
-                    with open(file_path, "rb") as f:
-                        st.download_button(
-                            label="📊 製造実績帳票をダウンロード (Excel)",
-                            data=f,
-                            file_name=file_path.name,
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                except Exception as e:
-                    st.error("帳票の生成に失敗しました。")
+                # 日付範囲でフィルタリング
+                filtered_brewing = []
+                for b in brewing:
+                    try:
+                        b_date = datetime.strptime(b.get("仕込日", "").replace("/","-"), "%Y-%m-%d").date()
+                        if date_from <= b_date <= date_to:
+                            filtered_brewing.append(b)
+                    except:
+                        pass
+                
+                if not filtered_brewing:
+                    st.warning("指定された期間の製造記録が見つかりません。")
+                else:
+                    try:
+                        file_path = report_generator.generate_brewing_report(filtered_brewing)
+                        with open(file_path, "rb") as f:
+                            st.download_button(
+                                label=f"📊 指定範囲の帳票をダウンロード ({len(filtered_brewing)}件)",
+                                data=f,
+                                file_name=file_path.name,
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            )
+                    except Exception as e:
+                        st.error("帳票の生成に失敗しました。")
+                        st.code(traceback.format_exc())
             else:
                 st.warning("`report_generator.py` が見つからないため、帳票出力は現在無効です。")
         else:
             st.info("過去の製造実績はありません。")
 
 # ═══════════════════════════════════════════════════════════════
-#  4. 原料在庫・棚卸（入出庫トレンドグラフ追加）
+#  4. 原料在庫・棚卸（入出庫トレンドグラフ追加＆小数第二位ガード）
 # ═══════════════════════════════════════════════════════════════
 elif page == "📦 原料在庫・棚卸":
     st.markdown('<div class="main-header"><h1>📦 原料在庫・棚卸管理</h1><p>ロット別現在庫の確認、入出庫トレンドのグラフ化、棚卸し調整を行います。</p></div>', unsafe_allow_html=True)
     tab_inv1, tab_inv_trend, tab_inv2 = st.tabs(["📋 ロット別現在庫一覧", "📈 入出庫トレンド推移", "⚖️ 棚卸し在庫調整"])
     
     with tab_inv1:
-        active_inv = [v for v in inventory_data.values() if abs(v["現在庫(袋)"]) > 0.001]
+        # 下限0ガード済みの在庫データを表示
+        active_inv = [v for v in inventory_data.values() if v["現在庫(袋)"] > 0.0]
         if active_inv:
             df_curr_inv = pd.DataFrame(active_inv)[["入荷No", "原料種別", "ロットNo", "入荷袋数", "使用袋数", "調整袋数", "現在庫(袋)"]]
-            st.dataframe(df_curr_inv, use_container_width=True, hide_index=True)
+            st.dataframe(
+                df_curr_inv, 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "入荷袋数": st.column_config.NumberColumn(format="%.2f"),
+                    "使用袋数": st.column_config.NumberColumn(format="%.2f"),
+                    "調整袋数": st.column_config.NumberColumn(format="%.2f"),
+                    "現在庫(袋)": st.column_config.NumberColumn(format="%.2f")
+                }
+            )
         else:
             st.info("現在庫のあるロットはありません。")
 
@@ -763,7 +803,7 @@ elif page == "🧹 資材・消耗品管理":
             st.info("資材入出庫履歴はありません。")
 
 # ═══════════════════════════════════════════════════════════════
-#  6. 双方向トレース（見やすいカードデザインへ改修）
+#  6. 双方向トレース
 # ═══════════════════════════════════════════════════════════════
 elif page == "🔍 履歴トレース":
     st.markdown('<div class="main-header"><h1>🔍 双方向原料トレース</h1><p>原料ロットと製品製造ロットの関連付けを完全に追跡します。</p></div>', unsafe_allow_html=True)
@@ -817,7 +857,6 @@ elif page == "🔍 履歴トレース":
             
             if st.button("⬅️ 遡及を開始する", type="primary", use_container_width=True):
                 st.markdown("##### 🧪 製造の基本情報")
-                # 生のJSONではなく、見やすいHTMLカードに変更
                 st.markdown(f"""
                 <div style="background-color: #f8fafc; padding: 20px; border-radius: 12px; border-left: 6px solid #2563eb; margin-bottom: 20px; border: 1px solid #e2e8f0;">
                     <h3 style="margin-top:0; color:#1e293b;">{selected_b.get('品名')}</h3>
@@ -856,7 +895,7 @@ elif page == "🔍 履歴トレース":
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════
-#  7. マスタ設定（一括削除ボタンUI搭載）
+#  7. マスタ設定
 # ═══════════════════════════════════════════════════════════════
 elif page == "⚙️ マスタ設定":
     st.markdown('<div class="main-header"><h1>⚙️ マスターデータ管理</h1><p>システム全体で共有されるリストや配合基準、資材の定義を行います。</p></div>', unsafe_allow_html=True)
@@ -913,7 +952,7 @@ elif page == "⚙️ マスタ設定":
 
     with m_tab4:
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
-        st.write("水を含む各配合原料の全体比率(％)を定義します。")
+        st.write("水を含む各配合原料の全体比率(％)を定義します。合計が100％になるように調整してください。")
         with st.form("new_recipe_builder_pct"):
             new_p_name = st.text_input("製品の名称 (例: こんにゃく極細白)")
             cols_recipe_inputs = []
@@ -955,7 +994,6 @@ elif page == "⚙️ マスタ設定":
                         st.write("読出しエラー")
             
             st.markdown("---")
-            # --- 削除ボタンの集中管理によるAPIクラッシュ回避 ---
             del_recipe_name = st.selectbox("削除するレシピを選択してください", [r["品名"] for r in recipes_raw])
             if st.button("🗑️ 選択したレシピを完全に削除する"):
                 updated_recipes = [r for r in recipes_raw if r["品名"] != del_recipe_name]
