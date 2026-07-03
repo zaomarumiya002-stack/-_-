@@ -348,7 +348,7 @@ elif page == "📥 原料入荷登録":
             st.dataframe(df_arr[::-1], use_container_width=True, hide_index=True, column_config={"袋数": st.column_config.NumberColumn(format="%.2f")})
 
 # ═══════════════════════════════════════════════════════════════
-#  3. 仕込み・配合記録（カテゴリ階層UI、％逆算、ブレンド対応、編集・削除）
+#  3. 仕込み・配合記録（修繕版）
 # ═══════════════════════════════════════════════════════════════
 elif page == "🧪 仕込み・配合計算":
     st.markdown('<div class="main-header"><h1>🧪 製造仕込み・配合計算</h1><p>カテゴリから製品を選択し、割合(%)を入力すると実投入量(kg)が自動算出されます。</p></div>', unsafe_allow_html=True)
@@ -418,6 +418,10 @@ elif page == "🧪 仕込み・配合計算":
             current_month = date.today().month
             is_summer = 6 <= current_month <= 9
             
+            # --- 初期化（NameErrorおよび値の保持バグ防止） ---
+            water_weight = 0.0
+            lime_water_val = 0.0
+            
             submitted_ingredients = []
             recent_arrivals = sorted(arrivals, key=lambda x: x.get("入荷日", ""), reverse=True)
 
@@ -426,21 +430,26 @@ elif page == "🧪 仕込み・配合計算":
                 r_name = item.get("原料名", "未定義原料")
                 base_ratio = float(item.get("比率", 0.0))
 
+                # 1. 水・お湯の処理
                 if "水" == r_name.strip() or "お湯" in r_name:
                     water_weight = target_size * (base_ratio / 100.0)
                     st.markdown(f'<div style="background:#e0f2fe; padding:12px; border-radius:8px; margin-bottom:16px; border:1px solid #bae6fd; color:#0369a1; font-weight:bold;">💧 [参考] 配合加水量: {water_weight:.2f} kg (マスタ比率: {base_ratio:.2f}%)</div>', unsafe_allow_html=True)
                     continue
 
+                # 2. 石灰の処理
                 if "石灰" in r_name or "カルシウム" in r_name:
                     if is_summer:
                         orig_ratio = base_ratio
-                        base_ratio += 0.01 # 修正: 夏季は +0.01%
+                        base_ratio += 0.01
                         st.markdown(f'<div style="background:#fefce8; padding:8px 12px; border-radius:6px; color:#a16207; font-weight:bold; margin-bottom:8px; border-left:4px solid #eab308;">☀️ 夏季自動調整: 石灰比率を +0.01% 増量 ({orig_ratio:.2f}% → {base_ratio:.2f}%)</div>', unsafe_allow_html=True)
                     
                     st.markdown(f"#### 🧪 {r_name}")
                     col_l1, col_l2 = st.columns(2)
                     act_ratio = col_l1.number_input("適用比率 (%)", value=base_ratio, step=0.01, format="%.2f", key=f"ratio_{i}")
                     lime_water_l = col_l2.number_input("作りたい石灰水の量 (L)", min_value=0.0, value=float(target_size), step=1.0, format="%.2f", key=f"lime_l_{i}")
+                    
+                    # ユーザー入力値を保存用の変数へ格納
+                    lime_water_val = lime_water_l
                     
                     calc_kg = lime_water_l * (act_ratio / 100.0)
                     st.metric("✅ 必要な石灰粉末 (自動計算)", f"{calc_kg:.3f} kg")
@@ -452,7 +461,6 @@ elif page == "🧪 仕込み・配合計算":
                         if l_no and l_no not in recent_filtered_lots: recent_filtered_lots.append(l_no)
                         if len(recent_filtered_lots) >= 5: break
                     
-                    # 修正: 文言の変更
                     lots_choices = ["─ (ロットを選択)", "✏️ 手入力 (リスト外)"] + recent_filtered_lots
                     col_l_sel, col_l_txt = st.columns(2)
                     lot_sel = col_l_sel.selectbox("入荷ロットの選択", lots_choices, key=f"lot_sel_{i}")
@@ -480,11 +488,8 @@ elif page == "🧪 仕込み・配合計算":
                     if len(recent_filtered_lots) >= 5: break
                 lots_choices = ["─ (ロットを選択)", "✏️ 手入力 (リスト外)"] + recent_filtered_lots
 
-                # --- 修正: ブレンド機能（こんにゃく粉限定・割合ベース計算） ---
                 if "こんにゃく" in r_name:
                     use_blend = st.toggle("🔀 こんにゃく粉をブレンドする（複数ロット）", key=f"blend_{i}")
-                    
-                    # 実投入量の合計入力（ブレンド時もここを基準に割り振る）
                     act_kg_total = col_kg_show.number_input(f"実投入量 合計(kg)", min_value=0.0, value=calc_kg, step=0.01, key=f"act_kg_total_{i}", format="%.3f")
                     
                     if use_blend:
@@ -569,86 +574,13 @@ elif page == "🧪 仕込み・配合計算":
                         "メーカー": "自社", "主原料ロット": k_lot, "仕込量(kg)": target_size,
                         "こんにゃく精粉(kg)": k_kg, "海藻粉(kg)": s_kg, "海藻粉ロット": s_lot,
                         "デンプン(kg)": st_kg, "デンプンロット": st_lot, "デンプン種別": "-",
-                        "石灰(kg)": lime_kg, "石灰水(L)": water_weight, 
+                        "石灰(kg)": lime_kg, "石灰水(L)": lime_water_val, # 修正：water_weight から lime_water_val に変更
                         "その他添加物": json.dumps(submitted_ingredients, ensure_ascii=False),
                         "備考": "割合ベース動的登録", "登録日時": datetime.now().isoformat()
                     })
                     st.success("仕込み・製造実績を登録しました。画面を更新します...")
                     import time; time.sleep(1.5)
                     refresh()
-
-    with tab_brw2:
-        st.markdown('<div class="section-title">📋 過去の製造記録</div>', unsafe_allow_html=True)
-        if brewing:
-            df_brw_all = pd.DataFrame(brewing)[["仕込No", "仕込日", "品名", "仕込量(kg)", "こんにゃく精粉(kg)", "主原料ロット"]]
-            st.dataframe(df_brw_all[::-1], use_container_width=True, hide_index=True)
-            
-            st.markdown("---")
-            st.markdown('<div class="section-title">🖨️ 管理帳票の範囲指定ダウンロード</div>', unsafe_allow_html=True)
-            col_d1, col_d2 = st.columns(2)
-            today = date.today()
-            start_val = date(today.year, today.month, 1)
-            date_from = col_d1.date_input("開始日", value=start_val)
-            date_to = col_d2.date_input("終了日", value=today)
-
-            if HAS_REPORT_GEN:
-                filtered_brewing = []
-                for b in brewing:
-                    try:
-                        b_date = datetime.strptime(b.get("仕込日", "").replace("/","-"), "%Y-%m-%d").date()
-                        if date_from <= b_date <= date_to: filtered_brewing.append(b)
-                    except: pass
-                
-                if not filtered_brewing: st.warning("指定された期間の製造記録が見つかりません。")
-                else:
-                    try:
-                        file_path = report_generator.generate_brewing_report(filtered_brewing)
-                        with open(file_path, "rb") as f:
-                            st.download_button(
-                                label=f"📊 指定範囲の帳票をダウンロード ({len(filtered_brewing)}件)",
-                                data=f, file_name=file_path.name,
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                            )
-                    except Exception as e:
-                        st.error("帳票の生成に失敗しました。")
-            else:
-                st.warning("帳票モジュールがありません。")
-
-    with tab_brw3:
-        st.markdown('<div class="form-card"><div class="section-title">✏️ 登録済み記録の編集と削除</div>', unsafe_allow_html=True)
-        if not brewing:
-            st.info("編集可能な履歴がありません。")
-        else:
-            brw_opts = {f"No.{b.get('仕込No')} - {b.get('品名')} ({b.get('仕込日')})": b for b in reversed(brewing)}
-            selected_brw_label = st.selectbox("対象の製造記録を選択してください", list(brw_opts.keys()))
-            target_b = brw_opts[selected_brw_label]
-            
-            col_e1, col_e2 = st.columns(2)
-            try: dt_val = datetime.strptime(target_b.get("仕込日", date.today().strftime("%Y-%m-%d")).replace("/","-"), "%Y-%m-%d").date()
-            except: dt_val = date.today()
-            edit_date = col_e1.date_input("製造日", value=dt_val)
-            edit_name = col_e2.text_input("品名", value=target_b.get("品名", ""))
-            edit_target_kg = col_e1.number_input("仕込量 (kg)", min_value=0.0, value=float(target_b.get("仕込量(kg)", 0)), step=1.0)
-            edit_remarks = col_e2.text_input("備考（修正理由など）", value=target_b.get("備考", ""))
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            col_eb1, col_eb2 = st.columns(2)
-            if col_eb1.button("💾 この内容で上書き更新する", type="primary", use_container_width=True):
-                target_b["仕込日"] = str(edit_date)
-                target_b["品名"] = edit_name
-                target_b["仕込量(kg)"] = edit_target_kg
-                target_b["備考"] = edit_remarks
-                sheets.update_brewing(target_b["仕込No"], target_b)
-                st.success("更新しました。画面を更新します...")
-                import time; time.sleep(1.5)
-                refresh()
-            if col_eb2.button("🗑️ この製造記録を完全に削除する", use_container_width=True):
-                sheets.delete_brewing(target_b["仕込No"])
-                st.success("削除しました。画面を更新します...")
-                import time; time.sleep(1.5)
-                refresh()
-        st.markdown('</div>', unsafe_allow_html=True)
-
 # ═══════════════════════════════════════════════════════════════
 #  4. 原料在庫・棚卸
 # ═══════════════════════════════════════════════════════════════
