@@ -401,6 +401,14 @@ elif page == "🧪 仕込み・配合計算":
             pass
         return []
 
+    # 【データ健全性チェック】原料名にJSON文字列が丸ごと紛れ込んでいる等、
+    # 明らかに壊れたデータを検知するための判定関数
+    def is_corrupted_name(name):
+        name = str(name).strip()
+        if not name:
+            return False
+        return len(name) > 30 or name.startswith("[") or name.startswith("{")
+
     p_recipes = {}
     for r in recipes_raw:
         p_name = r.get("品名", "未定義")
@@ -488,7 +496,7 @@ elif page == "🧪 仕込み・配合計算":
                 # 【表示崩れ防止】レシピデータが壊れている場合(JSON文字列がそのまま
                 # 原料名に入ってしまっている等)、画面に長大な文字列がそのまま表示され
                 # 崩れて見えることがあるため、異常なデータは安全な表示名に置き換える。
-                if len(r_name) > 30 or r_name.startswith("[") or r_name.startswith("{"):
+                if is_corrupted_name(r_name):
                     r_name = f"⚠️ 不明な原料 {i+1}（レシピデータ要確認）"
                 base_ratio = float(item.get("比率", 0.0))
 
@@ -1012,6 +1020,65 @@ elif page == "⚙️ マスタ設定":
                             refresh()
 
         with r_tab2:
+            # 【データ健全性チェック】原料マスタ・配合レシピの中に壊れたデータが
+            # 紛れ込んでいないかを自動検出し、その場でワンクリック修復できるパネル
+            broken_materials = [m for m in materials if is_corrupted_name(m)]
+            broken_recipe_items = []  # (recipe_dict, item_index, bad_name)
+            for rec in recipes_raw:
+                comp_list = safe_parse_recipe(rec.get("配合JSON"))
+                for j, it in enumerate(comp_list):
+                    if isinstance(it, dict) and is_corrupted_name(it.get("原料名", "")):
+                        broken_recipe_items.append((rec, j, comp_list))
+
+            if broken_materials or broken_recipe_items:
+                st.markdown('<div class="alert-box danger">🚨 データ破損を検知しました。原料マスタ、または配合レシピの中に本来入るべきでない文字列（JSONの塊など）が紛れ込んでいます。下記の内容を確認し、自動修復を実行してください。</div>', unsafe_allow_html=True)
+
+                if broken_materials:
+                    st.write(f"**⚗️ 原料マスタの壊れたデータ（{len(broken_materials)}件）**")
+                    for bm in broken_materials:
+                        st.code(bm[:200] + ("…" if len(bm) > 200 else ""), language=None)
+
+                if broken_recipe_items:
+                    st.write(f"**🧪 配合レシピの壊れた原料データ（{len(broken_recipe_items)}件）**")
+                    seen_names = set()
+                    for rec, j, comp_list in broken_recipe_items:
+                        pname = rec.get("品名", "未定義")
+                        if pname not in seen_names:
+                            st.write(f"- レシピ「{pname}」の {j+1} 番目の原料データが破損しています")
+                            seen_names.add(pname)
+
+                if st.button("🩺 検知した破損データを自動修復する", type="primary"):
+                    # 原料マスタから壊れたデータを除去
+                    if broken_materials:
+                        fixed_materials = [m for m in materials if not is_corrupted_name(m)]
+                        sheets.save_materials(fixed_materials)
+
+                    # レシピから壊れた原料エントリのみを除去（有効な原料はそのまま残す）
+                    if broken_recipe_items:
+                        fixed_recipes = []
+                        touched_names = set()
+                        for rec in recipes_raw:
+                            comp_list = safe_parse_recipe(rec.get("配合JSON"))
+                            cleaned = [it for it in comp_list if not (isinstance(it, dict) and is_corrupted_name(it.get("原料名", "")))]
+                            if len(cleaned) != len(comp_list):
+                                touched_names.add(rec.get("品名", ""))
+                            new_rec = dict(rec)
+                            new_rec["配合JSON"] = json.dumps(cleaned, ensure_ascii=False)
+                            fixed_recipes.append(new_rec)
+                        sheets.save_recipes(fixed_recipes)
+                        for tn in touched_names:
+                            try:
+                                sheets.append_recipe_log({
+                                    "ログID": f"RLOG-{datetime.now().strftime('%Y%m%d%H%M%S')}", "変更日時": datetime.now().strftime('%Y/%m/%d %H:%M:%S'),
+                                    "品名": tn, "処理": "自動修復", "変更内容": "破損した原料データを除去", "作業者": "システム(自動修復)"
+                                })
+                            except: pass
+
+                    st.success("破損データを修復しました。除去した原料は各レシピの編集画面から正しい原料・比率で再登録してください。")
+                    time.sleep(2)
+                    refresh()
+                st.markdown("---")
+
             if recipes_raw:
                 for idx, rec in enumerate(recipes_raw):
                     with st.expander(f"📦 {rec.get('品名')} (【{rec.get('大カテゴリ','')}】 {rec.get('中カテゴリ','')})"):
