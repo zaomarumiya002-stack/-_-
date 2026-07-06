@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import json
 import time
+import io
 from datetime import datetime, date
 import traceback
 import plotly.graph_objects as go
@@ -649,6 +650,78 @@ elif page == "🧪 仕込み・配合計算":
                     st.success("仕込み・製造実績を登録しました。画面を更新します...")
                     time.sleep(1.5)
                     refresh()
+
+    with tab_brw2:
+        st.markdown('<div class="form-card"><div class="section-title">📋 仕込み・製造実績の履歴一覧</div>', unsafe_allow_html=True)
+        if not brewing:
+            st.info("まだ製造実績が登録されていません。")
+        else:
+            df_brw = pd.DataFrame(brewing)
+            show_cols = [c for c in [
+                "仕込No", "仕込日", "品名", "メーカー", "仕込量(kg)", "主原料ロット",
+                "こんにゃく精粉(kg)", "海藻粉(kg)", "デンプン(kg)", "石灰(kg)", "石灰水(L)", "備考"
+            ] if c in df_brw.columns]
+            st.dataframe(df_brw[show_cols][::-1], use_container_width=True, hide_index=True)
+
+            excel_buffer = io.BytesIO()
+            try:
+                with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+                    df_brw[show_cols].to_excel(writer, index=False, sheet_name="仕込み履歴")
+                st.download_button(
+                    "📥 Excelファイルとしてダウンロード",
+                    data=excel_buffer.getvalue(),
+                    file_name=f"仕込み履歴_{date.today().strftime('%Y%m%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+            except Exception:
+                st.warning("Excel出力用のライブラリ(openpyxl)が見つからないため、代わりにCSVで出力します。")
+                csv_bytes = df_brw[show_cols].to_csv(index=False).encode("utf-8-sig")
+                st.download_button(
+                    "📥 CSVファイルとしてダウンロード",
+                    data=csv_bytes,
+                    file_name=f"仕込み履歴_{date.today().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with tab_brw3:
+        st.markdown('<div class="form-card"><div class="section-title">✏️ 仕込み・製造実績の編集・削除</div>', unsafe_allow_html=True)
+        if not brewing:
+            st.info("まだ製造実績が登録されていません。")
+        else:
+            brw_edit_opts = {f"No.{b.get('仕込No')} - {b.get('品名')} ({b.get('仕込日')})": b for b in brewing}
+            sel_label = st.selectbox("編集・削除する記録を選択", list(brw_edit_opts.keys()))
+            sel_rec = brw_edit_opts[sel_label]
+
+            with st.form("brw_edit_form"):
+                e_date = st.text_input("仕込日", value=str(sel_rec.get("仕込日", "")))
+                e_name = st.text_input("品名", value=str(sel_rec.get("品名", "")))
+                e_size = st.number_input("仕込量(kg)", min_value=1, value=int(float(sel_rec.get("仕込量(kg)", 100) or 100)), step=10, format="%d")
+                e_note = st.text_input("備考", value=str(sel_rec.get("備考", "")))
+
+                col_save, col_del = st.columns(2)
+                do_save = col_save.form_submit_button("💾 変更を保存する", type="primary", use_container_width=True)
+                do_delete = col_del.form_submit_button("🗑️ この記録を削除する", use_container_width=True)
+
+                if do_save or do_delete:
+                    if not hasattr(sheets, "save_brewing"):
+                        st.error("この操作には `sheets.py` 側に `save_brewing(list)` 関数（仕込みデータ全体を上書き保存する関数、他の save_recipes 等と同じ形式）を追加する必要があります。現状は追加・登録のみ対応しています。")
+                    else:
+                        updated_brewing = [b for b in brewing if b.get("仕込No") != sel_rec.get("仕込No")]
+                        if do_save:
+                            new_rec = dict(sel_rec)
+                            new_rec.update({"仕込日": e_date, "品名": e_name, "仕込量(kg)": e_size, "備考": e_note})
+                            updated_brewing.append(new_rec)
+                            sheets.save_brewing(updated_brewing)
+                            st.success("製造実績を更新しました。")
+                        else:
+                            sheets.save_brewing(updated_brewing)
+                            st.success("製造実績を削除しました。")
+                        time.sleep(1.5)
+                        refresh()
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════
 #  4. 原料在庫・棚卸
