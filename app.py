@@ -141,6 +141,24 @@ div[data-testid="stRadio"] label {
     transform: scale(0.98) !important;
 }
 
+/* 数値入力の＋－ステッパーボタンをスマホ・タブレットでタップしやすいサイズに拡大 */
+button[data-testid="stNumberInputStepUp"],
+button[data-testid="stNumberInputStepDown"] {
+    min-width: 48px !important;
+    min-height: 48px !important;
+    width: 48px !important;
+    height: 48px !important;
+    border-radius: 10px !important;
+    border: 2px solid var(--c-border) !important;
+    background-color: #f8fafc !important;
+}
+button[data-testid="stNumberInputStepUp"] svg,
+button[data-testid="stNumberInputStepDown"] svg {
+    width: 22px !important;
+    height: 22px !important;
+}
+div[data-baseweb="input"] { min-height: 54px !important; }
+
 .alert-box { background-color: #fffbeb; border-left: 6px solid var(--c-warning); color: #92400e; padding: 18px; border-radius: 10px; margin-bottom: 18px; font-size: 1.05rem; font-weight: 700; }
 .alert-box.danger { background-color: #fef2f2; border-left-color: var(--c-danger); color: #991b1b; }
 .alert-box.info { background-color: #f0fdf4; border-left-color: var(--c-success); color: #065f46; }
@@ -431,11 +449,23 @@ elif page == "🧪 仕込み・配合計算":
                 active_recipe = p_recipes.get(selected_p, {}).get("成分", [])
 
         st.markdown("---")
-        target_size = st.number_input("希望仕込製品量 (調合全体重量 kg)", min_value=1.0, value=100.0, step=10.0, format="%.2f")
+        target_size = st.number_input(
+            "希望仕込製品量 (調合全体重量 kg)",
+            min_value=1,
+            value=100,
+            step=10,
+            format="%d",
+            help="整数のみ入力できます（小数点は不要です）"
+        )
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # 【状態消失バグ対応】希望仕込量が変更された際、動的キーをリフレッシュする接尾辞
-        key_suffix = f"_{target_size:.2f}_{p_name}"
+        # 【文字消失・画面崩れバグ修正】
+        # 従来は target_size（希望仕込量）を毎回キーに含めていたため、
+        # 数量欄を1文字入力するたびに、下の原料入力欄が全て新しいウィジェットとして
+        # 再生成され、入力中の文字が消えたり画面が崩れる原因になっていました。
+        # 数量の変更では原料欄の状態をリセットする必要がないため、
+        # キーは「選択した製品」が変わったときだけ変化するようにします。
+        key_suffix = f"_{selected_p}" if selected_p else "_直接入力"
 
         if not active_recipe:
             st.info("製品を選択してください。")
@@ -455,6 +485,11 @@ elif page == "🧪 仕込み・配合計算":
             for i, item in enumerate(active_recipe[:10]):
                 if not isinstance(item, dict): continue
                 r_name = str(item.get("原料名", "未定義原料")).strip()
+                # 【表示崩れ防止】レシピデータが壊れている場合(JSON文字列がそのまま
+                # 原料名に入ってしまっている等)、画面に長大な文字列がそのまま表示され
+                # 崩れて見えることがあるため、異常なデータは安全な表示名に置き換える。
+                if len(r_name) > 30 or r_name.startswith("[") or r_name.startswith("{"):
+                    r_name = f"⚠️ 不明な原料 {i+1}（レシピデータ要確認）"
                 base_ratio = float(item.get("比率", 0.0))
 
                 # 1. 水・お湯の処理
