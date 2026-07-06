@@ -24,7 +24,7 @@ st.set_page_config(
 )
 
 # ════════════════════════════════════════════════════════════════
-#  モバイル・タブレット特化 UI/UX CSS (カード表示・文字欠け・操作性改善)
+#  モバイル・タブレット特化 UI/UX CSS (カード表示・完全統一サイズ)
 # ════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
@@ -445,10 +445,10 @@ elif page == "📥 入荷登録":
             st.dataframe(df_arr[::-1], use_container_width=True, hide_index=True)
 
 # ═══════════════════════════════════════════════════════════════
-#  3. 仕込み・配合記録（カードUI修復版・1行完全結合HTMLレンダリング）
+#  3. 仕込み・配合記録（業務ロジック改善・リアルタイム反映）
 # ═══════════════════════════════════════════════════════════════
 elif page == "📋 仕込み":
-    st.markdown('<div class="main-header"><h1>📋 製造仕込み・配合計算</h1><p>製品と希望仕込量を入力すると、直ちに準備する原料がカード表示されます。</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><h1>📋 製造仕込み・配合計算</h1><p>製品と仕込量を入力すると、直ちに準備する原料がカード表示されます。</p></div>', unsafe_allow_html=True)
     
     tab_brw1, tab_brw2, tab_brw3 = st.tabs(["📋 1. 仕込み", "📖 2. 履歴", "🛠️ 3. 編集"])
 
@@ -494,32 +494,46 @@ elif page == "📋 仕込み":
                 active_recipe = p_recipes.get(selected_p, {}).get("成分", [])
 
         st.markdown("---")
+        
+        # ────────────────────────────────────────────────────────
+        # 現場向けの重要入力項目（入力した瞬間にすべて再計算される）
+        # ────────────────────────────────────────────────────────
         target_size = st.number_input(
             "希望仕込製品量 (調合全体重量 kg)",
-            min_value=1,
-            value=100,
-            step=10,
-            format="%d",
-            help="希望する総重量を入力すると、必要な原料量が直ちに計算されます。"
+            min_value=1.0,
+            value=1000.0,
+            step=10.0,
+            format="%.1f",
+            help="この重量と石灰水作成量を変更すると、直ちに下の原料カードが更新されます。"
+        )
+        
+        lime_water_size = st.number_input(
+            "石灰水作成量 (kg)",
+            min_value=0.0,
+            value=20.0,
+            step=1.0,
+            format="%.1f",
+            help="別に作成する石灰水の量を入力してください。ここで指定した量の分だけ、メイン加水量から自動で差し引かれます。"
         )
         st.markdown('</div>', unsafe_allow_html=True)
 
         if not active_recipe:
             st.info("製品を選択してください。")
         else:
-            # 【重要】描画先のプレースホルダ（コンテナ）を先に配置
+            # 準備する原料カードを最上部に表示するためのコンテナ
             summary_container = st.container()
             
             submitted_ingredients = []
             summary_data = []
-            lime_water_val = 0.0
             
-            key_suffix = f"_{selected_p}" if selected_p else "_直接入力"
+            # 【重要】仕込量や石灰水量を変更した瞬間に、下部の詳細入力欄のStateをリセットし、
+            # 最新の計算値を強制反映させるための動的キー
+            key_suffix = f"_{selected_p}_{target_size}_{lime_water_size}"
+            
             current_month = date.today().month
             is_summer = 6 <= current_month <= 9
             recent_arrivals = sorted(arrivals, key=lambda x: x.get("入荷日", ""), reverse=True)
 
-            # 折りたたみの中で、割合変更や実投入量・ロットの調整を行わせる
             with st.expander("▼ 詳細調整（割合変更・実投入量の微調整・ロット入力）", expanded=False):
                 st.write("※通常作業ではこの項目を開く必要はありません。微調整やロット指定が必要な場合のみ使用してください。")
                 
@@ -530,29 +544,37 @@ elif page == "📋 仕込み":
 
                     # 1. 水・お湯
                     if "水" == r_name or "お湯" in r_name:
-                        calc_kg = round(target_size * (base_ratio / 100.0), 3)
                         st.markdown(f"#### 💧 {r_name}")
-                        st.info(f"自動加水量: {calc_kg:.3f} kg (マスタ比率: {base_ratio:.2f}%)")
-                        submitted_ingredients.append({"原料名": r_name, "kg": calc_kg, "lot": "─"})
-                        summary_data.append({"name": r_name, "kg": calc_kg, "type": "water"})
+                        col_l1, col_l2 = st.columns(2)
+                        act_ratio = col_l1.number_input("適用割合 (%)", value=base_ratio, step=0.01, format="%.2f", key=f"ratio_{i}{key_suffix}")
+                        
+                        # 水の計算: (希望仕込量 * 水の割合/100) - 石灰水作成量
+                        water_base = target_size * (act_ratio / 100.0)
+                        calc_kg = max(0.0, round(water_base - lime_water_size, 3))
+                        
+                        st.info(f"自動加水量: {calc_kg:.3f} kg (全体水量 {water_base:.3f} kg から 石灰水 {lime_water_size:.3f} kg を差し引き)")
+                        act_kg = col_l2.number_input(f"実投入量 (kg)", value=float(calc_kg), step=0.01, format="%.3f", key=f"act_kg_{i}{key_suffix}")
+                        
+                        submitted_ingredients.append({"原料名": r_name, "kg": act_kg, "lot": "─"})
+                        summary_data.append({"name": r_name, "kg": act_kg, "type": "water"})
                         st.markdown("<hr>", unsafe_allow_html=True)
                         continue
 
                     # 2. 石灰
                     is_lime = ("石灰" in r_name or "カルシウム" in r_name)
-                    if is_lime and is_summer:
-                        base_ratio += 0.01
-
-                    st.markdown(f"#### {'☀️ ' if is_lime and is_summer else '🧪 '}{r_name}")
-                    
-                    col_l1, col_l2 = st.columns(2)
-                    act_ratio = col_l1.number_input("適用割合 (%)", value=base_ratio, step=0.01, format="%.2f", key=f"ratio_{i}{key_suffix}")
-                    
                     if is_lime:
-                        lime_water_l = col_l2.number_input("作りたい石灰水の量 (L)", min_value=0.0, value=float(target_size), step=1.0, format="%.2f", key=f"lime_l_{i}{key_suffix}")
-                        lime_water_val = lime_water_l
-                        calc_kg = round(lime_water_l * (act_ratio / 100.0), 3)
-                        st.write(f"✅ 計算された石灰粉末の必要量: **{calc_kg:.3f} kg**")
+                        if is_summer:
+                            base_ratio += 0.01
+                            
+                        st.markdown(f"#### {'☀️ ' if is_summer else '🧪 '}{r_name}")
+                        col_l1, col_l2 = st.columns(2)
+                        act_ratio = col_l1.number_input("適用濃度 (%)", value=base_ratio, step=0.01, format="%.2f", key=f"ratio_{i}{key_suffix}")
+                        
+                        # 石灰の計算: 石灰水作成量 * 濃度 / 100 (希望仕込量は無視する)
+                        calc_kg = round(lime_water_size * (act_ratio / 100.0), 3)
+                        st.write(f"✅ 計算された石灰粉末の必要量: **{calc_kg:.3f} kg** (石灰水 {lime_water_size} kg × 濃度 {act_ratio}%)")
+                        
+                        act_kg = col_l2.number_input("実投入量 (kg)", value=float(calc_kg), step=0.001, format="%.3f", key=f"act_kg_{i}{key_suffix}")
                         
                         raw_arr_matches = [a for a in recent_arrivals if str(a.get("原料種別", "")).strip() == r_name]
                         recent_filtered_lots = []
@@ -568,12 +590,17 @@ elif page == "📋 仕込み":
                         final_lot = lot_txt if lot_sel == "✏️ 手入力 (リスト外)" else lot_sel
                         if final_lot == "─ (ロットを選択)": final_lot = "─"
                         
-                        summary_data.append({"name": r_name, "kg": calc_kg, "type": "lime"})
-                        submitted_ingredients.append({"原料名": r_name, "kg": calc_kg, "lot": final_lot})
+                        summary_data.append({"name": r_name, "kg": act_kg, "type": "lime"})
+                        submitted_ingredients.append({"原料名": r_name, "kg": act_kg, "lot": final_lot})
                         st.markdown("<hr>", unsafe_allow_html=True)
                         continue
 
                     # 3. 通常の粉体 (こんにゃく・海藻など)
+                    st.markdown(f"#### 🍏 {r_name}")
+                    col_l1, col_l2 = st.columns(2)
+                    act_ratio = col_l1.number_input("適用割合 (%)", value=base_ratio, step=0.01, format="%.2f", key=f"ratio_{i}{key_suffix}")
+                    
+                    # 通常粉体の計算: 希望仕込製品量 * 割合 / 100
                     calc_kg = round(target_size * (act_ratio / 100.0), 3)
                     
                     is_konjac = "こんにゃく" in r_name
@@ -633,11 +660,9 @@ elif page == "📋 仕込み":
 
                     st.markdown("<hr>", unsafe_allow_html=True)
 
-            # ━━━ 最上部のコンテナへ準備原料リストを一気に描画 ━━━
+            # ━━━ 最上部のコンテナへ準備原料リストを完全結合して一気に描画 ━━━
             with summary_container:
-                # 【修正の核心】
-                # StreamlitのMarkdownパーサーがコードブロックとして誤認しないよう、
-                # インデント（改行とスペース）を一切含まない1行の文字列として完全に結合してから渡します。
+                # 【重要】StreamlitのMarkdownパーサーを騙さないよう、途中に改行やスペースを一切入れない1行のHTML文字列として結合する
                 final_html = '<div class="form-card"><div style="font-size:1.4rem; font-weight:800; color:#1e293b; margin-bottom:16px;">📦 準備する原料</div>'
                 
                 for sd in summary_data:
@@ -687,7 +712,7 @@ elif page == "📋 仕込み":
                         "メーカー": "自社", "主原料ロット": k_lot, "仕込量(kg)": target_size,
                         "こんにゃく精粉(kg)": k_kg, "海藻粉(kg)": s_kg, "海藻粉ロット": s_lot,
                         "デンプン(kg)": st_kg, "デンプンロット": st_lot, "デンプン種別": "-",
-                        "石灰(kg)": lime_kg, "石灰水(L)": lime_water_val,
+                        "石灰(kg)": lime_kg, "石灰水(L)": lime_water_size,
                         "その他添加物": json.dumps(submitted_ingredients, ensure_ascii=False),
                         "備考": "割合ベース動的登録", "登録日時": datetime.now().isoformat()
                     })
