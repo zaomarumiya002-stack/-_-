@@ -147,21 +147,23 @@ div[data-testid="stRadio"] label {
 }
 .stButton button:active { transform: scale(0.98) !important; }
 
-/* 数値入力ボタン拡大 */
 button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStepDown"] {
     min-width: 48px !important; min-height: 48px !important; border-radius: 10px !important; background-color: #f8fafc !important;
 }
 
-/* ━━━ 原料カード表示用デザイン ━━━ */
+/* ━━━ 原料カード表示用デザイン (完全固定・統一サイズ) ━━━ */
 .ing-card {
     border-radius: 12px;
-    padding: 18px 24px;
-    margin-bottom: 16px;
+    padding: 20px 24px;
+    margin: 0 0 16px 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
     border: 2px solid;
     box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    min-height: 110px;
+    width: 100%;
+    box-sizing: border-box;
 }
 .ing-card.konjac { background: linear-gradient(135deg, #fdf4ff, #fae8ff); border-color: #e879f9; }
 .ing-card.konjac .ing-name { color: #86198f; }
@@ -183,9 +185,15 @@ button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStep
 .ing-card.other .ing-name { color: #334155; }
 .ing-card.other .ing-amount { color: #0f172a; }
 
-.ing-info { display: flex; flex-direction: column; gap: 4px; }
-.ing-name { font-size: 1.4rem; font-weight: 800; }
-.ing-amount { font-size: 2.2rem; font-weight: 900; }
+.ing-info { 
+    display: flex; 
+    flex-direction: column; 
+    justify-content: center;
+    align-items: flex-start;
+    gap: 8px; 
+}
+.ing-name { font-size: 1.5rem; font-weight: 800; margin: 0; line-height: 1; }
+.ing-amount { font-size: 2.2rem; font-weight: 900; margin: 0; line-height: 1; text-align: right; }
 .ing-alert { 
     color: #b91c1c; 
     background-color: #fef2f2; 
@@ -195,7 +203,7 @@ button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStep
     font-weight: 800; 
     display: inline-block; 
     border: 1px solid #fca5a5;
-    margin-top: 8px;
+    margin: 0;
 }
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
@@ -437,7 +445,7 @@ elif page == "📥 入荷登録":
             st.dataframe(df_arr[::-1], use_container_width=True, hide_index=True)
 
 # ═══════════════════════════════════════════════════════════════
-#  3. 仕込み・配合記録（カードUI・折りたたみ・リアルタイム対応版）
+#  3. 仕込み・配合記録（カードUI修復版・1行完全結合HTMLレンダリング）
 # ═══════════════════════════════════════════════════════════════
 elif page == "📋 仕込み":
     st.markdown('<div class="main-header"><h1>📋 製造仕込み・配合計算</h1><p>製品と希望仕込量を入力すると、直ちに準備する原料がカード表示されます。</p></div>', unsafe_allow_html=True)
@@ -499,7 +507,7 @@ elif page == "📋 仕込み":
         if not active_recipe:
             st.info("製品を選択してください。")
         else:
-            # 【重要】描画先のプレースホルダ（コンテナ）を先に配置し、下部で設定した値を上部に表示させる
+            # 【重要】描画先のプレースホルダ（コンテナ）を先に配置
             summary_container = st.container()
             
             submitted_ingredients = []
@@ -538,7 +546,6 @@ elif page == "📋 仕込み":
                     st.markdown(f"#### {'☀️ ' if is_lime and is_summer else '🧪 '}{r_name}")
                     
                     col_l1, col_l2 = st.columns(2)
-                    # 割合を変更すると、Streamlitが再実行され、画面が瞬時に更新される
                     act_ratio = col_l1.number_input("適用割合 (%)", value=base_ratio, step=0.01, format="%.2f", key=f"ratio_{i}{key_suffix}")
                     
                     if is_lime:
@@ -628,10 +635,11 @@ elif page == "📋 仕込み":
 
             # ━━━ 最上部のコンテナへ準備原料リストを一気に描画 ━━━
             with summary_container:
-                st.markdown('<div class="form-card">', unsafe_allow_html=True)
-                st.markdown(f'<div style="font-size:1.4rem; font-weight:800; color:#1e293b; margin-bottom:16px;">📦 準備する原料</div>', unsafe_allow_html=True)
+                # 【修正の核心】
+                # StreamlitのMarkdownパーサーがコードブロックとして誤認しないよう、
+                # インデント（改行とスペース）を一切含まない1行の文字列として完全に結合してから渡します。
+                final_html = '<div class="form-card"><div style="font-size:1.4rem; font-weight:800; color:#1e293b; margin-bottom:16px;">📦 準備する原料</div>'
                 
-                html_cards = []
                 for sd in summary_data:
                     name = sd["name"]
                     kg = sd["kg"]
@@ -642,21 +650,13 @@ elif page == "📋 仕込み":
                         inv_kg = type_totals_kg.get(name, 0.0)
                         if kg > inv_kg:
                             shortage = kg - inv_kg
-                            alert_html = f'<div class="ing-alert">🚨 在庫不足 (不足: {shortage:,.3f} kg / 現在庫: {inv_kg:,.3f} kg)</div>'
+                            alert_html = f'<div class="ing-alert">🚨 在庫不足 (不足: {shortage:,.3f} kg)</div>'
                             
-                    card_html = f"""
-                    <div class="ing-card {type_class}">
-                        <div class="ing-info">
-                            <div class="ing-name">【{name}】</div>
-                            {alert_html}
-                        </div>
-                        <div class="ing-amount">{kg:,.3f} <span style="font-size:1.2rem; color:inherit;">kg</span></div>
-                    </div>
-                    """
-                    html_cards.append(card_html)
+                    card_html = f'<div class="ing-card {type_class}"><div class="ing-info"><div class="ing-name">【{name}】</div>{alert_html}</div><div class="ing-amount">{kg:,.3f} <span style="font-size:1.2rem; color:inherit;">kg</span></div></div>'
+                    final_html += card_html
                     
-                st.markdown("".join(html_cards), unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
+                final_html += '</div>'
+                st.markdown(final_html, unsafe_allow_html=True)
             # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
             if st.button("💾 この実績で製造記録を保存する", type="primary", use_container_width=True):
