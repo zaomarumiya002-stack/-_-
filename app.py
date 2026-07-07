@@ -44,7 +44,7 @@ st.markdown("""
     --c-primary: #ea580c;       /* 現場用オレンジ(強調) */
     --c-primary-hover: #c2410c;
     --c-secondary: #1e293b;     /* ネイビー(メニュー・見出し) */
-    --c-border: #cbd5e1;
+    --c-border: #94a3b8;
     --c-text: #334155;          /* グレー(通常文字) */
     --c-danger: #ef4444;
     --c-success: #10b981;
@@ -110,28 +110,29 @@ st.markdown("""
 .main-header p { color: #64748b !important; font-size: 0.9rem !important; margin: 0 !important; font-weight: 600; }
 
 /* --- タイル型ラジオボタン (ライン・製品選択) --- */
-div[data-testid="stRadio"] > div { display: flex; flex-wrap: wrap; gap: 12px !important; }
+div[data-testid="stRadio"] > div { display: flex; flex-wrap: wrap; gap: 10px !important; }
 div[data-testid="stRadio"] label {
     font-size: 1.0rem !important; 
     color: var(--c-secondary) !important;
-    background-color: var(--c-surface);
-    padding: 12px 18px !important; 
+    background-color: #f1f5f9;
+    padding: 12px 20px !important; 
     border-radius: 14px;
     border: 2px solid var(--c-border);
     font-weight: 900 !important;
     cursor: pointer;
     text-align: center;
-    flex: 1;
-    min-width: 120px;
+    flex: 0 1 auto;
+    white-space: nowrap;
     justify-content: center;
     box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     transition: all 0.2s;
 }
-/* アイコン(絵文字)+テキストは内部が<p>タグになるため、そこにも直接サイズ・太さを指定 */
+/* アイコン(絵文字)+テキストは内部が<p>タグになるため、そこにも直接サイズ・太さを指定(折り返し禁止で見栄え改善) */
 div[data-testid="stRadio"] label p {
     font-size: 1.0rem !important;
     font-weight: 900 !important;
     line-height: 1.3 !important;
+    white-space: nowrap !important;
 }
 div[data-testid="stRadio"] label[data-baseweb="radio"] input:checked + div {
     background-color: var(--c-primary) !important;
@@ -261,8 +262,10 @@ SUB_CAT_ICONS = {
     "白": "⚪", "黒": "⚫", "耐冷": "❄️", "ショクカイ": "🍽️",
     "めん": "🍜", "おでん": "🍢", "その他": "📦"
 }
-# 未登録の中カテゴリ・製品名向けフォールバック用アイコンプール(識別しやすいよう形・色で区別)
+# 未登録の大カテゴリ・中カテゴリ向けフォールバック用アイコンプール(識別しやすいよう形・色で区別)
 _ICON_POOL = ["🔵", "🟢", "🟡", "🟣", "🟠", "🔴", "🟤", "🔷", "🔶", "🔹", "🔸", "⬛", "⬜", "🟥", "🟩", "🟦"]
+# 製品(品名)向けアイコンプール(ライン選択の色丸と混同しないよう、食品/工場テーマの絵文字を使用)
+_PRODUCT_ICON_POOL = ["🍥", "🥢", "🌿", "🎍", "🧊", "🍡", "🧵", "🏷️", "📌", "🧺", "🔖", "🧫"]
 
 def _deterministic_icon(name, pool):
     """同じ名前には常に同じアイコンを割り当てる(ハッシュ乱数の影響を受けないよう文字コード合計を使用)"""
@@ -276,7 +279,7 @@ def sub_cat_icon(name):
     return SUB_CAT_ICONS.get(name, _deterministic_icon(name, _ICON_POOL))
 
 def product_icon(name):
-    return _deterministic_icon(name, _ICON_POOL)
+    return _deterministic_icon(name, _PRODUCT_ICON_POOL)
 
 def safe_parse_recipe(recipe_val):
     if not recipe_val: return []
@@ -535,38 +538,40 @@ elif page == "🏭 製造仕込み":
 
     st.markdown('<div class="form-card">', unsafe_allow_html=True)
 
-    # ① 大カテゴリ選択 (スプレッドシートに実在する値のみを動的に表示: プラント / OKM 等)
-    st.markdown('<div style="font-size:1.05rem; font-weight:900; color:#1e293b; margin-bottom:8px;">① 大カテゴリを選択</div>', unsafe_allow_html=True)
+    # ① ライン選択 (スプレッドシートに実在する値のみを動的に表示: プラント / OKM 等)
+    st.markdown('<div style="font-size:1.2rem; font-weight:900; color:#1e293b; margin-bottom:8px;">① ラインを選択</div>', unsafe_allow_html=True)
     big_cats = sorted({v["大カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ")})
     if not big_cats:
-        st.warning("大カテゴリが登録されている製品マスタがありません。")
+        st.warning("ラインが登録されている製品マスタがありません。")
         big_cat = None
     else:
         big_cat_labels = [f"{big_cat_icon(c)} {c}" for c in big_cats]
-        sel_big_label = st.radio("大カテゴリ", big_cat_labels, horizontal=True, label_visibility="collapsed")
+        sel_big_label = st.radio("ライン", big_cat_labels, horizontal=True, label_visibility="collapsed")
         big_cat = big_cats[big_cat_labels.index(sel_big_label)]
 
-    # ② 中カテゴリ(ライン)選択 (選んだ大カテゴリに実在するものだけをアイコン付きで表示)
-    sub_cats = sorted({v["中カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ") == big_cat and v.get("中カテゴリ")}) if big_cat else []
+    # ② 製品選択 (選んだラインに実在する中カテゴリをアイコン付きで表示。プラントは 黒→白→耐冷→ショクカイ→めん→その他 の順で固定)
+    SUB_CAT_ORDER = ["黒", "白", "耐冷", "ショクカイ", "めん", "その他"]
+    sub_cats_set = {v["中カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ") == big_cat and v.get("中カテゴリ")} if big_cat else set()
+    sub_cats = sorted(sub_cats_set, key=lambda c: (SUB_CAT_ORDER.index(c) if c in SUB_CAT_ORDER else len(SUB_CAT_ORDER), c))
     sub_str = None
     if big_cat and len(sub_cats) > 1:
-        st.markdown('<div style="font-size:1.05rem; font-weight:900; color:#1e293b; margin:16px 0 8px 0;">② ラインを選択</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:1.2rem; font-weight:900; color:#1e293b; margin:16px 0 8px 0;">② 製品を選択</div>', unsafe_allow_html=True)
         sub_cat_labels = [f"{sub_cat_icon(c)} {c}" for c in sub_cats]
-        sel_sub_label = st.radio("ライン", sub_cat_labels, horizontal=True, label_visibility="collapsed")
+        sel_sub_label = st.radio("製品", sub_cat_labels, horizontal=True, label_visibility="collapsed")
         sub_str = sub_cats[sub_cat_labels.index(sel_sub_label)]
     elif sub_cats:
-        # ラインが1種類しかない場合は選択自体を省略して自動採用
+        # 製品が1種類しかない場合は選択自体を省略して自動採用
         sub_str = sub_cats[0]
 
     # ── 入力手順ガイド (折りたたみ式・デフォルト非表示でライン選択を最速表示) ──
     with st.expander("📋 仕込み入力手順を見る"):
         st.markdown("""
         <div class="guide-steps">
-            <span>① 大カテゴリを選択</span>➔<span>② ラインを選択</span>➔<span>③ 製品を選択</span>➔<span>④ 希望仕込量と石灰水量を入力</span>➔<span>⑤ 必要原料を確認</span>➔<span>⑥ ロットを選択(📦)</span>➔<span>⑦ 保存</span>
+            <span>① ラインを選択</span>➔<span>② 製品を選択</span>➔<span>③ 品番を選択</span>➔<span>④ 希望仕込量と石灰水量を入力</span>➔<span>⑤ 必要原料を確認</span>➔<span>⑥ ロットを選択(📦)</span>➔<span>⑦ 保存</span>
         </div>
         """, unsafe_allow_html=True)
     
-    st.markdown('<div style="font-size:1.05rem; font-weight:900; color:#1e293b; margin:16px 0 8px 0;">③ 製造する製品を選択</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:1.2rem; font-weight:900; color:#1e293b; margin:16px 0 8px 0;">③ 品番を選択</div>', unsafe_allow_html=True)
     filtered_opts = [k for k, v in p_recipes.items() if v.get("大カテゴリ") == big_cat and v.get("中カテゴリ") == sub_str] if big_cat and sub_str else []
     
     selected_p = None
@@ -637,7 +642,7 @@ elif page == "🏭 製造仕込み":
                 calc_kg = max(0.0, water_base - lime_water_size)
             elif is_lime:
                 if is_summer:
-                    base_ratio += 0.01
+                    base_ratio += 0.1
                     lime_summer_adjusted = True
                 calc_kg = lime_water_size * (base_ratio / 100.0)
             else:
