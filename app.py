@@ -675,14 +675,18 @@ elif page == "🏭 製造仕込み":
                     else:
                         # ポップオーバーでカード内にロット入力を格納 (画面遷移なし)
                         with lot_popover("📦 ロット選択"):
-                            act_kg = st.number_input("実投入量微調整 (kg)", value=float(calc_kg), step=0.01, format="%.2f", key=f"act_kg_{i}{key_suffix}")
+                            # ★ 配合比マスタの変更(石灰など)が確実に反映されるよう、
+                            #   計算結果(calc_kg)自体をwidgetキーに含める。
+                            #   こうすることで配合比%が変わって計算結果が変化した際は
+                            #   自動的に新しい初期値が反映され、古い入力値が残り続けることを防ぐ。
+                            act_kg = st.number_input("実投入量微調整 (kg)", value=float(calc_kg), step=0.01, format="%.2f", key=f"act_kg_{i}{key_suffix}_{round(calc_kg, 4)}")
                             
                             raw_arr_matches = [a for a in recent_arrivals if str(a.get("原料種別", "")).strip() == r_name]
                             recent_filtered_lots = []
                             for a in raw_arr_matches:
                                 l_no = str(a.get("ロットNo", "")).strip()
                                 if l_no and l_no not in recent_filtered_lots: recent_filtered_lots.append(l_no)
-                                if len(recent_filtered_lots) >= 5: break
+                                if len(recent_filtered_lots) >= 10: break
                             lots_choices = ["─ (未選択)", "✏️ 手入力 (リスト外)"] + recent_filtered_lots
                             
                             lot_sel = st.selectbox("ロット選択", lots_choices, key=f"lot_sel_{i}{key_suffix}")
