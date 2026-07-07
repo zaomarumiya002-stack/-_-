@@ -161,18 +161,18 @@ button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStep
     min-width: 38px !important; min-height: 38px !important; border-radius: 8px !important; background-color: #f1f5f9 !important; border: 1px solid var(--c-border) !important;
 }
 
-/* --- ③ 希望仕込製品量・石灰水作成量だけは入力しやすいよう特大表示 --- */
+/* --- ④ 希望仕込製品量・石灰水作成量だけは入力しやすいよう特大表示 --- */
 .st-key-qty_inputs_box div[data-baseweb="input"] input {
-    font-size: 2.1rem !important;
+    font-size: 2.8rem !important;
     font-weight: 900 !important;
-    padding: 18px 14px !important;
+    padding: 26px 18px !important;
 }
-.st-key-qty_inputs_box div[data-baseweb="input"] { border-width: 2px !important; }
+.st-key-qty_inputs_box div[data-baseweb="input"] { border-width: 3px !important; }
 .st-key-qty_inputs_box button[data-testid="stNumberInputStepUp"],
 .st-key-qty_inputs_box button[data-testid="stNumberInputStepDown"] {
-    min-width: 54px !important; min-height: 54px !important;
+    min-width: 62px !important; min-height: 62px !important;
 }
-.st-key-qty_inputs_box label p { font-size: 1.0rem !important; font-weight: 900 !important; }
+.st-key-qty_inputs_box label p { font-size: 1.1rem !important; font-weight: 900 !important; }
 
 /* ボタン類(コンパクト) */
 .stButton button {
@@ -630,12 +630,15 @@ elif page == "🏭 製造仕込み":
             
             icon = "💧" if is_water else ("🧂" if is_lime else ("📦" if is_konjac else ("🌿" if is_seaweed else "🔹")))
 
-            # --- 計算ロジック (石灰は石灰水量×濃度) ---
+            # --- 計算ロジック (石灰は石灰水量×濃度、6〜9月は+1g調整) ---
+            lime_summer_adjusted = False
             if is_water:
                 water_base = target_size * (base_ratio / 100.0)
                 calc_kg = max(0.0, water_base - lime_water_size)
             elif is_lime:
-                if is_summer: base_ratio += 0.01
+                if is_summer:
+                    base_ratio += 0.01
+                    lime_summer_adjusted = True
                 calc_kg = lime_water_size * (base_ratio / 100.0)
             else:
                 calc_kg = target_size * (base_ratio / 100.0)
@@ -650,6 +653,8 @@ elif page == "🏭 製造仕込み":
                 
                 with c1:
                     st.markdown(f"<h3 style='margin:0; padding:6px 0; display:flex; align-items:center; gap:8px; color:#1e293b; font-weight:900; font-size:1.05rem;'><span style='font-size:1.15rem;'>{icon}</span> {r_name}</h3>", unsafe_allow_html=True)
+                    # 配合比は確認用として控えめに表示(目立たせない)
+                    st.caption(f"配合比: {base_ratio:.2f}%" + (" 🌡️ 6〜9月のため石灰+1g調整済み" if lime_summer_adjusted else ""))
                     if is_shortage:
                         st.markdown(f"<div style='color:#dc2626; font-weight:900; font-size:1.2rem; margin-top:8px;'>⚠ 在庫不足 (不足 {fmt_kg(calc_kg - inv_kg)}kg)</div>", unsafe_allow_html=True)
 
