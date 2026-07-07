@@ -43,41 +43,57 @@ st.markdown("""
 }
 .stApp { background-color: var(--c-bg); color: var(--c-text); font-family: 'Helvetica Neue', Arial, sans-serif; }
 
-/* --- サイドバー 超大型・押しやすい --- */
+/* ════════════════════════════════════════════
+   ラジオボタンの丸マーク共通非表示化
+════════════════════════════════════════════ */
+label[data-baseweb="radio"] > div:first-of-type {
+    display: none !important;
+}
+
+/* ════════════════════════════════════════════
+   サイドバー 超大型・押しやすいメニュー
+════════════════════════════════════════════ */
 [data-testid="stSidebar"] { background-color: var(--c-secondary) !important; padding-top: 1rem; }
 [data-testid="stSidebar"] * { color: #f8fafc !important; }
-[data-testid="stSidebar"] div[role="radiogroup"] label {
-    padding: 24px 24px !important;
+
+[data-testid="stSidebar"] label[data-baseweb="radio"] {
+    padding: 18px 20px !important;
     border-radius: 12px !important;
-    margin-bottom: 16px !important;
+    margin-bottom: 8px !important;
     background: transparent !important;
     border: none !important;
     cursor: pointer;
     transition: all 0.2s;
-    min-height: 80px;
     display: flex;
     align-items: center;
 }
-/* ラジオボタンの丸いマークを非表示 */
-[data-testid="stSidebar"] div[role="radiogroup"] label > div:first-child {
-    display: none !important;
-}
-/* テキストを巨大化・太字化 */
-[data-testid="stSidebar"] div[role="radiogroup"] label p {
-    font-size: 1.9rem !important;
-    font-weight: 900 !important;
+/* テキストスタイル (文字サイズを適正化し、見やすい白に) */
+[data-testid="stSidebar"] label[data-baseweb="radio"] p {
+    font-size: 1.35rem !important; 
+    font-weight: 800 !important;
+    color: #e2e8f0 !important; 
     margin: 0 !important;
 }
-[data-testid="stSidebar"] div[role="radiogroup"] label:hover { background: rgba(255,255,255,0.15) !important; }
-[data-testid="stSidebar"] div[role="radiogroup"] label[data-baseweb="radio"] input:checked + div {
+/* ホバー時 */
+[data-testid="stSidebar"] label[data-baseweb="radio"]:hover { 
+    background: rgba(255,255,255,0.1) !important; 
+}
+[data-testid="stSidebar"] label[data-baseweb="radio"]:hover p {
+    color: #ffffff !important;
+}
+/* 選択時 (:has を使用して行全体をハイライト) */
+[data-testid="stSidebar"] label[data-baseweb="radio"]:has(input:checked) {
     background: var(--c-primary) !important;
     border-radius: 12px !important;
 }
-[data-testid="stSidebar"] div[role="radiogroup"] label[data-baseweb="radio"] input:checked + div p {
-    color: white !important;
+[data-testid="stSidebar"] label[data-baseweb="radio"]:has(input:checked) p {
+    color: #ffffff !important;
+    font-weight: 900 !important;
 }
 
-/* --- ヘッダー --- */
+/* ════════════════════════════════════════════
+   ヘッダー
+════════════════════════════════════════════ */
 .main-header {
     background: var(--c-surface);
     padding: 24px 32px;
@@ -89,61 +105,64 @@ st.markdown("""
 .main-header h1 { color: var(--c-secondary) !important; font-size: 2.2rem !important; margin: 0 0 10px 0 !important; font-weight: 900 !important; display: flex; align-items: center; gap: 14px; }
 .main-header p { color: #64748b !important; font-size: 1.2rem !important; margin: 0 !important; font-weight: 700; }
 
-/* --- タイル型ラジオボタン (ライン・製品選択を巨大アイコン化) --- */
-div[data-testid="stRadio"] > div { display: flex; flex-wrap: wrap; gap: 16px !important; }
-div[data-testid="stRadio"] label {
+/* ════════════════════════════════════════════
+   タイル型ラジオボタン (ライン・製品選択等)
+════════════════════════════════════════════ */
+div[data-testid="stRadio"] > div[role="radiogroup"] { 
+    display: flex; flex-wrap: wrap; gap: 12px !important; 
+}
+div[data-testid="stRadio"] label[data-baseweb="radio"] {
     background-color: var(--c-surface);
-    padding: 32px 40px !important; 
-    border-radius: 16px;
-    border: 3px solid var(--c-border);
+    padding: 18px 20px !important; 
+    border-radius: 12px;
+    border: 2px solid var(--c-border);
     cursor: pointer;
     flex: 1;
-    min-width: 180px;
+    min-width: 140px; 
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     transition: all 0.2s;
-}
-/* ラジオボタンの丸いマークを非表示 */
-div[data-testid="stRadio"] label > div:first-child {
-    display: none !important;
-}
-/* テキストコンテナの中央揃え */
-div[data-testid="stRadio"] label > div:last-child {
-    width: 100%;
-    text-align: center;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-/* テキストを巨大化・太字化 */
-div[data-testid="stRadio"] label p {
-    font-size: 2.3rem !important; 
-    color: var(--c-secondary) !important;
-    font-weight: 900 !important;
     margin: 0 !important;
 }
-div[data-testid="stRadio"] label[data-baseweb="radio"] input:checked + div {
+/* テキストコンテナの中央揃え */
+div[data-testid="stRadio"] label[data-baseweb="radio"] > div:last-child {
+    width: 100%;
+    text-align: center;
+}
+/* テキストのスタイル (大きすぎたサイズを適正化) */
+div[data-testid="stRadio"] label[data-baseweb="radio"] p {
+    font-size: 1.35rem !important; 
+    color: var(--c-secondary) !important;
+    font-weight: 800 !important;
+    margin: 0 !important;
+    line-height: 1.4;
+    white-space: pre-wrap;
+}
+/* 選択時 (:has を使用) */
+div[data-testid="stRadio"] label[data-baseweb="radio"]:has(input:checked) {
     background-color: var(--c-primary) !important;
     border-color: var(--c-primary) !important;
     transform: scale(1.02);
-    box-shadow: 0 8px 16px rgba(234, 88, 12, 0.3);
+    box-shadow: 0 6px 12px rgba(234, 88, 12, 0.25);
 }
-div[data-testid="stRadio"] label[data-baseweb="radio"] input:checked + div p {
-    color: white !important;
+div[data-testid="stRadio"] label[data-baseweb="radio"]:has(input:checked) p {
+    color: #ffffff !important;
 }
 
-/* --- 汎用カード --- */
+/* ════════════════════════════════════════════
+   汎用カード・ウィジェット
+════════════════════════════════════════════ */
 .form-card { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 16px; padding: 32px; margin-bottom: 32px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
 .section-title { font-size: 1.6rem; font-weight: 900; color: var(--c-secondary); margin-bottom: 24px; display: flex; align-items: center; gap: 12px; }
 .section-title::before { content: ''; display: block; width: 8px; height: 26px; background-color: var(--c-primary); border-radius: 6px; }
 
-/* --- 入力ウィジェットのレイアウト崩れ防止と超大型化 --- */
+/* 入力ウィジェットのレイアウト崩れ防止と超大型化 */
 div[data-baseweb="input"] {
     border-radius: 12px !important;
     border: 2px solid var(--c-border) !important;
     background-color: var(--c-surface) !important;
-    align-items: center !important; /* プラスマイナスボタン飛び出し防止 */
+    align-items: center !important; 
 }
 div[data-baseweb="input"]:focus-within { border-color: var(--c-primary) !important; box-shadow: 0 0 0 4px rgba(234, 88, 12, 0.2) !important; }
 div[data-baseweb="input"] input { font-size: 1.6rem !important; font-weight: 900 !important; color: var(--c-secondary) !important; padding: 18px 24px !important; text-align: center !important; }
@@ -163,7 +182,7 @@ button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStep
 }
 .stButton button:active { transform: scale(0.97) !important; }
 
-/* --- アラート・手順ガイド --- */
+/* アラート・手順ガイド */
 .guide-box { background-color: #f8fafc; border-left: 8px solid var(--c-secondary); padding: 24px; border-radius: 12px; margin-bottom: 32px; border-top: 1px solid var(--c-border); border-right: 1px solid var(--c-border); border-bottom: 1px solid var(--c-border); }
 .guide-title { font-size: 1.3rem; font-weight: 900; color: var(--c-secondary); margin-bottom: 12px; display:flex; align-items:center; gap:8px;}
 .guide-steps { display:flex; gap: 16px; flex-wrap:wrap; font-weight: 800; color: #475569; font-size: 1.15rem; align-items:center; }
@@ -171,7 +190,7 @@ button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStep
 .status-badge { display: inline-block; padding: 8px 16px; border-radius: 8px; font-size: 1.15rem; font-weight: 900; border: 2px solid; }
 .status-badge.danger { background-color: #fef2f2; color: #b91c1c; border-color: #fca5a5; }
 
-/* --- ポップオーバーボタンの強調 --- */
+/* ポップオーバーボタンの強調 */
 button[data-testid="stPopoverButton"] {
     background-color: #f1f5f9 !important; border: 2px solid var(--c-border) !important; color: var(--c-secondary) !important;
     font-size: 1.25rem !important; font-weight: 900 !important;
