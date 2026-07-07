@@ -51,25 +51,25 @@ st.markdown("""
 }
 .stApp { background-color: var(--c-bg); color: var(--c-text); font-family: 'Helvetica Neue', Arial, sans-serif; }
 
-/* --- サイドバー 超大型・押しやすい・視認性強化 --- */
-[data-testid="stSidebar"] { background-color: var(--c-secondary) !important; padding-top: 1rem; }
+/* --- サイドバー コンパクト・視認性強化 --- */
+[data-testid="stSidebar"] { background-color: var(--c-secondary) !important; padding-top: 0.4rem; }
 [data-testid="stSidebar"] * { color: #ffffff !important; }
 [data-testid="stSidebar"] div[role="radiogroup"] label {
-    padding: 20px 24px !important;
-    border-radius: 12px !important;
-    margin-bottom: 14px !important;
+    padding: 8px 12px !important;
+    border-radius: 8px !important;
+    margin-bottom: 5px !important;
     background: rgba(255,255,255,0.06) !important;
-    border: 2px solid rgba(255,255,255,0.12) !important;
+    border: 1px solid rgba(255,255,255,0.12) !important;
     cursor: pointer;
-    font-size: 1.65rem !important;
-    font-weight: 800 !important;
-    letter-spacing: 0.02em;
+    font-size: 0.92rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.01em;
     transition: all 0.2s;
-    min-height: 74px;
+    min-height: 36px;
     display: flex;
     align-items: center;
 }
-[data-testid="stSidebar"] div[role="radiogroup"] label p { font-size: 1.65rem !important; font-weight: 800 !important; }
+[data-testid="stSidebar"] div[role="radiogroup"] label p { font-size: 0.92rem !important; font-weight: 700 !important; }
 [data-testid="stSidebar"] div[role="radiogroup"] label:hover {
     background: rgba(255,255,255,0.16) !important;
     border-color: rgba(255,255,255,0.3) !important;
@@ -78,21 +78,21 @@ st.markdown("""
 [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
     background: var(--c-primary) !important;
     border-color: var(--c-primary-hover) !important;
-    box-shadow: 0 6px 14px rgba(0,0,0,0.35);
+    box-shadow: 0 3px 6px rgba(0,0,0,0.3);
 }
 [data-testid="stSidebar"] div[role="radiogroup"] label[data-baseweb="radio"] input:checked + div {
     background: var(--c-primary) !important;
     color: white !important;
-    border-radius: 12px !important;
+    border-radius: 8px !important;
 }
 [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) * { color: #ffffff !important; font-weight: 900 !important; }
-/* サイドバー内のその他の文字(更新ボタン等)も大きく */
+/* サイドバー内のその他の文字(更新ボタン等) */
 [data-testid="stSidebar"] .stButton button {
-    font-size: 1.3rem !important;
-    font-weight: 900 !important;
-    min-height: 60px !important;
+    font-size: 0.85rem !important;
+    font-weight: 800 !important;
+    min-height: 32px !important;
     background: rgba(255,255,255,0.08) !important;
-    border: 2px solid rgba(255,255,255,0.25) !important;
+    border: 1px solid rgba(255,255,255,0.25) !important;
     color: #ffffff !important;
 }
 [data-testid="stSidebar"] .stButton button:hover { background: rgba(255,255,255,0.2) !important; }
@@ -100,36 +100,36 @@ st.markdown("""
 /* --- ヘッダー --- */
 .main-header {
     background: var(--c-surface);
-    padding: 24px 32px;
-    border-radius: 16px;
-    margin-bottom: 24px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-    border-left: 12px solid var(--c-primary);
+    padding: 14px 20px;
+    border-radius: 12px;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    border-left: 6px solid var(--c-primary);
 }
-.main-header h1 { color: var(--c-secondary) !important; font-size: 2.2rem !important; margin: 0 0 10px 0 !important; font-weight: 900 !important; display: flex; align-items: center; gap: 14px; }
-.main-header p { color: #64748b !important; font-size: 1.2rem !important; margin: 0 !important; font-weight: 700; }
+.main-header h1 { color: var(--c-secondary) !important; font-size: 1.4rem !important; margin: 0 0 4px 0 !important; font-weight: 900 !important; display: flex; align-items: center; gap: 10px; }
+.main-header p { color: #64748b !important; font-size: 0.9rem !important; margin: 0 !important; font-weight: 600; }
 
-/* --- タイル型ラジオボタン (ライン・製品選択を巨大アイコン化) --- */
-div[data-testid="stRadio"] > div { display: flex; flex-wrap: wrap; gap: 16px !important; }
+/* --- タイル型ラジオボタン (ライン・製品選択) --- */
+div[data-testid="stRadio"] > div { display: flex; flex-wrap: wrap; gap: 12px !important; }
 div[data-testid="stRadio"] label {
-    font-size: 1.6rem !important; 
+    font-size: 1.0rem !important; 
     color: var(--c-secondary) !important;
     background-color: var(--c-surface);
-    padding: 18px 26px !important; 
-    border-radius: 16px;
-    border: 3px solid var(--c-border);
+    padding: 12px 18px !important; 
+    border-radius: 14px;
+    border: 2px solid var(--c-border);
     font-weight: 900 !important;
     cursor: pointer;
     text-align: center;
     flex: 1;
-    min-width: 150px;
+    min-width: 120px;
     justify-content: center;
     box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     transition: all 0.2s;
 }
 /* アイコン(絵文字)+テキストは内部が<p>タグになるため、そこにも直接サイズ・太さを指定 */
 div[data-testid="stRadio"] label p {
-    font-size: 1.6rem !important;
+    font-size: 1.0rem !important;
     font-weight: 900 !important;
     line-height: 1.3 !important;
 }
@@ -142,47 +142,60 @@ div[data-testid="stRadio"] label[data-baseweb="radio"] input:checked + div {
 }
 
 /* --- 汎用カード --- */
-.form-card { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 16px; padding: 32px; margin-bottom: 32px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
-.section-title { font-size: 1.6rem; font-weight: 900; color: var(--c-secondary); margin-bottom: 24px; display: flex; align-items: center; gap: 12px; }
-.section-title::before { content: ''; display: block; width: 8px; height: 26px; background-color: var(--c-primary); border-radius: 6px; }
+.form-card { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 12px; padding: 18px 20px; margin-bottom: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
+.section-title { font-size: 1.15rem; font-weight: 900; color: var(--c-secondary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.section-title::before { content: ''; display: block; width: 6px; height: 18px; background-color: var(--c-primary); border-radius: 4px; }
 
-/* --- 入力ウィジェットのレイアウト崩れ防止と超大型化 --- */
+/* --- 入力ウィジェットのレイアウト崩れ防止(標準サイズ・コンパクト) --- */
 div[data-baseweb="input"] {
-    border-radius: 12px !important;
-    border: 2px solid var(--c-border) !important;
+    border-radius: 10px !important;
+    border: 1px solid var(--c-border) !important;
     background-color: var(--c-surface) !important;
     align-items: center !important; /* プラスマイナスボタン飛び出し防止 */
 }
-div[data-baseweb="input"]:focus-within { border-color: var(--c-primary) !important; box-shadow: 0 0 0 4px rgba(234, 88, 12, 0.2) !important; }
-div[data-baseweb="input"] input { font-size: 1.6rem !important; font-weight: 900 !important; color: var(--c-secondary) !important; padding: 18px 24px !important; text-align: center !important; }
+div[data-baseweb="input"]:focus-within { border-color: var(--c-primary) !important; box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.15) !important; }
+div[data-baseweb="input"] input { font-size: 1.0rem !important; font-weight: 700 !important; color: var(--c-secondary) !important; padding: 8px 12px !important; text-align: center !important; }
 
-/* プラスマイナスボタンの飛び出し完全防止と大型化 */
+/* プラスマイナスボタン(コンパクト) */
 button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStepDown"] {
-    min-width: 65px !important; min-height: 65px !important; border-radius: 10px !important; background-color: #f1f5f9 !important; border: 1px solid var(--c-border) !important;
+    min-width: 38px !important; min-height: 38px !important; border-radius: 8px !important; background-color: #f1f5f9 !important; border: 1px solid var(--c-border) !important;
 }
 
-/* ボタン類 */
+/* --- ③ 希望仕込製品量・石灰水作成量だけは入力しやすいよう特大表示 --- */
+.st-key-qty_inputs_box div[data-baseweb="input"] input {
+    font-size: 2.1rem !important;
+    font-weight: 900 !important;
+    padding: 18px 14px !important;
+}
+.st-key-qty_inputs_box div[data-baseweb="input"] { border-width: 2px !important; }
+.st-key-qty_inputs_box button[data-testid="stNumberInputStepUp"],
+.st-key-qty_inputs_box button[data-testid="stNumberInputStepDown"] {
+    min-width: 54px !important; min-height: 54px !important;
+}
+.st-key-qty_inputs_box label p { font-size: 1.0rem !important; font-weight: 900 !important; }
+
+/* ボタン類(コンパクト) */
 .stButton button {
-    background-color: var(--c-surface) !important; border: 2px solid var(--c-border) !important; color: var(--c-secondary) !important;
-    border-radius: 12px !important; font-size: 1.4rem !important; font-weight: 900 !important; padding: 20px 32px !important; transition: all 0.2s; min-height: 75px !important;
+    background-color: var(--c-surface) !important; border: 1px solid var(--c-border) !important; color: var(--c-secondary) !important;
+    border-radius: 10px !important; font-size: 1.0rem !important; font-weight: 800 !important; padding: 10px 18px !important; transition: all 0.2s; min-height: 44px !important;
 }
 .stButton button[kind="primary"] {
-    background: linear-gradient(135deg, var(--c-primary), var(--c-primary-hover)) !important; border: none !important; color: white !important; box-shadow: 0 8px 16px rgba(234, 88, 12, 0.3) !important;
+    background: linear-gradient(135deg, var(--c-primary), var(--c-primary-hover)) !important; border: none !important; color: white !important; box-shadow: 0 4px 10px rgba(234, 88, 12, 0.3) !important;
 }
 .stButton button:active { transform: scale(0.97) !important; }
 
-/* --- アラート・手順ガイド --- */
-.guide-box { background-color: #f8fafc; border-left: 8px solid var(--c-secondary); padding: 24px; border-radius: 12px; margin-bottom: 32px; border-top: 1px solid var(--c-border); border-right: 1px solid var(--c-border); border-bottom: 1px solid var(--c-border); }
-.guide-title { font-size: 1.3rem; font-weight: 900; color: var(--c-secondary); margin-bottom: 12px; display:flex; align-items:center; gap:8px;}
-.guide-steps { display:flex; gap: 16px; flex-wrap:wrap; font-weight: 800; color: #475569; font-size: 1.15rem; align-items:center; }
+/* --- アラート・手順ガイド(コンパクト) --- */
+.guide-box { background-color: #f8fafc; border-left: 5px solid var(--c-secondary); padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; border-top: 1px solid var(--c-border); border-right: 1px solid var(--c-border); border-bottom: 1px solid var(--c-border); }
+.guide-title { font-size: 1.0rem; font-weight: 900; color: var(--c-secondary); margin-bottom: 8px; display:flex; align-items:center; gap:6px;}
+.guide-steps { display:flex; gap: 10px; flex-wrap:wrap; font-weight: 700; color: #475569; font-size: 0.9rem; align-items:center; }
 
-.status-badge { display: inline-block; padding: 8px 16px; border-radius: 8px; font-size: 1.15rem; font-weight: 900; border: 2px solid; }
+.status-badge { display: inline-block; padding: 5px 12px; border-radius: 8px; font-size: 0.9rem; font-weight: 900; border: 2px solid; }
 .status-badge.danger { background-color: #fef2f2; color: #b91c1c; border-color: #fca5a5; }
 
-/* --- ポップオーバーボタンの強調 --- */
+/* --- ポップオーバーボタン(コンパクト) --- */
 button[data-testid="stPopoverButton"] {
-    background-color: #f1f5f9 !important; border: 2px solid var(--c-border) !important; color: var(--c-secondary) !important;
-    font-size: 1.25rem !important; font-weight: 900 !important;
+    background-color: #f1f5f9 !important; border: 1px solid var(--c-border) !important; color: var(--c-secondary) !important;
+    font-size: 0.95rem !important; font-weight: 800 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -431,8 +444,8 @@ def generate_excel_report(df, start_d, end_d, report_title="製造記録一覧")
 #  サイドバー (超大型メニュー・アイコン積極活用)
 # ════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown('<div style="font-size:2rem; font-weight:900; margin-bottom:1.5rem; color:white; display:flex; align-items:center; gap:10px;">🏭 <span>製造ERP</span></div>', unsafe_allow_html=True)
-    page = st.radio("", [
+    st.markdown('<div style="font-size:1.2rem; font-weight:900; margin-bottom:0.8rem; color:white; display:flex; align-items:center; gap:8px;">🏭 <span>製造ERP</span></div>', unsafe_allow_html=True)
+    page = st.radio("メニュー", [
         "📊 経営ダッシュボード", 
         "🏭 製造仕込み", 
         "📥 入荷登録", 
@@ -487,16 +500,6 @@ if page == "📊 経営ダッシュボード":
 # ═══════════════════════════════════════════════════════════════
 elif page == "🏭 製造仕込み":
     st.markdown('<div class="main-header"><h1>🏭 製造仕込み</h1><p>製品と仕込量を入力すると、直ちに準備する原料が計算されます。</p></div>', unsafe_allow_html=True)
-    
-    # ── 入力手順ガイド (黄色バー廃止・洗練化) ──
-    st.markdown("""
-    <div class="guide-box">
-        <div class="guide-title">📋 仕込み入力手順</div>
-        <div class="guide-steps">
-            <span>① ライン・製品を選択</span>➔<span>② 希望仕込量と石灰水量を入力</span>➔<span>③ 必要原料を確認</span>➔<span>④ ロットを選択(📦)</span>➔<span>⑤ 保存</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
 
     p_recipes = {}
     for r in recipes_raw:
@@ -508,13 +511,21 @@ elif page == "🏭 製造仕込み":
         }
 
     st.markdown('<div class="form-card">', unsafe_allow_html=True)
-    
-    # ★ ライン選択の巨大アイコンタイル化 ★
-    st.markdown('<div style="font-size:1.4rem; font-weight:900; color:#1e293b; margin-bottom:12px;">① ラインを選択</div>', unsafe_allow_html=True)
+
+    # ★ ライン選択 (最上部に配置し、開いた瞬間すぐに選べるように) ★
+    st.markdown('<div style="font-size:1.05rem; font-weight:900; color:#1e293b; margin-bottom:8px;">① ラインを選択</div>', unsafe_allow_html=True)
     cat_sub = st.radio("ライン", ["⚪ 白", "⚫ 黒", "❄️ 耐冷", "🍜 ショクカイ", "🍢 おでん", "📦 その他"], horizontal=True, label_visibility="collapsed")
     sub_str = cat_sub.split(" ")[1]
+
+    # ── 入力手順ガイド (折りたたみ式・デフォルト非表示でライン選択を最速表示) ──
+    with st.expander("📋 仕込み入力手順を見る"):
+        st.markdown("""
+        <div class="guide-steps">
+            <span>① ライン・製品を選択</span>➔<span>② 希望仕込量と石灰水量を入力</span>➔<span>③ 必要原料を確認</span>➔<span>④ ロットを選択(📦)</span>➔<span>⑤ 保存</span>
+        </div>
+        """, unsafe_allow_html=True)
     
-    st.markdown('<div style="font-size:1.4rem; font-weight:900; color:#1e293b; margin:30px 0 12px 0;">② 製造する製品を選択</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:1.05rem; font-weight:900; color:#1e293b; margin:16px 0 8px 0;">② 製造する製品を選択</div>', unsafe_allow_html=True)
     filtered_opts = [k for k, v in p_recipes.items() if v["大カテゴリ"] == "プラント" and v["中カテゴリ"] == sub_str]
     
     selected_p = None
@@ -531,18 +542,19 @@ elif page == "🏭 製造仕込み":
 
     st.markdown("---")
     
-    # ★ 最重要入力欄 (並列レイアウト・フォーマット0fで整数化) ★
-    st.markdown('<div style="font-size:1.6rem; font-weight:900; color:#ea580c; margin-bottom:20px; display:flex; justify-content:center;">③ 希望仕込製品量 と 石灰水作成量 を入力</div>', unsafe_allow_html=True)
+    # ★ 最重要入力欄 (並列レイアウト・フォーマット0fで整数化・特大タップ入力) ★
+    st.markdown('<div style="font-size:1.15rem; font-weight:900; color:#ea580c; margin-bottom:12px; display:flex; justify-content:center;">③ 希望仕込製品量 と 石灰水作成量 を入力</div>', unsafe_allow_html=True)
     
-    col_in1, col_in2 = st.columns(2)
-    with col_in1:
-        target_size = st.number_input(
-            "🏭 希望仕込製品量 (調合全体 kg)", min_value=1.0, step=1.0, value=None, format="%.0f", placeholder="例: 1000"
-        )
-    with col_in2:
-        lime_water_size = st.number_input(
-            "💧 石灰水作成量 (kg)", min_value=0.0, step=1.0, value=None, format="%.0f", placeholder="例: 20"
-        )
+    with st.container(key="qty_inputs_box"):
+        col_in1, col_in2 = st.columns(2)
+        with col_in1:
+            target_size = st.number_input(
+                "🏭 希望仕込製品量 (調合全体 kg)", min_value=1.0, step=1.0, value=None, format="%.0f", placeholder="例: 1000"
+            )
+        with col_in2:
+            lime_water_size = st.number_input(
+                "💧 石灰水作成量 (kg)", min_value=0.0, step=1.0, value=None, format="%.0f", placeholder="例: 20"
+            )
         
     st.markdown("<br>", unsafe_allow_html=True)
     operator = st.selectbox("👨‍🏭 製造担当者", inspectors if inspectors else ["未登録"])
@@ -594,7 +606,7 @@ elif page == "🏭 製造仕込み":
                 c1, c2, c3 = st.columns([4, 3, 3])
                 
                 with c1:
-                    st.markdown(f"<h3 style='margin:0; padding:10px 0; display:flex; align-items:center; gap:10px; color:#1e293b; font-weight:900; font-size:1.55rem;'><span style='font-size:1.7rem;'>{icon}</span> {r_name}</h3>", unsafe_allow_html=True)
+                    st.markdown(f"<h3 style='margin:0; padding:6px 0; display:flex; align-items:center; gap:8px; color:#1e293b; font-weight:900; font-size:1.05rem;'><span style='font-size:1.15rem;'>{icon}</span> {r_name}</h3>", unsafe_allow_html=True)
                     if is_shortage:
                         st.markdown(f"<div style='color:#dc2626; font-weight:900; font-size:1.2rem; margin-top:8px;'>⚠ 在庫不足 (不足 {fmt_kg(calc_kg - inv_kg)}kg)</div>", unsafe_allow_html=True)
 
