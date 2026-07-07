@@ -3,7 +3,8 @@ import streamlit as st
 import pandas as pd
 import json
 import time
-import io
+import base64
+from io import BytesIO
 from datetime import datetime, date
 import traceback
 import plotly.graph_objects as go
@@ -17,6 +18,13 @@ try:
     HAS_OPENPYXL = True
 except ImportError:
     HAS_OPENPYXL = False
+
+# 資材画像アップロード用 (Pillow未導入環境でも起動できるようフォールバック)
+try:
+    from PIL import Image
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
 
 st.set_page_config(
     page_title="食品工場 製造ERP",
@@ -43,29 +51,51 @@ st.markdown("""
 }
 .stApp { background-color: var(--c-bg); color: var(--c-text); font-family: 'Helvetica Neue', Arial, sans-serif; }
 
-/* --- サイドバー 超大型・押しやすい --- */
+/* --- サイドバー 超大型・押しやすい・視認性強化 --- */
 [data-testid="stSidebar"] { background-color: var(--c-secondary) !important; padding-top: 1rem; }
-[data-testid="stSidebar"] * { color: #f8fafc !important; }
+[data-testid="stSidebar"] * { color: #ffffff !important; }
 [data-testid="stSidebar"] div[role="radiogroup"] label {
     padding: 20px 24px !important;
     border-radius: 12px !important;
-    margin-bottom: 12px !important;
-    background: transparent !important;
-    border: none !important;
+    margin-bottom: 14px !important;
+    background: rgba(255,255,255,0.06) !important;
+    border: 2px solid rgba(255,255,255,0.12) !important;
     cursor: pointer;
-    font-size: 1.4rem !important;
+    font-size: 1.65rem !important;
     font-weight: 800 !important;
+    letter-spacing: 0.02em;
     transition: all 0.2s;
-    min-height: 70px;
+    min-height: 74px;
     display: flex;
     align-items: center;
 }
-[data-testid="stSidebar"] div[role="radiogroup"] label:hover { background: rgba(255,255,255,0.1) !important; }
+[data-testid="stSidebar"] div[role="radiogroup"] label p { font-size: 1.65rem !important; font-weight: 800 !important; }
+[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
+    background: rgba(255,255,255,0.16) !important;
+    border-color: rgba(255,255,255,0.3) !important;
+}
+/* 選択中の項目はラベル全体をオレンジで塗って視認性を最大化 */
+[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
+    background: var(--c-primary) !important;
+    border-color: var(--c-primary-hover) !important;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.35);
+}
 [data-testid="stSidebar"] div[role="radiogroup"] label[data-baseweb="radio"] input:checked + div {
     background: var(--c-primary) !important;
     color: white !important;
     border-radius: 12px !important;
 }
+[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) * { color: #ffffff !important; font-weight: 900 !important; }
+/* サイドバー内のその他の文字(更新ボタン等)も大きく */
+[data-testid="stSidebar"] .stButton button {
+    font-size: 1.3rem !important;
+    font-weight: 900 !important;
+    min-height: 60px !important;
+    background: rgba(255,255,255,0.08) !important;
+    border: 2px solid rgba(255,255,255,0.25) !important;
+    color: #ffffff !important;
+}
+[data-testid="stSidebar"] .stButton button:hover { background: rgba(255,255,255,0.2) !important; }
 
 /* --- ヘッダー --- */
 .main-header {
@@ -82,10 +112,10 @@ st.markdown("""
 /* --- タイル型ラジオボタン (ライン・製品選択を巨大アイコン化) --- */
 div[data-testid="stRadio"] > div { display: flex; flex-wrap: wrap; gap: 16px !important; }
 div[data-testid="stRadio"] label {
-    font-size: 1.4rem !important; 
+    font-size: 1.9rem !important; 
     color: var(--c-secondary) !important;
     background-color: var(--c-surface);
-    padding: 24px 32px !important; 
+    padding: 26px 32px !important; 
     border-radius: 16px;
     border: 3px solid var(--c-border);
     font-weight: 900 !important;
@@ -96,6 +126,12 @@ div[data-testid="stRadio"] label {
     justify-content: center;
     box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     transition: all 0.2s;
+}
+/* アイコン(絵文字)+テキストは内部が<p>タグになるため、そこにも直接サイズ・太さを指定 */
+div[data-testid="stRadio"] label p {
+    font-size: 1.9rem !important;
+    font-weight: 900 !important;
+    line-height: 1.3 !important;
 }
 div[data-testid="stRadio"] label[data-baseweb="radio"] input:checked + div {
     background-color: var(--c-primary) !important;
@@ -558,7 +594,7 @@ elif page == "🏭 製造仕込み":
                 c1, c2, c3 = st.columns([4, 3, 3])
                 
                 with c1:
-                    st.markdown(f"<h3 style='margin:0; padding:10px 0; display:flex; align-items:center; gap:10px; color:#1e293b; font-weight:900;'>{icon} {r_name}</h3>", unsafe_allow_html=True)
+                    st.markdown(f"<h3 style='margin:0; padding:10px 0; display:flex; align-items:center; gap:12px; color:#1e293b; font-weight:900; font-size:1.9rem;'><span style='font-size:2.3rem;'>{icon}</span> {r_name}</h3>", unsafe_allow_html=True)
                     if is_shortage:
                         st.markdown(f"<div style='color:#dc2626; font-weight:900; font-size:1.2rem; margin-top:8px;'>⚠ 在庫不足 (不足 {fmt_kg(calc_kg - inv_kg)}kg)</div>", unsafe_allow_html=True)
 
@@ -753,7 +789,7 @@ elif page == "📋 履歴・帳票":
             with st.container(border=True):
                 with st.form("inline_edit_form"):
                     st.markdown("#### 編集パネル")
-                    e_date = st.text_input("製造日", value=str(sel_rec.get("仕込日", "")))
+                    edit_seikomi_date = st.text_input("製造日", value=str(sel_rec.get("仕込日", "")))
                     e_name = st.text_input("品名", value=str(sel_rec.get("品名", "")))
                     c_s1, c_s2 = st.columns(2)
                     e_size = c_s1.number_input("製造量(kg)", min_value=1.0, value=float(sel_rec.get("仕込量(kg)", 100) or 100), step=10.0, format="%.1f")
@@ -777,7 +813,7 @@ elif page == "📋 履歴・帳票":
                             if do_save:
                                 new_rec = dict(sel_rec)
                                 new_note = e_note + f" 【修正: {datetime.now().strftime('%Y/%m/%d %H:%M')} {e_user}】"
-                                new_rec.update({"仕込日": e_date, "品名": e_name, "メーカー": e_user, "仕込量(kg)": e_size, "石灰水(L)": e_lime, "備考": new_note})
+                                new_rec.update({"仕込日": edit_seikomi_date, "品名": e_name, "メーカー": e_user, "仕込量(kg)": e_size, "石灰水(L)": e_lime, "備考": new_note})
                                 updated_brewing.append(new_rec)
                                 sheets.save_brewing(updated_brewing)
                                 st.success("製造記録を更新しました。監査用履歴スタンプを記録しました。")
