@@ -635,16 +635,16 @@ elif page == "🏭 製造仕込み":
             
             icon = "💧" if is_water else ("🧂" if is_lime else ("📦" if is_konjac else ("🌿" if is_seaweed else "🔹")))
 
-            # --- 計算ロジック (石灰は石灰水量×濃度、6〜9月は+1g調整) ---
+            # --- 計算ロジック (石灰は石灰水量×マスタ配合比、6〜9月は計算後に+1g加算) ---
             lime_summer_adjusted = False
             if is_water:
                 water_base = target_size * (base_ratio / 100.0)
                 calc_kg = max(0.0, water_base - lime_water_size)
             elif is_lime:
-                if is_summer:
-                    base_ratio += 0.1
-                    lime_summer_adjusted = True
                 calc_kg = lime_water_size * (base_ratio / 100.0)
+                if is_summer:
+                    calc_kg += 0.001  # 6〜9月は石灰+1g(=0.001kg)を加算(マスタの配合比%自体は変更しない)
+                    lime_summer_adjusted = True
             else:
                 calc_kg = target_size * (base_ratio / 100.0)
 
@@ -658,8 +658,8 @@ elif page == "🏭 製造仕込み":
                 
                 with c1:
                     st.markdown(f"<h3 style='margin:0; padding:6px 0; display:flex; align-items:center; gap:8px; color:#1e293b; font-weight:900; font-size:1.05rem;'><span style='font-size:1.15rem;'>{icon}</span> {r_name}</h3>", unsafe_allow_html=True)
-                    # 配合比は確認用として控えめに表示(目立たせない)
-                    st.caption(f"配合比: {base_ratio:.2f}%" + (" 🌡️ 6〜9月のため石灰+1g調整済み" if lime_summer_adjusted else ""))
+                    # 配合比は確認用として控えめに表示(マスタの値をそのまま表示、目立たせない)
+                    st.caption(f"配合比: {base_ratio:.2f}%" + (" 🌡️ 6〜9月のため石灰+1g加算済み" if lime_summer_adjusted else ""))
                     if is_shortage:
                         st.markdown(f"<div style='color:#dc2626; font-weight:900; font-size:1.2rem; margin-top:8px;'>⚠ 在庫不足 (不足 {fmt_kg(calc_kg - inv_kg)}kg)</div>", unsafe_allow_html=True)
 
@@ -1252,7 +1252,13 @@ elif page == "⚙️ マスタ設定":
                 
             def_mats = ["(未設定)", "水"] + materials
 
-            with st.form("recipe_builder_form"):
+            # ★ このフォームスコープ識別子を各入力欄のキーに含めることで、
+            #   「新規作成」⇔「既存レシピの編集」の切り替えや、編集対象レシピの変更時に
+            #   Streamlitのセッション状態が前回編集中の値を引きずってしまう(古いレシピの
+            #   配合比%が新しいレシピにも残ってしまう)不具合を防ぐ。
+            form_scope = f"edit_{init_name}" if (edit_mode == "既存レシピの編集" and target_recipe) else "new"
+
+            with st.form(f"recipe_builder_form_{form_scope}"):
                 cat_main = st.radio("大カテゴリ", ["🏭 プラント", "🟦 OKM"], index=0 if init_cat_m == "プラント" else 1, horizontal=True)
                 cat_sub = st.radio("中カテゴリ（プラントの場合のみ）", ["⚪ 白", "⚫ 黒", "❄️ 耐冷", "🍽️ ショクカイ", "🍜 めん", "📦 その他"], 
                                    index=["白","黒","耐冷","ショクカイ","めん","その他"].index(init_cat_s) if init_cat_s in ["白","黒","耐冷","ショクカイ","めん","その他"] else 1, horizontal=True)
@@ -1267,8 +1273,8 @@ elif page == "⚙️ マスタ設定":
                     try: mat_idx = def_mats.index(def_mat_val)
                     except: mat_idx = 0
                     
-                    ing_mat = c_n.selectbox(f"配合成分 {j+1}", def_mats, index=mat_idx, key=f"rec_b_{j}")
-                    ing_ratio = c_w.number_input("比率 (％)", min_value=0.00, max_value=100.00, value=def_rat_val, step=0.01, format="%.2f", key=f"rec_r_{j}")
+                    ing_mat = c_n.selectbox(f"配合成分 {j+1}", def_mats, index=mat_idx, key=f"rec_b_{j}_{form_scope}")
+                    ing_ratio = c_w.number_input("比率 (％)", min_value=0.00, max_value=100.00, value=def_rat_val, step=0.01, format="%.2f", key=f"rec_r_{j}_{form_scope}")
                     cols_recipe_inputs.append({"name": ing_mat, "ratio": ing_ratio})
                 
                 operator = st.selectbox("操作担当者", inspectors if inspectors else ["未登録"])
