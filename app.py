@@ -112,24 +112,24 @@ st.markdown("""
 /* --- タイル型ラジオボタン (ライン・製品選択を巨大アイコン化) --- */
 div[data-testid="stRadio"] > div { display: flex; flex-wrap: wrap; gap: 16px !important; }
 div[data-testid="stRadio"] label {
-    font-size: 1.9rem !important; 
+    font-size: 1.6rem !important; 
     color: var(--c-secondary) !important;
     background-color: var(--c-surface);
-    padding: 26px 32px !important; 
+    padding: 18px 26px !important; 
     border-radius: 16px;
     border: 3px solid var(--c-border);
     font-weight: 900 !important;
     cursor: pointer;
     text-align: center;
     flex: 1;
-    min-width: 180px;
+    min-width: 150px;
     justify-content: center;
     box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     transition: all 0.2s;
 }
 /* アイコン(絵文字)+テキストは内部が<p>タグになるため、そこにも直接サイズ・太さを指定 */
 div[data-testid="stRadio"] label p {
-    font-size: 1.9rem !important;
+    font-size: 1.6rem !important;
     font-weight: 900 !important;
     line-height: 1.3 !important;
 }
@@ -594,7 +594,7 @@ elif page == "🏭 製造仕込み":
                 c1, c2, c3 = st.columns([4, 3, 3])
                 
                 with c1:
-                    st.markdown(f"<h3 style='margin:0; padding:10px 0; display:flex; align-items:center; gap:12px; color:#1e293b; font-weight:900; font-size:1.9rem;'><span style='font-size:2.3rem;'>{icon}</span> {r_name}</h3>", unsafe_allow_html=True)
+                    st.markdown(f"<h3 style='margin:0; padding:10px 0; display:flex; align-items:center; gap:10px; color:#1e293b; font-weight:900; font-size:1.55rem;'><span style='font-size:1.7rem;'>{icon}</span> {r_name}</h3>", unsafe_allow_html=True)
                     if is_shortage:
                         st.markdown(f"<div style='color:#dc2626; font-weight:900; font-size:1.2rem; margin-top:8px;'>⚠ 在庫不足 (不足 {fmt_kg(calc_kg - inv_kg)}kg)</div>", unsafe_allow_html=True)
 
@@ -702,7 +702,7 @@ elif page == "📥 入荷登録":
         chk_exp = cc1.selectbox("③ 賞味期限", ["OK（期限内）", "NG（期限切れ）"])
         chk_dmg = cc2.selectbox("④ 異物・破損", ["OK（なし）", "NG（あり）"])
         
-        abn_desc = st.text_input("⚠️ 異常内容の詳細", placeholder="異常詳細を入力してください") if "NG" in [chk_app, chk_spec, chk_exp, chk_dmg] else ""
+        abn_desc = st.text_input("⚠️ 異常内容の詳細", placeholder="異常詳細を入力してください") if any("NG" in v for v in [chk_app, chk_spec, chk_exp, chk_dmg]) else ""
         inspector_val = st.selectbox("受入検査担当者", inspectors if inspectors else ["未登録"])
         remarks_val = st.text_input("備考")
         st.markdown('</div>', unsafe_allow_html=True)
