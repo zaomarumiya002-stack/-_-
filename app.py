@@ -635,16 +635,20 @@ elif page == "🏭 製造仕込み":
             
             icon = "💧" if is_water else ("🧂" if is_lime else ("📦" if is_konjac else ("🌿" if is_seaweed else "🔹")))
 
-            # --- 計算ロジック (石灰は石灰水量×マスタ配合比、6〜9月は計算後に+1g加算) ---
+            # --- 計算ロジック ---
+            # 石灰は「石灰水量 × 配合比(マスタ値) ÷ 10」で算出する(例: 配合比0.14・石灰水150kgの場合 150×0.14÷10=2.1kg)。
+            # 6〜9月は配合比に+0.01した値で計算する(例: 0.14→0.15 の場合 150×0.15÷10=2.25kg)。
+            # ※マスタの表示自体(配合比キャプション)は元の値のまま変更しない。
             lime_summer_adjusted = False
             if is_water:
                 water_base = target_size * (base_ratio / 100.0)
                 calc_kg = max(0.0, water_base - lime_water_size)
             elif is_lime:
-                calc_kg = lime_water_size * (base_ratio / 100.0)
+                effective_ratio = base_ratio
                 if is_summer:
-                    calc_kg += 0.001  # 6〜9月は石灰+1g(=0.001kg)を加算(マスタの配合比%自体は変更しない)
+                    effective_ratio += 0.01
                     lime_summer_adjusted = True
+                calc_kg = lime_water_size * (effective_ratio / 10.0)
             else:
                 calc_kg = target_size * (base_ratio / 100.0)
 
@@ -659,7 +663,7 @@ elif page == "🏭 製造仕込み":
                 with c1:
                     st.markdown(f"<h3 style='margin:0; padding:6px 0; display:flex; align-items:center; gap:8px; color:#1e293b; font-weight:900; font-size:1.05rem;'><span style='font-size:1.15rem;'>{icon}</span> {r_name}</h3>", unsafe_allow_html=True)
                     # 配合比は確認用として控えめに表示(マスタの値をそのまま表示、目立たせない)
-                    st.caption(f"配合比: {base_ratio:.2f}%" + (" 🌡️ 6〜9月のため石灰+1g加算済み" if lime_summer_adjusted else ""))
+                    st.caption(f"配合比: {base_ratio:.2f}%" + (" 🌡️ 6〜9月のため石灰+1g相当(+0.01)を計算に加算済み" if lime_summer_adjusted else ""))
                     if is_shortage:
                         st.markdown(f"<div style='color:#dc2626; font-weight:900; font-size:1.2rem; margin-top:8px;'>⚠ 在庫不足 (不足 {fmt_kg(calc_kg - inv_kg)}kg)</div>", unsafe_allow_html=True)
 
