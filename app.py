@@ -365,6 +365,36 @@ for v in inventory_data.values():
     type_totals_kg[m_type] = type_totals_kg.get(m_type, 0.0) + v["現在庫(kg)"]
 
 # ════════════════════════════════════════════════════════════════
+#  資材(消耗品)現在庫算出ロジック
+#  【修繕】従来は資材の「現在庫」表示が常にマスタ登録時の「初期在庫」の
+#  値のままで、入出庫ログ(補充・使用)を記録しても画面上の在庫数が
+#  一切変動しないという不具合があったため、原料と同様に
+#  初期在庫 ± ログ実績 から現在庫を都度算出するように修正。
+# ════════════════════════════════════════════════════════════════
+def get_supply_inventory():
+    inv = {}
+    for s in supplies:
+        sid = str(s.get("資材ID", "")).strip()
+        if not sid: continue
+        inv[sid] = {
+            "資材ID": sid, "資材名": s.get("資材名", ""), "カテゴリ": s.get("カテゴリ", ""),
+            "画像URL": s.get("画像URL", ""), "初期在庫": float(s.get("初期在庫") or 0.0),
+            "発注点": float(s.get("発注点") or 0.0), "入庫累計": 0.0, "出庫累計": 0.0
+        }
+    for log in supply_logs:
+        sid = str(log.get("資材ID", "")).strip()
+        if sid not in inv: continue
+        try: qty = float(log.get("数量") or 0.0)
+        except Exception: qty = 0.0
+        if log.get("処理") == "入荷": inv[sid]["入庫累計"] += qty
+        elif log.get("処理") == "使用": inv[sid]["出庫累計"] += qty
+    for v in inv.values():
+        v["現在庫"] = v["初期在庫"] + v["入庫累計"] - v["出庫累計"]
+    return inv
+
+supply_inventory = get_supply_inventory()
+
+# ════════════════════════════════════════════════════════════════
 #  日次・月次データ集計 (ダッシュボード用)
 # ════════════════════════════════════════════════════════════════
 df_brw_global = pd.DataFrame(brewing)
@@ -671,11 +701,82 @@ elif page == "🏭 製造仕込み":
                     # Metricを使って巨大な数値を表示
                     st.metric("必要量", f"{fmt_kg(calc_kg)} kg")
 
+                # 当該原料カードから実際に登録される原料明細(通常1件 / ブレンド時は2件)
+                card_entries = []
+
                 with c3:
                     if is_water:
                         st.markdown("<div style='color:#3b82f6; font-weight:900; font-size:1.2rem; margin-top:30px; text-align:center;'>💧 石灰水を除く</div>", unsafe_allow_html=True)
-                        final_lot = "─"
-                        act_kg = calc_kg
+                        card_entries.append({"原料名": r_name, "kg": calc_kg, "lot": "─"})
+
+                    elif is_konjac:
+                        # ★【新規実装】こんにゃく粉ブレンド登録機能
+                        #   以前存在した「2種類のこんにゃく粉を指定比率でブレンドして仕込む」運用を再構築。
+                        #   ブレンドモードをONにすると、こんにゃく粉A・Bをそれぞれ原料(マスタ)とロットで選択し、
+                        #   スライダーで指定した比率(%)に応じて必要量を自動按分する。
+                        with lot_popover("📦 ロット選択 / ブレンド設定"):
+                            blend_on = st.checkbox("🧪 2種類のこんにゃく粉をブレンドする", key=f"konjac_blend_{i}{key_suffix}")
+                            konjac_mats = [m for m in materials if "こんにゃく" in m] or [r_name]
+
+                            def _recent_lots_for(mat_name):
+                                lots = []
+                                for a in recent_arrivals:
+                                    l_no = str(a.get("ロットNo", "")).strip()
+                                    if str(a.get("原料種別", "")).strip() == mat_name and l_no and l_no not in lots:
+                                        lots.append(l_no)
+                                    if len(lots) >= 10: break
+                                return lots
+
+                            if blend_on:
+                                st.caption("こんにゃく粉A・Bの配合比率(%)を指定してください。必要量はスライダーの比率で自動按分されます。")
+                                total_kg_adj = st.number_input(
+                                    "ブレンド合計投入量 (kg)", value=float(calc_kg), step=0.01, format="%.2f",
+                                    key=f"konjac_total_{i}{key_suffix}_{round(calc_kg, 4)}"
+                                )
+                                ratio_a = st.slider("こんにゃく粉A の配合比率 (%)", 0, 100, 50, key=f"konjac_ratio_{i}{key_suffix}")
+                                ratio_b = 100 - ratio_a
+                                kg_a = round(total_kg_adj * ratio_a / 100.0, 2)
+                                kg_b = round(total_kg_adj - kg_a, 2)
+
+                                st.markdown(f"**🅰️ こんにゃく粉A（{ratio_a}%・{fmt_kg(kg_a)}kg）**")
+                                mat_a = st.selectbox("原料(A)", konjac_mats, index=0, key=f"konjac_mat_a_{i}{key_suffix}")
+                                lot_choices_a = ["─ (未選択)", "✏️ 手入力 (リスト外)"] + _recent_lots_for(mat_a)
+                                lot_sel_a = st.selectbox("ロット(A)", lot_choices_a, key=f"konjac_lot_sel_a_{i}{key_suffix}")
+                                lot_txt_a = st.text_input("手入力(A)", value="" if lot_sel_a == "✏️ 手入力 (リスト外)" else lot_sel_a, disabled=(lot_sel_a != "✏️ 手入力 (リスト外)"), key=f"konjac_lot_txt_a_{i}{key_suffix}")
+                                lot_final_a = lot_txt_a if lot_sel_a == "✏️ 手入力 (リスト外)" else lot_sel_a
+                                if lot_final_a == "─ (未選択)": lot_final_a = "─"
+
+                                st.markdown(f"**🅱️ こんにゃく粉B（{ratio_b}%・{fmt_kg(kg_b)}kg）**")
+                                mat_b_default_idx = 1 if len(konjac_mats) > 1 else 0
+                                mat_b = st.selectbox("原料(B)", konjac_mats, index=mat_b_default_idx, key=f"konjac_mat_b_{i}{key_suffix}")
+                                lot_choices_b = ["─ (未選択)", "✏️ 手入力 (リスト外)"] + _recent_lots_for(mat_b)
+                                lot_sel_b = st.selectbox("ロット(B)", lot_choices_b, key=f"konjac_lot_sel_b_{i}{key_suffix}")
+                                lot_txt_b = st.text_input("手入力(B)", value="" if lot_sel_b == "✏️ 手入力 (リスト外)" else lot_sel_b, disabled=(lot_sel_b != "✏️ 手入力 (リスト外)"), key=f"konjac_lot_txt_b_{i}{key_suffix}")
+                                lot_final_b = lot_txt_b if lot_sel_b == "✏️ 手入力 (リスト外)" else lot_sel_b
+                                if lot_final_b == "─ (未選択)": lot_final_b = "─"
+
+                                # ロット文字列に比率(%)を併記し、トレース帳票上でもブレンド比率が分かるようにする
+                                lot_label_a = f"{lot_final_a}({ratio_a}%)" if lot_final_a != "─" else f"未選択({ratio_a}%)"
+                                lot_label_b = f"{lot_final_b}({ratio_b}%)" if lot_final_b != "─" else f"未選択({ratio_b}%)"
+                                card_entries.append({"原料名": mat_a, "kg": kg_a, "lot": lot_label_a})
+                                card_entries.append({"原料名": mat_b, "kg": kg_b, "lot": lot_label_b})
+                            else:
+                                act_kg = st.number_input("実投入量微調整 (kg)", value=float(calc_kg), step=0.01, format="%.2f", key=f"act_kg_{i}{key_suffix}_{round(calc_kg, 4)}")
+                                lots_choices = ["─ (未選択)", "✏️ 手入力 (リスト外)"] + _recent_lots_for(r_name)
+                                lot_sel = st.selectbox("ロット選択", lots_choices, key=f"lot_sel_{i}{key_suffix}")
+                                lot_txt = st.text_input("手入力", value="" if lot_sel == "✏️ 手入力 (リスト外)" else lot_sel, disabled=(lot_sel != "✏️ 手入力 (リスト外)"), key=f"lot_txt_{i}{key_suffix}")
+                                final_lot = lot_txt if lot_sel == "✏️ 手入力 (リスト外)" else lot_sel
+                                if final_lot == "─ (未選択)": final_lot = "─"
+                                card_entries.append({"原料名": r_name, "kg": act_kg, "lot": final_lot})
+
+                        # 選択状態をカード内に表示
+                        if blend_on:
+                            st.markdown(f"<div style='margin-top:10px; font-weight:900; color:#7c3aed; font-size:1.1rem;'>🧪 ブレンド中: A {ratio_a}% / B {ratio_b}%</div>", unsafe_allow_html=True)
+                        elif card_entries[0]["lot"] != "─":
+                            st.markdown(f"<div style='margin-top:10px; font-weight:900; color:#1d4ed8; font-size:1.2rem;'>🔵 ロット: {card_entries[0]['lot']}</div>", unsafe_allow_html=True)
+                        else:
+                            st.markdown("<div style='margin-top:10px; font-weight:900; color:#15803d; font-size:1.2rem;'>🟢 ロット未選択</div>", unsafe_allow_html=True)
+
                     else:
                         # ポップオーバーでカード内にロット入力を格納 (画面遷移なし)
                         with lot_popover("📦 ロット選択"):
@@ -703,8 +804,9 @@ elif page == "🏭 製造仕込み":
                             st.markdown(f"<div style='margin-top:10px; font-weight:900; color:#1d4ed8; font-size:1.2rem;'>🔵 ロット: {final_lot}</div>", unsafe_allow_html=True)
                         else:
                             st.markdown("<div style='margin-top:10px; font-weight:900; color:#15803d; font-size:1.2rem;'>🟢 ロット未選択</div>", unsafe_allow_html=True)
-                            
-                submitted_ingredients.append({"原料名": r_name, "kg": act_kg, "lot": final_lot})
+                        card_entries.append({"原料名": r_name, "kg": act_kg, "lot": final_lot})
+
+                submitted_ingredients.extend(card_entries)
 
         st.markdown("<br><br>", unsafe_allow_html=True)
         if st.button("💾 この実績で製造記録を保存する", type="primary", use_container_width=True):
@@ -1008,41 +1110,102 @@ elif page == "📦 在庫・棚卸":
 #  7. 資材管理
 # ═══════════════════════════════════════════════════════════════
 elif page == "🧹 資材管理":
-    st.markdown('<div class="main-header"><h1>🧹 資材・消耗品管理</h1><p>資材の残量確認および入出庫操作を行います。</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><h1>🧹 資材・消耗品管理</h1><p>資材の残量確認および入出庫操作を行います。資材カードの画像をタップして選択し、そのまま入出庫を記録できます。</p></div>', unsafe_allow_html=True)
     tab_s1, tab_s2 = st.tabs(["📋 在庫一覧・入出庫", "🕒 ログ管理"])
     
     with tab_s1:
         if supplies:
-            st.markdown('<div class="section-title">🚦 資材モニター</div>', unsafe_allow_html=True)
+            # 【修繕】以前は資材の現在庫が常に「初期在庫」の固定値のまま表示され、
+            #   入出庫を記録しても数値が変わらない不具合があったため、
+            #   supply_inventory(初期在庫 ± ログ実績)から算出した現在庫を表示するよう修正。
+            if "selected_supply_id" not in st.session_state:
+                st.session_state.selected_supply_id = supplies[0].get("資材ID")
+
+            id_by_name = {s.get("資材名"): s.get("資材ID") for s in supplies}
+            name_by_id = {s.get("資材ID"): s.get("資材名") for s in supplies}
+
+            st.markdown('<div class="section-title">🚦 資材モニター（画像タップで選択）</div>', unsafe_allow_html=True)
+
+            # キーボード・検索での選択も可能なテキスト検索(タップ操作が苦手な場合の代替導線)
+            sup_names = [s.get("資材名") for s in supplies]
+            current_name = name_by_id.get(st.session_state.selected_supply_id, sup_names[0])
+            quick_sel_name = st.selectbox(
+                "🔎 資材名で検索して選択（画像タップの代わりに使えます）",
+                sup_names,
+                index=sup_names.index(current_name) if current_name in sup_names else 0,
+                key="sup_quick_search"
+            )
+            if id_by_name.get(quick_sel_name) != st.session_state.selected_supply_id:
+                st.session_state.selected_supply_id = id_by_name.get(quick_sel_name)
+                st.rerun()
+
             cols_grid = st.columns(max(2, min(4, len(supplies))))
             for idx, s in enumerate(supplies):
+                sid = s.get("資材ID")
+                sinv = supply_inventory.get(sid, {})
+                curr_stock = sinv.get("現在庫", float(s.get("初期在庫") or 0.0))
+                order_pt = sinv.get("発注点", float(s.get("発注点") or 0.0))
+                is_low = (order_pt > 0 and curr_stock < order_pt)
+                is_selected = (st.session_state.selected_supply_id == sid)
                 with cols_grid[idx % len(cols_grid)]:
-                    st.markdown(f"**{s.get('資材名')}** ({s.get('カテゴリ')})")
-                    img_data = s.get("画像URL", "")
-                    if img_data and img_data.startswith("data:image"): st.image(img_data, width=100)
-                    else: st.caption("📷 画像なし")
-                    st.write(f"初期: {fmt_kg(s.get('初期在庫'))} / 発注点: {fmt_kg(s.get('発注点'))}")
-                    st.markdown("---")
-            
-            st.markdown('<div class="form-card"><div class="section-title">📥 資材入出庫の記録</div>', unsafe_allow_html=True)
-            col_sc1, col_sc2 = st.columns(2)
-            sup_name = col_sc1.selectbox("資材名", [s.get("資材名") for s in supplies])
-            action_type = col_sc2.selectbox("処理内容", ["➕ 補充する (入荷)", "➖ 使用する (出庫)"])
-            qty_val = st.number_input("数量", min_value=1.0, value=1.0, step=1.0, format="%.2f")
-            operator_val = st.selectbox("作業担当者", inspectors if inspectors else ["未登録"], key="op_sup")
-            notes_val = st.text_input("備考情報")
-            
-            if st.button("💾 資材変動を保存する", type="primary", use_container_width=True):
-                target_sup = next(s for s in supplies if s.get("資材名") == sup_name)
-                sheets.append_supply_log({
-                    "ログID": f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
-                    "登録日": str(date.today()), "資材ID": target_sup.get("資材ID"),
-                    "処理": "入荷" if "補充" in action_type else "使用", "数量": qty_val,
-                    "作業者": operator_val, "備考": notes_val, "登録日時": datetime.now().isoformat()
-                })
-                st.success("資材情報を記録しました。")
-                time.sleep(1.5)
-                refresh()
+                    with st.container(border=True):
+                        img_data = s.get("画像URL", "")
+                        if img_data and img_data.startswith("data:image"):
+                            st.image(img_data, use_container_width=True)
+                        else:
+                            st.markdown("<div style='text-align:center; padding:20px 0; color:#94a3b8; font-size:0.85rem;'>📷 画像なし</div>", unsafe_allow_html=True)
+                        st.markdown(f"**{s.get('資材名')}**")
+                        st.caption(s.get("カテゴリ", ""))
+                        st.metric("現在庫", f"{fmt_kg(curr_stock)}", f"発注点 {fmt_kg(order_pt)}", delta_color="inverse" if is_low else "off")
+                        if is_low:
+                            st.markdown('<div class="status-badge danger">⚠ 発注点以下</div>', unsafe_allow_html=True)
+                        if st.button("✅ 選択中" if is_selected else "👆 この資材を選択", key=f"sel_sup_{sid}", type="primary" if is_selected else "secondary", use_container_width=True):
+                            st.session_state.selected_supply_id = sid
+                            st.rerun()
+
+            st.markdown("---")
+
+            sel_id = st.session_state.selected_supply_id
+            target_sup = next((s for s in supplies if s.get("資材ID") == sel_id), supplies[0])
+            sel_inv = supply_inventory.get(sel_id, {})
+            sel_curr = sel_inv.get("現在庫", float(target_sup.get("初期在庫") or 0.0))
+
+            st.markdown(f'<div class="form-card"><div class="section-title">📥「{target_sup.get("資材名")}」の入出庫を記録</div>', unsafe_allow_html=True)
+            col_img, col_form = st.columns([1, 2])
+            with col_img:
+                img_data = target_sup.get("画像URL", "")
+                if img_data and img_data.startswith("data:image"):
+                    st.image(img_data, use_container_width=True)
+                else:
+                    st.info("📷 画像未登録")
+                st.metric("現在庫", f"{fmt_kg(sel_curr)}")
+
+            with col_form:
+                action_type = st.radio("処理内容", ["➕ 補充する (入荷)", "➖ 使用する (出庫)"], horizontal=True, key="sup_action_type")
+
+                if "sup_qty_val" not in st.session_state:
+                    st.session_state.sup_qty_val = 1.0
+                st.caption("よく使う数量をワンタップで入力できます")
+                quick_cols = st.columns(4)
+                for qi, qv in enumerate([1, 5, 10, 20]):
+                    if quick_cols[qi].button(f"{qv}", key=f"quick_sup_{qv}", use_container_width=True):
+                        st.session_state.sup_qty_val = float(qv)
+                        st.rerun()
+
+                qty_val = st.number_input("数量", min_value=0.01, step=1.0, format="%.2f", key="sup_qty_val")
+                operator_val = st.selectbox("作業担当者", inspectors if inspectors else ["未登録"], key="op_sup")
+                notes_val = st.text_input("備考情報", key="sup_notes")
+
+                if st.button("💾 資材変動を保存する", type="primary", use_container_width=True):
+                    sheets.append_supply_log({
+                        "ログID": f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+                        "登録日": str(date.today()), "資材ID": target_sup.get("資材ID"),
+                        "処理": "入荷" if "補充" in action_type else "使用", "数量": qty_val,
+                        "作業者": operator_val, "備考": notes_val, "登録日時": datetime.now().isoformat()
+                    })
+                    st.success(f"「{target_sup.get('資材名')}」の{'補充' if '補充' in action_type else '使用'}を記録しました。")
+                    time.sleep(1.5)
+                    refresh()
             st.markdown('</div>', unsafe_allow_html=True)
         else:
             st.warning("資材が未登録です。マスタ設定よりご登録ください。")
@@ -1055,13 +1218,22 @@ elif page == "🧹 資材管理":
             st.dataframe(df_logs.tail(20)[::-1], use_container_width=True, hide_index=True)
             
             st.markdown('<div class="section-title">🚨 ログの取り消し・削除</div>', unsafe_allow_html=True)
-            log_id_to_del = st.text_input("削除するログIDを入力してください")
-            if st.button("🗑️ このログIDを完全に削除する"):
-                if log_id_to_del:
-                    sheets.delete_supply_log(log_id_to_del)
+            # 【修繕】以前はログIDを手入力する方式でタイプミスによる削除失敗・誤削除の
+            #   リスクがあったため、実際のログ一覧から選択する方式に変更し安全性を向上。
+            df_logs_sorted = df_logs.sort_values("登録日", ascending=False) if "登録日" in df_logs.columns else df_logs
+            log_options = {
+                f"{r.get('登録日','')} / {r.get('資材名','')} / {r.get('処理','')} {fmt_kg(r.get('数量',0))} (ID:{r.get('ログID','')})": r.get("ログID", "")
+                for _, r in df_logs_sorted.iterrows()
+            }
+            if log_options:
+                sel_log_label = st.selectbox("削除するログを選択してください", list(log_options.keys()))
+                if st.button("🗑️ このログを完全に削除する", type="primary"):
+                    sheets.delete_supply_log(log_options[sel_log_label])
                     st.success("ログを削除しました。")
                     time.sleep(1.5)
                     refresh()
+        else:
+            st.info("入出庫ログはまだありません。")
 
 # ═══════════════════════════════════════════════════════════════
 #  8. トレース
@@ -1352,6 +1524,7 @@ elif page == "⚙️ マスタ設定":
 
     with m_tab5:
         st.markdown('<div class="form-card"><div class="section-title">📋 登録済み資材の管理・編集</div>', unsafe_allow_html=True)
+        st.caption("💡「初期在庫」はマスタ登録時の基準値です。実際の現在庫は🧹資材管理タブで入出庫ログを反映して自動計算されます。")
         df_sup_list = pd.DataFrame(supplies)
         if not df_sup_list.empty:
             df_sup_edit = df_sup_list[["資材ID", "資材名", "カテゴリ", "初期在庫", "発注点"]]
