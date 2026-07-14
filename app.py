@@ -163,15 +163,26 @@ button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStep
 }
 
 /* --- ④ 希望仕込製品量・石灰水作成量だけは入力しやすいよう特大表示 --- */
-.st-key-qty_inputs_box div[data-baseweb="input"] input {
-    font-size: 2.8rem !important;
-    font-weight: 900 !important;
-    padding: 26px 18px !important;
+.st-key-qty_inputs_box div[data-testid="stNumberInput"] { overflow: visible !important; }
+.st-key-qty_inputs_box div[data-baseweb="input"] {
+    border-width: 3px !important;
+    min-height: 72px !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
 }
-.st-key-qty_inputs_box div[data-baseweb="input"] { border-width: 3px !important; }
+.st-key-qty_inputs_box div[data-baseweb="input"] input {
+    font-size: 2.2rem !important;
+    font-weight: 900 !important;
+    padding: 16px 10px !important;
+}
 .st-key-qty_inputs_box button[data-testid="stNumberInputStepUp"],
 .st-key-qty_inputs_box button[data-testid="stNumberInputStepDown"] {
-    min-width: 62px !important; min-height: 62px !important;
+    min-width: 46px !important;
+    min-height: 46px !important;
+    max-width: 46px !important;
+    max-height: 46px !important;
+    flex-shrink: 0 !important;
+    box-sizing: border-box !important;
 }
 .st-key-qty_inputs_box label p { font-size: 1.1rem !important; font-weight: 900 !important; }
 
@@ -557,6 +568,13 @@ if page == "📊 経営ダッシュボード":
 elif page == "🏭 製造仕込み":
     st.markdown('<div class="main-header"><h1>🏭 製造仕込み</h1><p>製品と仕込量を入力すると、直ちに準備する原料が計算されます。</p></div>', unsafe_allow_html=True)
 
+    # ★【配置修正】仕込日はライン・製品を選ぶ前に決めたいという要望のため、
+    #   ページの一番上部(①ラインを選択のさらに前)に配置。
+    st.markdown('<div class="form-card">', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:1.2rem; font-weight:900; color:#1e293b; margin-bottom:8px;">📅 仕込日を選択</div>', unsafe_allow_html=True)
+    brew_date = st.date_input("仕込日", value=date.today(), label_visibility="collapsed")
+    st.markdown('</div>', unsafe_allow_html=True)
+
     p_recipes = {}
     for r in recipes_raw:
         p_name = r.get("品名", "未定義")
@@ -639,10 +657,8 @@ elif page == "🏭 製造仕込み":
     with col_op1:
         operator = st.selectbox("👨‍🏭 製造担当者", inspectors if inspectors else ["未登録"])
     with col_op2:
-        # ★【新規実装】仕込日を選択して記録できる機能。
-        #   以前は常に本日の日付で固定登録されており、後日まとめて入力する際や
-        #   前日分の追記登録ができなかったため、日付選択欄を追加。
-        brew_date = st.date_input("📅 仕込日", value=date.today())
+        # ★【新規実装】備考を入力して製造記録に残せる機能。
+        brew_remarks = st.text_input("📝 備考（任意）", placeholder="例: 通常より多めに仕込み 等")
     st.markdown('</div>', unsafe_allow_html=True)
 
     # ── 準備原料表示 ──
@@ -691,16 +707,21 @@ elif page == "🏭 製造仕込み":
 
         def _resolve_lot(sel_label, label_map, txt_key):
             """選択されたロット(メーカー名付き表示ラベル)を実際のロットNoへ変換し、
-            手入力欄も併せて描画する。戻り値は最終的なロットNo文字列。"""
+            手入力欄も併せて描画する。戻り値は最終的なロットNo文字列。
+            ★【修繕】以前は読み取り専用の表示欄と手入力欄で同一のwidgetキーを
+            共有していたため、選択モードを切り替えるとStreamlitがそのキーの
+            古いセッション値を優先してしまい、手入力した内容が反映されない・
+            手入力欄に無関係な古い値が残る、という不具合があった。
+            モードごとに異なるキーを使うことで、各入力欄が独立して正しく動作するよう修正。"""
             if sel_label == "✏️ 手入力 (リスト外)":
-                lot_txt = st.text_input("手入力", value="", disabled=False, key=txt_key)
+                lot_txt = st.text_input("手入力", value="", key=f"{txt_key}_manual")
                 return lot_txt if lot_txt else "─"
             elif sel_label == "─ (未選択)":
-                st.text_input("手入力", value="", disabled=True, key=txt_key)
+                st.text_input("手入力", value="", disabled=True, key=f"{txt_key}_none")
                 return "─"
             else:
                 plain_lot = label_map.get(sel_label, sel_label)
-                st.text_input("手入力", value=plain_lot, disabled=True, key=txt_key)
+                st.text_input("手入力", value=plain_lot, disabled=True, key=f"{txt_key}_disp_{plain_lot}")
                 return plain_lot
 
         for i, item in enumerate(active_recipe[:10]):
@@ -748,8 +769,12 @@ elif page == "🏭 製造仕込み":
                         st.markdown(f"<div style='color:#dc2626; font-weight:900; font-size:1.2rem; margin-top:8px;'>⚠ 在庫不足 (不足 {fmt_kg(calc_kg - inv_kg)}kg)</div>", unsafe_allow_html=True)
 
                 with c2:
-                    # Metricを使って巨大な数値を表示
-                    st.metric("必要量", f"{fmt_kg(calc_kg)} kg")
+                    # 【修繕】以前はここに理論上の必要量(calc_kg)を固定表示しており、
+                    #   ③でロット選択欄の「実投入量微調整」を変更しても、この数値には
+                    #   一切反映されない不具合があった。st.empty()のプレースホルダーを使い、
+                    #   実際に登録される量(card_entries確定後)で上書き表示するよう修正。
+                    metric_ph = st.empty()
+                    metric_ph.metric("必要量", f"{fmt_kg(calc_kg)} kg")
 
                 # 当該原料カードから実際に登録される原料明細(通常1件 / ブレンド時は2件)
                 card_entries = []
@@ -832,6 +857,13 @@ elif page == "🏭 製造仕込み":
                             st.markdown("<div style='margin-top:10px; font-weight:900; color:#15803d; font-size:1.2rem;'>🟢 ロット未選択</div>", unsafe_allow_html=True)
                         card_entries.append({"原料名": r_name, "kg": act_kg, "lot": final_lot})
 
+                # 実投入量微調整(またはブレンド按分)後の実際の合計を「必要量」表示に反映する
+                actual_total_kg = sum(e["kg"] for e in card_entries)
+                if abs(actual_total_kg - calc_kg) > 0.005:
+                    metric_ph.metric("必要量", f"{fmt_kg(actual_total_kg)} kg", f"計算値 {fmt_kg(calc_kg)}kg から調整")
+                else:
+                    metric_ph.metric("必要量", f"{fmt_kg(actual_total_kg)} kg")
+
                 submitted_ingredients.extend(card_entries)
 
         st.markdown("<br><br>", unsafe_allow_html=True)
@@ -856,6 +888,7 @@ elif page == "🏭 製造仕込み":
                 elif "石灰" in n or "カルシウム" in n:
                     lime_kg += ing["kg"]
 
+            user_note = f"{brew_remarks} " if brew_remarks else ""
             sheets.append_brewing({
                 "仕込No": sheets.next_brewing_no(brewing), "仕込日": str(brew_date), "品名": p_name,
                 "メーカー": operator, "主原料ロット": k_lot, "仕込量(kg)": target_size,
@@ -863,7 +896,7 @@ elif page == "🏭 製造仕込み":
                 "デンプン(kg)": st_kg, "デンプンロット": st_lot, "デンプン種別": "-",
                 "石灰(kg)": lime_kg, "石灰水(L)": lime_water_size,
                 "その他添加物": json.dumps(submitted_ingredients, ensure_ascii=False),
-                "備考": f"【新規作成: {datetime.now().strftime('%Y/%m/%d %H:%M')} {operator}】", 
+                "備考": f"{user_note}【新規作成: {datetime.now().strftime('%Y/%m/%d %H:%M')} {operator}】", 
                 "登録日時": datetime.now().isoformat()
             })
             st.success("製造実績を登録しました。画面を更新します...")
