@@ -635,7 +635,14 @@ elif page == "🏭 製造仕込み":
             )
         
     st.markdown("<br>", unsafe_allow_html=True)
-    operator = st.selectbox("👨‍🏭 製造担当者", inspectors if inspectors else ["未登録"])
+    col_op1, col_op2 = st.columns(2)
+    with col_op1:
+        operator = st.selectbox("👨‍🏭 製造担当者", inspectors if inspectors else ["未登録"])
+    with col_op2:
+        # ★【新規実装】仕込日を選択して記録できる機能。
+        #   以前は常に本日の日付で固定登録されており、後日まとめて入力する際や
+        #   前日分の追記登録ができなかったため、日付選択欄を追加。
+        brew_date = st.date_input("📅 仕込日", value=date.today())
     st.markdown('</div>', unsafe_allow_html=True)
 
     # ── 準備原料表示 ──
@@ -740,6 +747,8 @@ elif page == "🏭 製造仕込み":
 
                                 st.markdown(f"**🅰️ こんにゃく粉A（{ratio_a}%・{fmt_kg(kg_a)}kg）**")
                                 mat_a = st.selectbox("原料(A)", konjac_mats, index=0, key=f"konjac_mat_a_{i}{key_suffix}")
+                                if kg_a > type_totals_kg.get(mat_a, 0.0):
+                                    st.caption(f"⚠ {mat_a} 在庫不足の可能性 (在庫 {fmt_kg(type_totals_kg.get(mat_a, 0.0))}kg)")
                                 lot_choices_a = ["─ (未選択)", "✏️ 手入力 (リスト外)"] + _recent_lots_for(mat_a)
                                 lot_sel_a = st.selectbox("ロット(A)", lot_choices_a, key=f"konjac_lot_sel_a_{i}{key_suffix}")
                                 lot_txt_a = st.text_input("手入力(A)", value="" if lot_sel_a == "✏️ 手入力 (リスト外)" else lot_sel_a, disabled=(lot_sel_a != "✏️ 手入力 (リスト外)"), key=f"konjac_lot_txt_a_{i}{key_suffix}")
@@ -749,6 +758,8 @@ elif page == "🏭 製造仕込み":
                                 st.markdown(f"**🅱️ こんにゃく粉B（{ratio_b}%・{fmt_kg(kg_b)}kg）**")
                                 mat_b_default_idx = 1 if len(konjac_mats) > 1 else 0
                                 mat_b = st.selectbox("原料(B)", konjac_mats, index=mat_b_default_idx, key=f"konjac_mat_b_{i}{key_suffix}")
+                                if kg_b > type_totals_kg.get(mat_b, 0.0):
+                                    st.caption(f"⚠ {mat_b} 在庫不足の可能性 (在庫 {fmt_kg(type_totals_kg.get(mat_b, 0.0))}kg)")
                                 lot_choices_b = ["─ (未選択)", "✏️ 手入力 (リスト外)"] + _recent_lots_for(mat_b)
                                 lot_sel_b = st.selectbox("ロット(B)", lot_choices_b, key=f"konjac_lot_sel_b_{i}{key_suffix}")
                                 lot_txt_b = st.text_input("手入力(B)", value="" if lot_sel_b == "✏️ 手入力 (リスト外)" else lot_sel_b, disabled=(lot_sel_b != "✏️ 手入力 (リスト外)"), key=f"konjac_lot_txt_b_{i}{key_suffix}")
@@ -831,7 +842,7 @@ elif page == "🏭 製造仕込み":
                     lime_kg += ing["kg"]
 
             sheets.append_brewing({
-                "仕込No": sheets.next_brewing_no(brewing), "仕込日": str(date.today()), "品名": p_name,
+                "仕込No": sheets.next_brewing_no(brewing), "仕込日": str(brew_date), "品名": p_name,
                 "メーカー": operator, "主原料ロット": k_lot, "仕込量(kg)": target_size,
                 "こんにゃく精粉(kg)": k_kg, "海藻粉(kg)": s_kg, "海藻粉ロット": s_lot,
                 "デンプン(kg)": st_kg, "デンプンロット": st_lot, "デンプン種別": "-",
@@ -1110,7 +1121,7 @@ elif page == "📦 在庫・棚卸":
 #  7. 資材管理
 # ═══════════════════════════════════════════════════════════════
 elif page == "🧹 資材管理":
-    st.markdown('<div class="main-header"><h1>🧹 資材・消耗品管理</h1><p>資材の残量確認および入出庫操作を行います。資材カードの画像をタップして選択し、そのまま入出庫を記録できます。</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><h1>🧹 資材・消耗品管理</h1><p>資材の残量確認および入出庫操作を行います。資材カードをタップして選択し、そのまま入出庫を記録できます。</p></div>', unsafe_allow_html=True)
     tab_s1, tab_s2 = st.tabs(["📋 在庫一覧・入出庫", "🕒 ログ管理"])
     
     with tab_s1:
@@ -1124,47 +1135,11 @@ elif page == "🧹 資材管理":
             id_by_name = {s.get("資材名"): s.get("資材ID") for s in supplies}
             name_by_id = {s.get("資材ID"): s.get("資材名") for s in supplies}
 
-            st.markdown('<div class="section-title">🚦 資材モニター（画像タップで選択）</div>', unsafe_allow_html=True)
+            def _select_supply(sid):
+                st.session_state.selected_supply_id = sid
 
-            # キーボード・検索での選択も可能なテキスト検索(タップ操作が苦手な場合の代替導線)
-            sup_names = [s.get("資材名") for s in supplies]
-            current_name = name_by_id.get(st.session_state.selected_supply_id, sup_names[0])
-            quick_sel_name = st.selectbox(
-                "🔎 資材名で検索して選択（画像タップの代わりに使えます）",
-                sup_names,
-                index=sup_names.index(current_name) if current_name in sup_names else 0,
-                key="sup_quick_search"
-            )
-            if id_by_name.get(quick_sel_name) != st.session_state.selected_supply_id:
-                st.session_state.selected_supply_id = id_by_name.get(quick_sel_name)
-                st.rerun()
-
-            cols_grid = st.columns(max(2, min(4, len(supplies))))
-            for idx, s in enumerate(supplies):
-                sid = s.get("資材ID")
-                sinv = supply_inventory.get(sid, {})
-                curr_stock = sinv.get("現在庫", float(s.get("初期在庫") or 0.0))
-                order_pt = sinv.get("発注点", float(s.get("発注点") or 0.0))
-                is_low = (order_pt > 0 and curr_stock < order_pt)
-                is_selected = (st.session_state.selected_supply_id == sid)
-                with cols_grid[idx % len(cols_grid)]:
-                    with st.container(border=True):
-                        img_data = s.get("画像URL", "")
-                        if img_data and img_data.startswith("data:image"):
-                            st.image(img_data, use_container_width=True)
-                        else:
-                            st.markdown("<div style='text-align:center; padding:20px 0; color:#94a3b8; font-size:0.85rem;'>📷 画像なし</div>", unsafe_allow_html=True)
-                        st.markdown(f"**{s.get('資材名')}**")
-                        st.caption(s.get("カテゴリ", ""))
-                        st.metric("現在庫", f"{fmt_kg(curr_stock)}", f"発注点 {fmt_kg(order_pt)}", delta_color="inverse" if is_low else "off")
-                        if is_low:
-                            st.markdown('<div class="status-badge danger">⚠ 発注点以下</div>', unsafe_allow_html=True)
-                        if st.button("✅ 選択中" if is_selected else "👆 この資材を選択", key=f"sel_sup_{sid}", type="primary" if is_selected else "secondary", use_container_width=True):
-                            st.session_state.selected_supply_id = sid
-                            st.rerun()
-
-            st.markdown("---")
-
+            # ── ① 入出庫フォームを最上部に配置(以前はカード一覧の下にあり、
+            #     毎回スクロールしないと入力できず操作しづらかったため) ──
             sel_id = st.session_state.selected_supply_id
             target_sup = next((s for s in supplies if s.get("資材ID") == sel_id), supplies[0])
             sel_inv = supply_inventory.get(sel_id, {})
@@ -1175,7 +1150,7 @@ elif page == "🧹 資材管理":
             with col_img:
                 img_data = target_sup.get("画像URL", "")
                 if img_data and img_data.startswith("data:image"):
-                    st.image(img_data, use_container_width=True)
+                    st.image(img_data, width=140)
                 else:
                     st.info("📷 画像未登録")
                 st.metric("現在庫", f"{fmt_kg(sel_curr)}")
@@ -1188,9 +1163,7 @@ elif page == "🧹 資材管理":
                 st.caption("よく使う数量をワンタップで入力できます")
                 quick_cols = st.columns(4)
                 for qi, qv in enumerate([1, 5, 10, 20]):
-                    if quick_cols[qi].button(f"{qv}", key=f"quick_sup_{qv}", use_container_width=True):
-                        st.session_state.sup_qty_val = float(qv)
-                        st.rerun()
+                    quick_cols[qi].button(f"{qv}", key=f"quick_sup_{qv}", use_container_width=True, on_click=lambda v=float(qv): st.session_state.update(sup_qty_val=v))
 
                 qty_val = st.number_input("数量", min_value=0.01, step=1.0, format="%.2f", key="sup_qty_val")
                 operator_val = st.selectbox("作業担当者", inspectors if inspectors else ["未登録"], key="op_sup")
@@ -1207,6 +1180,63 @@ elif page == "🧹 資材管理":
                     time.sleep(1.5)
                     refresh()
             st.markdown('</div>', unsafe_allow_html=True)
+
+            # ── ② 資材の選択(タップ選択 or プルダウン検索) ──
+            st.markdown('<div class="section-title">🚦 資材モニター（カードをタップして選択）</div>', unsafe_allow_html=True)
+
+            # 【修繕/バグ修正】以前はこの検索プルダウンが常に固定キーで描画されていたため、
+            #   カード側のタップ選択でセッション状態を更新しても、プルダウン自身は
+            #   古い選択値を保持し続け、その古い値で選択状態を毎回上書きしてしまい、
+            #   結果として「タップしても選択されず、プルダウンでしか選べない」不具合の
+            #   原因になっていた。選択中IDを含む動的キーにすることで、
+            #   カード側の選択があった場合はプルダウンを正しく再生成し、
+            #   逆にプルダウンを操作した場合は on_change で選択状態を更新するよう修正。
+            sup_names = [s.get("資材名") for s in supplies]
+            current_name = name_by_id.get(st.session_state.selected_supply_id, sup_names[0])
+            search_key = f"sup_quick_search_{st.session_state.selected_supply_id}"
+
+            def _on_search_change(_key=search_key):
+                picked_name = st.session_state.get(_key)
+                if picked_name in id_by_name:
+                    st.session_state.selected_supply_id = id_by_name[picked_name]
+
+            st.selectbox(
+                "🔎 資材名で検索して選択（タップの代わりに使えます）",
+                sup_names,
+                index=sup_names.index(current_name) if current_name in sup_names else 0,
+                key=search_key,
+                on_change=_on_search_change
+            )
+
+            # 画像が大きすぎて見づらいとの指摘に対応し、カード内の画像は小さめの固定サイズに縮小
+            cols_grid = st.columns(max(2, min(4, len(supplies))))
+            for idx, s in enumerate(supplies):
+                sid = s.get("資材ID")
+                sinv = supply_inventory.get(sid, {})
+                curr_stock = sinv.get("現在庫", float(s.get("初期在庫") or 0.0))
+                order_pt = sinv.get("発注点", float(s.get("発注点") or 0.0))
+                is_low = (order_pt > 0 and curr_stock < order_pt)
+                is_selected = (st.session_state.selected_supply_id == sid)
+                with cols_grid[idx % len(cols_grid)]:
+                    with st.container(border=True):
+                        img_data = s.get("画像URL", "")
+                        if img_data and img_data.startswith("data:image"):
+                            st.image(img_data, width=90)
+                        else:
+                            st.markdown("<div style='text-align:center; padding:14px 0; color:#94a3b8; font-size:0.85rem;'>📷 画像なし</div>", unsafe_allow_html=True)
+                        st.markdown(f"**{s.get('資材名')}**")
+                        st.caption(s.get("カテゴリ", ""))
+                        st.metric("現在庫", f"{fmt_kg(curr_stock)}", f"発注点 {fmt_kg(order_pt)}", delta_color="inverse" if is_low else "off")
+                        if is_low:
+                            st.markdown('<div class="status-badge danger">⚠ 発注点以下</div>', unsafe_allow_html=True)
+                        st.button(
+                            "✅ 選択中" if is_selected else "👆 この資材を選択",
+                            key=f"sel_sup_{sid}",
+                            type="primary" if is_selected else "secondary",
+                            use_container_width=True,
+                            on_click=_select_supply,
+                            args=(sid,)
+                        )
         else:
             st.warning("資材が未登録です。マスタ設定よりご登録ください。")
 
@@ -1223,6 +1253,7 @@ elif page == "🧹 資材管理":
             df_logs_sorted = df_logs.sort_values("登録日", ascending=False) if "登録日" in df_logs.columns else df_logs
             log_options = {
                 f"{r.get('登録日','')} / {r.get('資材名','')} / {r.get('処理','')} {fmt_kg(r.get('数量',0))} (ID:{r.get('ログID','')})": r.get("ログID", "")
+
                 for _, r in df_logs_sorted.iterrows()
             }
             if log_options:
