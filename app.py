@@ -186,6 +186,14 @@ button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStep
 }
 .st-key-qty_inputs_box label p { font-size: 1.1rem !important; font-weight: 900 !important; }
 
+.st-key-brew_date_box div[data-baseweb="input"] input {
+    font-size: 1.3rem !important;
+    font-weight: 900 !important;
+    padding: 14px 10px !important;
+    text-align: center !important;
+}
+.st-key-brew_date_box div[data-baseweb="input"] { border-width: 2px !important; }
+
 /* ボタン類(コンパクト) */
 .stButton button {
     background-color: var(--c-surface) !important; border: 1px solid var(--c-border) !important; color: var(--c-secondary) !important;
@@ -570,9 +578,17 @@ elif page == "🏭 製造仕込み":
 
     # ★【配置修正】仕込日はライン・製品を選ぶ前に決めたいという要望のため、
     #   ページの一番上部(①ラインを選択のさらに前)に配置。
-    st.markdown('<div class="form-card">', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:1.2rem; font-weight:900; color:#1e293b; margin-bottom:8px;">📅 仕込日を選択</div>', unsafe_allow_html=True)
-    brew_date = st.date_input("仕込日", value=date.today(), label_visibility="collapsed")
+    # 【修繕】開始タグ<div class="form-card">だけを単独のst.markdownで出力すると、
+    #   Streamlitでは各st.markdown呼び出しが個別のDOMブロックになるため、
+    #   ブラウザがその場でタグを閉じてしまい、中身のない「白い帯」だけの
+    #   カードが表示される不具合があった。見出しと開始タグを同じ呼び出しに
+    #   まとめることでこの空白バーを解消。
+    st.markdown('<div class="form-card"><div style="font-size:1.2rem; font-weight:900; color:#1e293b; margin-bottom:8px;">📅 仕込日を選択</div>', unsafe_allow_html=True)
+    # 日付選択欄は横幅いっぱいだと間延びして見づらいため、コンパクトな幅に変更
+    col_date, _sp = st.columns([1, 3])
+    with col_date:
+        with st.container(key="brew_date_box"):
+            brew_date = st.date_input("仕込日", value=date.today(), label_visibility="collapsed")
     st.markdown('</div>', unsafe_allow_html=True)
 
     p_recipes = {}
@@ -584,10 +600,8 @@ elif page == "🏭 製造仕込み":
             "成分": safe_parse_recipe(r.get("配合JSON"))
         }
 
-    st.markdown('<div class="form-card">', unsafe_allow_html=True)
-
     # ① ライン選択 (スプレッドシートに実在する値のみを動的に表示: プラント / OKM 等)
-    st.markdown('<div style="font-size:1.2rem; font-weight:900; color:#1e293b; margin-bottom:8px;">① ラインを選択</div>', unsafe_allow_html=True)
+    st.markdown('<div class="form-card"><div style="font-size:1.2rem; font-weight:900; color:#1e293b; margin-bottom:8px;">① ラインを選択</div>', unsafe_allow_html=True)
     big_cats = sorted({v["大カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ")})
     if not big_cats:
         st.warning("ラインが登録されている製品マスタがありません。")
