@@ -658,7 +658,50 @@ elif page == "🏭 製造仕込み":
         
         current_month = date.today().month
         is_summer = 6 <= current_month <= 9
+        # 入荷日の新しい順に並べ替え(ロット選択プルダウンの表示順の基準)
         recent_arrivals = sorted(arrivals, key=lambda x: x.get("入荷日", ""), reverse=True)
+
+        LOT_DISPLAY_LIMIT = 15  # ロット選択プルダウンに表示する最新件数
+
+        def _recent_lot_options(mat_name, limit=LOT_DISPLAY_LIMIT):
+            """指定した原料の入荷履歴から、最新日付順にロットNo・メーカー名の組を重複なく取得する。"""
+            opts = []
+            seen = set()
+            for a in recent_arrivals:
+                if str(a.get("原料種別", "")).strip() != mat_name:
+                    continue
+                l_no = str(a.get("ロットNo", "")).strip()
+                if not l_no or l_no in seen:
+                    continue
+                seen.add(l_no)
+                maker = str(a.get("メーカー", "")).strip() or "メーカー不明"
+                opts.append((l_no, maker))
+                if len(opts) >= limit:
+                    break
+            return opts
+
+        def _lot_selectbox(label, mat_name, key):
+            """ロットNo横にメーカー名を併記したプルダウンを表示し、
+            (表示用選択肢, 表示ラベル→実ロットNoの対応表)を返すヘルパー。"""
+            lot_opts = _recent_lot_options(mat_name)
+            label_map = {f"{lot} ｜ {maker}": lot for lot, maker in lot_opts}
+            choices = ["─ (未選択)", "✏️ 手入力 (リスト外)"] + list(label_map.keys())
+            sel_label = st.selectbox(label, choices, key=key)
+            return sel_label, label_map
+
+        def _resolve_lot(sel_label, label_map, txt_key):
+            """選択されたロット(メーカー名付き表示ラベル)を実際のロットNoへ変換し、
+            手入力欄も併せて描画する。戻り値は最終的なロットNo文字列。"""
+            if sel_label == "✏️ 手入力 (リスト外)":
+                lot_txt = st.text_input("手入力", value="", disabled=False, key=txt_key)
+                return lot_txt if lot_txt else "─"
+            elif sel_label == "─ (未選択)":
+                st.text_input("手入力", value="", disabled=True, key=txt_key)
+                return "─"
+            else:
+                plain_lot = label_map.get(sel_label, sel_label)
+                st.text_input("手入力", value=plain_lot, disabled=True, key=txt_key)
+                return plain_lot
 
         for i, item in enumerate(active_recipe[:10]):
             if not isinstance(item, dict): continue
@@ -725,15 +768,6 @@ elif page == "🏭 製造仕込み":
                             blend_on = st.checkbox("🧪 2種類のこんにゃく粉をブレンドする", key=f"konjac_blend_{i}{key_suffix}")
                             konjac_mats = [m for m in materials if "こんにゃく" in m] or [r_name]
 
-                            def _recent_lots_for(mat_name):
-                                lots = []
-                                for a in recent_arrivals:
-                                    l_no = str(a.get("ロットNo", "")).strip()
-                                    if str(a.get("原料種別", "")).strip() == mat_name and l_no and l_no not in lots:
-                                        lots.append(l_no)
-                                    if len(lots) >= 10: break
-                                return lots
-
                             if blend_on:
                                 st.caption("こんにゃく粉A・Bの配合比率(%)を指定してください。必要量はスライダーの比率で自動按分されます。")
                                 total_kg_adj = st.number_input(
@@ -749,22 +783,16 @@ elif page == "🏭 製造仕込み":
                                 mat_a = st.selectbox("原料(A)", konjac_mats, index=0, key=f"konjac_mat_a_{i}{key_suffix}")
                                 if kg_a > type_totals_kg.get(mat_a, 0.0):
                                     st.caption(f"⚠ {mat_a} 在庫不足の可能性 (在庫 {fmt_kg(type_totals_kg.get(mat_a, 0.0))}kg)")
-                                lot_choices_a = ["─ (未選択)", "✏️ 手入力 (リスト外)"] + _recent_lots_for(mat_a)
-                                lot_sel_a = st.selectbox("ロット(A)", lot_choices_a, key=f"konjac_lot_sel_a_{i}{key_suffix}")
-                                lot_txt_a = st.text_input("手入力(A)", value="" if lot_sel_a == "✏️ 手入力 (リスト外)" else lot_sel_a, disabled=(lot_sel_a != "✏️ 手入力 (リスト外)"), key=f"konjac_lot_txt_a_{i}{key_suffix}")
-                                lot_final_a = lot_txt_a if lot_sel_a == "✏️ 手入力 (リスト外)" else lot_sel_a
-                                if lot_final_a == "─ (未選択)": lot_final_a = "─"
+                                lot_sel_a, label_map_a = _lot_selectbox("ロット(A)（最新15件・メーカー名併記）", mat_a, key=f"konjac_lot_sel_a_{i}{key_suffix}")
+                                lot_final_a = _resolve_lot(lot_sel_a, label_map_a, txt_key=f"konjac_lot_txt_a_{i}{key_suffix}")
 
                                 st.markdown(f"**🅱️ こんにゃく粉B（{ratio_b}%・{fmt_kg(kg_b)}kg）**")
                                 mat_b_default_idx = 1 if len(konjac_mats) > 1 else 0
                                 mat_b = st.selectbox("原料(B)", konjac_mats, index=mat_b_default_idx, key=f"konjac_mat_b_{i}{key_suffix}")
                                 if kg_b > type_totals_kg.get(mat_b, 0.0):
                                     st.caption(f"⚠ {mat_b} 在庫不足の可能性 (在庫 {fmt_kg(type_totals_kg.get(mat_b, 0.0))}kg)")
-                                lot_choices_b = ["─ (未選択)", "✏️ 手入力 (リスト外)"] + _recent_lots_for(mat_b)
-                                lot_sel_b = st.selectbox("ロット(B)", lot_choices_b, key=f"konjac_lot_sel_b_{i}{key_suffix}")
-                                lot_txt_b = st.text_input("手入力(B)", value="" if lot_sel_b == "✏️ 手入力 (リスト外)" else lot_sel_b, disabled=(lot_sel_b != "✏️ 手入力 (リスト外)"), key=f"konjac_lot_txt_b_{i}{key_suffix}")
-                                lot_final_b = lot_txt_b if lot_sel_b == "✏️ 手入力 (リスト外)" else lot_sel_b
-                                if lot_final_b == "─ (未選択)": lot_final_b = "─"
+                                lot_sel_b, label_map_b = _lot_selectbox("ロット(B)（最新15件・メーカー名併記）", mat_b, key=f"konjac_lot_sel_b_{i}{key_suffix}")
+                                lot_final_b = _resolve_lot(lot_sel_b, label_map_b, txt_key=f"konjac_lot_txt_b_{i}{key_suffix}")
 
                                 # ロット文字列に比率(%)を併記し、トレース帳票上でもブレンド比率が分かるようにする
                                 lot_label_a = f"{lot_final_a}({ratio_a}%)" if lot_final_a != "─" else f"未選択({ratio_a}%)"
@@ -773,11 +801,8 @@ elif page == "🏭 製造仕込み":
                                 card_entries.append({"原料名": mat_b, "kg": kg_b, "lot": lot_label_b})
                             else:
                                 act_kg = st.number_input("実投入量微調整 (kg)", value=float(calc_kg), step=0.01, format="%.2f", key=f"act_kg_{i}{key_suffix}_{round(calc_kg, 4)}")
-                                lots_choices = ["─ (未選択)", "✏️ 手入力 (リスト外)"] + _recent_lots_for(r_name)
-                                lot_sel = st.selectbox("ロット選択", lots_choices, key=f"lot_sel_{i}{key_suffix}")
-                                lot_txt = st.text_input("手入力", value="" if lot_sel == "✏️ 手入力 (リスト外)" else lot_sel, disabled=(lot_sel != "✏️ 手入力 (リスト外)"), key=f"lot_txt_{i}{key_suffix}")
-                                final_lot = lot_txt if lot_sel == "✏️ 手入力 (リスト外)" else lot_sel
-                                if final_lot == "─ (未選択)": final_lot = "─"
+                                lot_sel, label_map = _lot_selectbox("ロット選択（最新15件・メーカー名併記）", r_name, key=f"lot_sel_{i}{key_suffix}")
+                                final_lot = _resolve_lot(lot_sel, label_map, txt_key=f"lot_txt_{i}{key_suffix}")
                                 card_entries.append({"原料名": r_name, "kg": act_kg, "lot": final_lot})
 
                         # 選択状態をカード内に表示
@@ -796,19 +821,9 @@ elif page == "🏭 製造仕込み":
                             #   こうすることで配合比%が変わって計算結果が変化した際は
                             #   自動的に新しい初期値が反映され、古い入力値が残り続けることを防ぐ。
                             act_kg = st.number_input("実投入量微調整 (kg)", value=float(calc_kg), step=0.01, format="%.2f", key=f"act_kg_{i}{key_suffix}_{round(calc_kg, 4)}")
-                            
-                            raw_arr_matches = [a for a in recent_arrivals if str(a.get("原料種別", "")).strip() == r_name]
-                            recent_filtered_lots = []
-                            for a in raw_arr_matches:
-                                l_no = str(a.get("ロットNo", "")).strip()
-                                if l_no and l_no not in recent_filtered_lots: recent_filtered_lots.append(l_no)
-                                if len(recent_filtered_lots) >= 10: break
-                            lots_choices = ["─ (未選択)", "✏️ 手入力 (リスト外)"] + recent_filtered_lots
-                            
-                            lot_sel = st.selectbox("ロット選択", lots_choices, key=f"lot_sel_{i}{key_suffix}")
-                            lot_txt = st.text_input("手入力", value="" if lot_sel == "✏️ 手入力 (リスト外)" else lot_sel, disabled=(lot_sel != "✏️ 手入力 (リスト外)"), key=f"lot_txt_{i}{key_suffix}")
-                            final_lot = lot_txt if lot_sel == "✏️ 手入力 (リスト外)" else lot_sel
-                            if final_lot == "─ (未選択)": final_lot = "─"
+                            # ロットNoの横にメーカー名を併記し、最新の入荷日から15件まで表示する
+                            lot_sel, label_map = _lot_selectbox("ロット選択（最新15件・メーカー名併記）", r_name, key=f"lot_sel_{i}{key_suffix}")
+                            final_lot = _resolve_lot(lot_sel, label_map, txt_key=f"lot_txt_{i}{key_suffix}")
 
                         # 選択状態をカード内に表示
                         if final_lot != "─":
