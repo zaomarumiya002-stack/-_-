@@ -57,7 +57,7 @@ st.markdown("""
     border-radius: 10px !important; 
     font-size: 1.1rem !important; 
     font-weight: 800 !important; 
-    min-height: 58px !important; 
+    min-height: 56px !important; 
     transition: all 0.2s;
 }
 .stButton button[kind="primary"] {
@@ -68,10 +68,8 @@ st.markdown("""
 }
 .stButton button:active { transform: scale(0.96) !important; }
 
-/* ロット選択ボタンなど、長文を含むボタンのテキスト折り返し許可 */
-.stButton button p {
-    white-space: normal !important; word-break: break-all !important; line-height: 1.3 !important;
-}
+/* ボタン内テキスト折り返し */
+.stButton button p { white-space: normal !important; word-break: break-all !important; line-height: 1.3 !important; }
 
 /* --- サイドバー --- */
 [data-testid="stSidebar"] { background-color: var(--c-secondary) !important; padding-top: 0.4rem; }
@@ -103,9 +101,26 @@ div[data-testid="stRadio"] label[data-baseweb="radio"] input:checked + div {
 .section-title { font-size: 1.15rem; font-weight: 900; color: var(--c-secondary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
 .section-title::before { content: ''; display: block; width: 6px; height: 18px; background-color: var(--c-primary); border-radius: 4px; }
 
-/* --- 入力ウィジェットのサイズアップ --- */
+/* 🔴【最重要】入力ウィジェットとプルダウンの文字を「太字＆拡大」化 🔴 */
 div[data-baseweb="input"] { border-radius: 10px !important; border: 1px solid var(--c-border) !important; min-height: 54px !important; }
-div[data-baseweb="input"] input { font-size: 1.15rem !important; font-weight: 700 !important; text-align: center !important; }
+div[data-baseweb="input"] input { 
+    font-size: 1.25rem !important; 
+    font-weight: 900 !important; 
+    color: var(--c-secondary) !important;
+    text-align: center !important; 
+}
+div[data-baseweb="select"] > div {
+    font-size: 1.15rem !important;
+    font-weight: 900 !important; 
+    color: var(--c-secondary) !important;
+    min-height: 54px !important;
+}
+div[data-baseweb="popover"] li {
+    font-size: 1.1rem !important;
+    font-weight: 800 !important;
+    padding-top: 14px !important;
+    padding-bottom: 14px !important;
+}
 
 /* 仕込量など特大入力用 */
 .giant-input div[data-baseweb="input"] { border-width: 3px !important; min-height: 72px !important; }
@@ -121,12 +136,6 @@ div[data-baseweb="input"] input { font-size: 1.15rem !important; font-weight: 70
 .status-badge.danger { background-color: #fef2f2; color: #b91c1c; border-color: #fca5a5; }
 </style>
 """, unsafe_allow_html=True)
-
-def lot_popover(label):
-    if hasattr(st, "popover"):
-        return st.popover(label, use_container_width=True)
-    else:
-        return st.expander(label)
 
 # ════════════════════════════════════════════════════════════════
 #  データロード・ユーティリティ
@@ -370,7 +379,7 @@ with st.sidebar:
     if st.button("🔄 最新データに更新"): refresh()
 
 # ==============================================================================
-#  [1] 製造仕込み (モバイル特化・ウィザードUI版)
+#  [1] 製造仕込み (モバイル特化・プルダウンUI版)
 # ==============================================================================
 if page == "🏭 製造仕込み":
     st.markdown('<div style="background:#fff; padding:12px; border-radius:12px; margin-bottom:12px; border-left:6px solid #ea580c; box-shadow:0 2px 4px rgba(0,0,0,0.05);"><h2 style="margin:0; font-size:1.4rem; color:#1e293b;">🏭 製造仕込み</h2></div>', unsafe_allow_html=True)
@@ -485,7 +494,7 @@ if page == "🏭 製造仕込み":
         is_summer = 6 <= date.today().month <= 9
         recent_arrivals = sorted(arrivals, key=lambda x: x.get("入荷日", ""), reverse=True)
 
-        def _recent_lot_options(mat_name, limit=10):
+        def _recent_lot_options(mat_name, limit=15):
             opts = []
             seen = set()
             for a in recent_arrivals:
@@ -497,46 +506,23 @@ if page == "🏭 製造仕込み":
                 if len(opts) >= limit: break
             return opts
 
-        # 🔴 ステップ確定方式 (常時展開・縦1列) 🔴
-        def _lot_step_selector(label, mat_name, session_key):
-            done_key = f"{session_key}_done"
+        # 🔴【改修】ロット選択をシンプルで太字化された「プルダウン (selectbox)」に変更 🔴
+        def _lot_selector_dropdown(label, mat_name, session_key):
+            st.markdown(f"<div style='font-size:1.0rem; font-weight:900; color:#1e293b; margin:12px 0 4px 0;'>👆 {label}</div>", unsafe_allow_html=True)
+            lot_opts = _recent_lot_options(mat_name, limit=15)
+            choices = ["─ (未選択)", "✏️ 手入力 (リスト外)"] + [f"{lot} ｜ {maker}" for lot, maker in lot_opts]
             
-            if st.session_state.get(done_key, False):
-                # 確定済み状態 (コンパクト表示)
-                sel = st.session_state.get(session_key, "未選択")
-                st.success(f"✅ 確定ロット: {sel}")
-                if st.button("🔄 ロットを変更する", key=f"btn_change_{session_key}"):
-                    st.session_state[done_key] = False
-                    st.rerun()
-                return sel
+            sel_val = st.selectbox(label, choices, key=f"sel_{session_key}", label_visibility="collapsed")
+            
+            if sel_val == "✏️ 手入力 (リスト外)":
+                manual_lot = st.text_input("手入力ロット番号", key=f"man_{session_key}", placeholder="ロット番号を入力")
+                return manual_lot if manual_lot else "─"
+            elif sel_val == "─ (未選択)":
+                return "─"
             else:
-                # 未確定状態 (ドカンとボタンリストを出す)
-                st.markdown(f"<div style='font-weight:900; margin:12px 0 8px 0; color:#dc2626; font-size:1.05rem;'>👆 {label} をタップして確定してください</div>", unsafe_allow_html=True)
-                lot_opts = _recent_lot_options(mat_name, limit=10)
-                choices = ["─ (ロット指定なしで進む)"] + [f"{lot} ｜ {maker}" for lot, maker in lot_opts]
-                
-                for idx, choice in enumerate(choices):
-                    if st.button(choice, key=f"btn_opt_{session_key}_{idx}", use_container_width=True):
-                        st.session_state[session_key] = choice.split(" ｜ ")[0] if "｜" in choice else choice
-                        st.session_state[done_key] = True
-                        st.rerun()
-                
-                st.markdown("<div style='margin-top:12px; font-weight:700;'>📝 リストにない場合は手入力</div>", unsafe_allow_html=True)
-                mc1, mc2 = st.columns([2, 1])
-                manual = mc1.text_input("手入力ロット番号", key=f"txt_{session_key}", label_visibility="collapsed")
-                if mc2.button("確定", key=f"btn_man_{session_key}", type="primary"):
-                    if manual:
-                        st.session_state[session_key] = manual
-                        st.session_state[done_key] = True
-                        st.rerun()
-                    else:
-                        st.error("入力してください")
-                
-                return None # 未完了フラグ
+                return sel_val.split(" ｜ ")[0]
 
-        # 🔴 原料リストの描画 (巨大なkg数とステップUI) 🔴
-        all_completed = True # すべての原料ロットが確定したか判定用
-
+        # 🔴 原料リストの描画 (巨大なkg数とプルダウンUI) 🔴
         for i, item in enumerate(active_recipe[:10]):
             if not isinstance(item, dict): continue
             r_name = str(item.get("原料名", "未定義")).strip()
@@ -581,7 +567,8 @@ if page == "🏭 製造仕込み":
                     konjac_mats = [m for m in materials if "こんにゃく" in m] or [r_name]
                     
                     if blend_on:
-                        actual_total_kg = st.number_input("⚖️ 合計投入量微調整 (kg)", value=float(calc_kg), step=0.01, format="%.2f", key=f"konjac_tot_{i}{key_suffix}")
+                        st.markdown("<div style='font-size:1.0rem; font-weight:900; margin-bottom:4px;'>⚖️ 合計投入量微調整 (kg)</div>", unsafe_allow_html=True)
+                        actual_total_kg = st.number_input("合計投入量", value=float(calc_kg), step=0.01, format="%.2f", key=f"konjac_tot_{i}{key_suffix}", label_visibility="collapsed")
                         
                         ratio_key = f"konjac_ratio_{i}{key_suffix}"
                         if ratio_key not in st.session_state: st.session_state[ratio_key] = 50
@@ -593,7 +580,8 @@ if page == "🏭 製造仕込み":
                         bc2.button("A 50%", key=f"{ratio_key}_50", use_container_width=True, type="primary" if st.session_state[ratio_key]==50 else "secondary", on_click=lambda k=ratio_key: st.session_state.update({k: 50}))
                         bc3.button("A 80%", key=f"{ratio_key}_80", use_container_width=True, type="primary" if st.session_state[ratio_key]==80 else "secondary", on_click=lambda k=ratio_key: st.session_state.update({k: 80}))
                         
-                        ratio_a = st.number_input("こんにゃく粉A(%) 微調整", min_value=0, max_value=100, step=1, key=ratio_key)
+                        st.markdown("<div style='font-size:1.0rem; font-weight:900; margin-bottom:4px;'>こんにゃく粉A(%) 微調整</div>", unsafe_allow_html=True)
+                        ratio_a = st.number_input("こんにゃく粉A(%) 微調整", min_value=0, max_value=100, step=1, key=ratio_key, label_visibility="collapsed")
                         ratio_b = 100 - ratio_a
                         kg_a = round(actual_total_kg * ratio_a / 100.0, 2)
                         kg_b = round(actual_total_kg - kg_a, 2)
@@ -601,74 +589,63 @@ if page == "🏭 製造仕込み":
                         st.markdown("---")
                         st.markdown(f"<div style='font-size:1.1rem; font-weight:900;'>🅰️ 原料A ({ratio_a}%) - {fmt_kg(kg_a)}kg</div>", unsafe_allow_html=True)
                         mat_a = st.selectbox("原料(A)の種類", konjac_mats, index=0, key=f"k_m_a_{i}{key_suffix}")
-                        lot_final_a = _lot_step_selector("原料Aのロット", mat_a, f"lot_a_{i}_{key_suffix}")
+                        lot_final_a = _lot_selector_dropdown("📦 原料Aのロット", mat_a, f"lot_a_{i}_{key_suffix}")
 
                         st.markdown("---")
                         st.markdown(f"<div style='font-size:1.1rem; font-weight:900;'>🅱️ 原料B ({ratio_b}%) - {fmt_kg(kg_b)}kg</div>", unsafe_allow_html=True)
                         mat_b = st.selectbox("原料(B)の種類", konjac_mats, index=1 if len(konjac_mats)>1 else 0, key=f"k_m_b_{i}{key_suffix}")
-                        lot_final_b = _lot_step_selector("原料Bのロット", mat_b, f"lot_b_{i}_{key_suffix}")
+                        lot_final_b = _lot_selector_dropdown("📦 原料Bのロット", mat_b, f"lot_b_{i}_{key_suffix}")
 
-                        if lot_final_a is not None and lot_final_b is not None:
-                            submitted_ingredients.append({"原料名": mat_a, "kg": kg_a, "lot": f"{lot_final_a}({ratio_a}%)"})
-                            submitted_ingredients.append({"原料名": mat_b, "kg": kg_b, "lot": f"{lot_final_b}({ratio_b}%)"})
-                        else:
-                            all_completed = False
+                        submitted_ingredients.append({"原料名": mat_a, "kg": kg_a, "lot": f"{lot_final_a}({ratio_a}%)"})
+                        submitted_ingredients.append({"原料名": mat_b, "kg": kg_b, "lot": f"{lot_final_b}({ratio_b}%)"})
                     else:
-                        actual_total_kg = st.number_input("⚖️ 実投入量微調整 (kg)", value=float(calc_kg), step=0.01, format="%.2f", key=f"act_kg_{i}{key_suffix}")
-                        final_lot = _lot_step_selector("使用するロット", r_name, f"lot_{i}_{key_suffix}")
-                        if final_lot is not None:
-                            submitted_ingredients.append({"原料名": r_name, "kg": actual_total_kg, "lot": final_lot})
-                        else:
-                            all_completed = False
+                        st.markdown("<div style='font-size:1.0rem; font-weight:900; margin-bottom:4px;'>⚖️ 実投入量微調整 (kg)</div>", unsafe_allow_html=True)
+                        actual_total_kg = st.number_input("実投入量微調整 (kg)", value=float(calc_kg), step=0.01, format="%.2f", key=f"act_kg_{i}{key_suffix}", label_visibility="collapsed")
+                        final_lot = _lot_selector_dropdown("📦 使用するロット", r_name, f"lot_{i}_{key_suffix}")
+                        submitted_ingredients.append({"原料名": r_name, "kg": actual_total_kg, "lot": final_lot})
                 
                 else:
-                    actual_total_kg = st.number_input("⚖️ 実投入量微調整 (kg)", value=float(calc_kg), step=0.01, format="%.2f", key=f"act_kg_{i}{key_suffix}")
-                    final_lot = _lot_step_selector("使用するロット", r_name, f"lot_{i}_{key_suffix}")
-                    if final_lot is not None:
-                        submitted_ingredients.append({"原料名": r_name, "kg": actual_total_kg, "lot": final_lot})
-                    else:
-                        all_completed = False
+                    st.markdown("<div style='font-size:1.0rem; font-weight:900; margin-bottom:4px;'>⚖️ 実投入量微調整 (kg)</div>", unsafe_allow_html=True)
+                    actual_total_kg = st.number_input("実投入量微調整 (kg)", value=float(calc_kg), step=0.01, format="%.2f", key=f"act_kg_{i}{key_suffix}", label_visibility="collapsed")
+                    final_lot = _lot_selector_dropdown("📦 使用するロット", r_name, f"lot_{i}_{key_suffix}")
+                    submitted_ingredients.append({"原料名": r_name, "kg": actual_total_kg, "lot": final_lot})
 
         st.markdown("<br>", unsafe_allow_html=True)
         
-        if all_completed:
-            if st.button("💾 この実績で製造記録を保存する", type="primary", use_container_width=True):
-                k_kg = s_kg = st_kg = lime_kg = 0.0
-                k_lot = s_lot = st_lot = "─"
-                for ing in submitted_ingredients:
-                    n = ing["原料名"]
-                    if "こんにゃく" in n:
-                        k_kg += ing["kg"]
-                        if k_lot == "─": k_lot = ing["lot"]
-                        elif ing["lot"] not in k_lot: k_lot += f" / {ing['lot']}"
-                    elif "海藻" in n:
-                        s_kg += ing["kg"]
-                        if s_lot == "─": s_lot = ing["lot"]
-                        elif ing["lot"] not in s_lot: s_lot += f" / {ing['lot']}"
-                    elif "デンプン" in n or "でんぷん" in n:
-                        st_kg += ing["kg"]
-                        if st_lot == "─": st_lot = ing["lot"]
-                        elif ing["lot"] not in st_lot: st_lot += f" / {ing['lot']}"
-                    elif "石灰" in n or "カルシウム" in n:
-                        lime_kg += ing["kg"]
+        if st.button("💾 この実績で製造記録を保存する", type="primary", use_container_width=True):
+            k_kg = s_kg = st_kg = lime_kg = 0.0
+            k_lot = s_lot = st_lot = "─"
+            for ing in submitted_ingredients:
+                n = ing["原料名"]
+                if "こんにゃく" in n:
+                    k_kg += ing["kg"]
+                    if k_lot == "─": k_lot = ing["lot"]
+                    elif ing["lot"] not in k_lot: k_lot += f" / {ing['lot']}"
+                elif "海藻" in n:
+                    s_kg += ing["kg"]
+                    if s_lot == "─": s_lot = ing["lot"]
+                    elif ing["lot"] not in s_lot: s_lot += f" / {ing['lot']}"
+                elif "デンプン" in n or "でんぷん" in n:
+                    st_kg += ing["kg"]
+                    if st_lot == "─": st_lot = ing["lot"]
+                    elif ing["lot"] not in st_lot: st_lot += f" / {ing['lot']}"
+                elif "石灰" in n or "カルシウム" in n:
+                    lime_kg += ing["kg"]
 
-                user_note = f"{brew_remarks} " if brew_remarks else ""
-                sheets.append_brewing({
-                    "仕込No": sheets.next_brewing_no(brewing), "仕込日": str(brew_date), "品名": p_name,
-                    "メーカー": operator, "主原料ロット": k_lot, "仕込量(kg)": target_size,
-                    "こんにゃく精粉(kg)": k_kg, "海藻粉(kg)": s_kg, "海藻粉ロット": s_lot,
-                    "デンプン(kg)": st_kg, "デンプンロット": st_lot, "デンプン種別": "-",
-                    "石灰(kg)": lime_kg, "石灰水(L)": lime_water_size,
-                    "その他添加物": json.dumps(submitted_ingredients, ensure_ascii=False),
-                    "備考": f"{user_note}【新規作成: {datetime.now().strftime('%Y/%m/%d %H:%M')} {operator}】", 
-                    "登録日時": datetime.now().isoformat()
-                })
-                st.success("🎉 製造実績を登録しました。画面を更新します...")
-                time.sleep(1.5)
-                refresh()
-        else:
-            st.error("⚠️ 未確定のロットがあります。すべての原料のロットを確定してから保存してください。")
-            st.button("🚫 未確定項目があるため保存できません", disabled=True, use_container_width=True)
+            user_note = f"{brew_remarks} " if brew_remarks else ""
+            sheets.append_brewing({
+                "仕込No": sheets.next_brewing_no(brewing), "仕込日": str(brew_date), "品名": p_name,
+                "メーカー": operator, "主原料ロット": k_lot, "仕込量(kg)": target_size,
+                "こんにゃく精粉(kg)": k_kg, "海藻粉(kg)": s_kg, "海藻粉ロット": s_lot,
+                "デンプン(kg)": st_kg, "デンプンロット": st_lot, "デンプン種別": "-",
+                "石灰(kg)": lime_kg, "石灰水(L)": lime_water_size,
+                "その他添加物": json.dumps(submitted_ingredients, ensure_ascii=False),
+                "備考": f"{user_note}【新規作成: {datetime.now().strftime('%Y/%m/%d %H:%M')} {operator}】", 
+                "登録日時": datetime.now().isoformat()
+            })
+            st.success("🎉 製造実績を登録しました。画面を更新します...")
+            time.sleep(1.5)
+            refresh()
 
 
 # ==============================================================================
