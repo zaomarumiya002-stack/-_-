@@ -664,29 +664,48 @@ elif page == "🏭 製造仕込み":
     
     # ★ 最重要入力欄 (並列レイアウト・フォーマット0fで整数化・特大タップ入力) ★
     st.markdown('<div style="font-size:1.15rem; font-weight:900; color:#ea580c; margin-bottom:12px; display:flex; justify-content:center;">④ 希望仕込製品量 と 石灰水作成量 を入力</div>', unsafe_allow_html=True)
-    
+
+    # 【変更】固定値ボタン(100/300/500 等)ではなく、押すたびに現在値へ加算していく
+    #   1 / 10 / 100 / 1000 ボタンに変更。例えば「1000」を3回・「100」を2回押すと
+    #   3200 になる、電卓のような積み上げ式の入力ができる。
+    def _add_to_field(key, amt):
+        cur = st.session_state.get(key)
+        cur = float(cur) if cur not in (None, "") else 0.0
+        st.session_state[key] = cur + float(amt)
+
+    def _clear_field(key):
+        st.session_state[key] = None
+
     with st.container(key="qty_inputs_box"):
         col_in1, col_in2 = st.columns(2)
         with col_in1:
-            st.caption("👆 よく使う量はワンタップ（手入力も可）")
-            preset_cols1 = st.columns(4)
-            for pi, pv in enumerate([100, 300, 500, 1000]):
-                preset_cols1[pi].button(
-                    f"{pv}", key=f"ts_preset_{pv}", use_container_width=True,
-                    on_click=lambda v=pv: st.session_state.update(target_size_val=float(v))
+            st.caption("👆 タップするたび加算されます（押し間違えたら✖0でリセット）")
+            add_cols1 = st.columns(5)
+            for pi, pv in enumerate([1, 10, 100, 1000]):
+                add_cols1[pi].button(
+                    f"+{pv}", key=f"ts_add_{pv}", use_container_width=True,
+                    on_click=_add_to_field, args=("target_size_val", pv)
                 )
+            add_cols1[4].button(
+                "✖0", key="ts_clear", use_container_width=True,
+                on_click=_clear_field, args=("target_size_val",)
+            )
             target_size = st.number_input(
                 "🏭 希望仕込製品量 (調合全体 kg)", min_value=1.0, step=1.0, value=None, format="%.0f",
                 placeholder="例: 1000", key="target_size_val"
             )
         with col_in2:
-            st.caption("👆 よく使う量はワンタップ（手入力も可）")
-            preset_cols2 = st.columns(4)
-            for pi, pv in enumerate([10, 20, 30, 50]):
-                preset_cols2[pi].button(
-                    f"{pv}", key=f"lw_preset_{pv}", use_container_width=True,
-                    on_click=lambda v=pv: st.session_state.update(lime_water_size_val=float(v))
+            st.caption("👆 タップするたび加算されます（押し間違えたら✖0でリセット）")
+            add_cols2 = st.columns(5)
+            for pi, pv in enumerate([1, 10, 100, 1000]):
+                add_cols2[pi].button(
+                    f"+{pv}", key=f"lw_add_{pv}", use_container_width=True,
+                    on_click=_add_to_field, args=("lime_water_size_val", pv)
                 )
+            add_cols2[4].button(
+                "✖0", key="lw_clear", use_container_width=True,
+                on_click=_clear_field, args=("lime_water_size_val",)
+            )
             lime_water_size = st.number_input(
                 "💧 石灰水作成量 (kg)", min_value=0.0, step=1.0, value=None, format="%.0f",
                 placeholder="例: 20", key="lime_water_size_val"
