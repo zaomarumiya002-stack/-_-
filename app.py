@@ -102,36 +102,22 @@ button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStep
     min-width: 48px !important; min-height: 48px !important;
 }
 
-/* --- 特大入力枠 (希望仕込量・石灰水) --- */
-.st-key-qty_inputs_box div[data-baseweb="input"] { border-width: 3px !important; min-height: 70px !important; }
-.st-key-qty_inputs_box div[data-baseweb="input"] input { font-size: 2.2rem !important; font-weight: 900 !important; }
+/* --- 仕込量・石灰水の入力枠調整 (縦積み・シンプル化) --- */
+.st-key-qty_inputs_box div[data-baseweb="input"] { border-width: 2px !important; min-height: 60px !important; margin-top: 4px; }
+.st-key-qty_inputs_box div[data-baseweb="input"] input { font-size: 1.8rem !important; font-weight: 900 !important; }
 
-/* 🔴【スマホ特化ハック】電卓加算ボタンを強制的に1行5列で表示 🔴 */
-.st-key-qty_inputs_box [data-testid="stHorizontalBlock"] {
-    flex-wrap: nowrap !important; gap: 4px !important;
+/* 加算ボタン(+1, +10など)を小さくシンプルに */
+.st-key-qty_inputs_box button {
+    padding: 0 4px !important;
+    min-height: 42px !important; /* 標準ボタンより少し小さく */
+    font-size: 0.95rem !important;
+    font-weight: 900 !important;
+    border-radius: 8px !important;
 }
-.st-key-qty_inputs_box [data-testid="column"] {
-    width: 20% !important; min-width: 20% !important; flex: 1 1 20% !important;
-}
-.st-key-qty_inputs_box button { padding: 0 !important; font-size: 1.05rem !important; font-weight: 900 !important; }
 
-/* 🔴【スマホ特化ハック】ロット選択ボタンを強制的に2列で表示 🔴 */
-div[class^="st-key-lot_btns_"] [data-testid="stHorizontalBlock"] {
-    flex-wrap: nowrap !important; gap: 4px !important;
-}
-div[class^="st-key-lot_btns_"] [data-testid="column"] {
-    width: 50% !important; min-width: 50% !important; flex: 1 1 50% !important;
-}
+/* ロット選択のテキスト折り返し許可 */
 div[class^="st-key-lot_btns_"] button p {
     white-space: normal !important; word-break: break-all !important; line-height: 1.2 !important; font-size: 0.9rem !important;
-}
-
-/* 🔴【スマホ特化ハック】ブレンド比率ボタンを強制的に3列で表示 🔴 */
-div[class^="st-key-blend_btns_"] [data-testid="stHorizontalBlock"] {
-    flex-wrap: nowrap !important; gap: 4px !important;
-}
-div[class^="st-key-blend_btns_"] [data-testid="column"] {
-    width: 33.3% !important; min-width: 33.3% !important; flex: 1 1 33.3% !important;
 }
 
 /* その他細かい調整 */
@@ -229,7 +215,6 @@ def fmt_kg(val):
         return s
     except: return str(val)
 
-# 現在庫計算等（省略せず既存ロジックを保持）
 def get_inventory():
     inv = {}
     for a in arrivals:
@@ -446,7 +431,7 @@ if page == "🏭 製造仕込み":
         active_recipe = p_recipes.get(selected_p, {}).get("成分", [])
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # 🔴 特大入力エリア（モバイル強制横並び適用済み）🔴
+    # 🔴 特大入力エリア（縦積み・小さなシンプルボタンへ改善）🔴
     st.markdown('<div class="form-card"><div style="font-size:1.1rem; font-weight:900; color:#ea580c; margin-bottom:12px;">④ 仕込量・石灰水を入力</div>', unsafe_allow_html=True)
 
     def _add_to_field(key, amt):
@@ -458,22 +443,27 @@ if page == "🏭 製造仕込み":
         st.session_state[key] = None
 
     with st.container(key="qty_inputs_box"):
-        col_in1, col_in2 = st.columns(2)
-        with col_in1:
-            st.markdown("<div style='font-weight:900;'>🏭 希望仕込製品量 (kg)</div>", unsafe_allow_html=True)
-            add_cols1 = st.columns(5)
-            for pi, pv in enumerate([1, 10, 100, 1000]):
-                add_cols1[pi].button(f"+{pv}", key=f"ts_add_{pv}", use_container_width=True, on_click=_add_to_field, args=("target_size_val", pv))
-            add_cols1[4].button("✖0", key="ts_clear", use_container_width=True, on_click=_clear_field, args=("target_size_val",))
-            target_size = st.number_input("仕込量", min_value=1.0, step=1.0, value=None, format="%.0f", placeholder="1000", key="target_size_val", label_visibility="collapsed")
+        # ▼ [1] 希望仕込製品量 (縦並びの上部)
+        st.markdown("<div style='font-weight:900; margin-bottom:4px;'>🏭 希望仕込製品量 (kg)</div>", unsafe_allow_html=True)
+        add_cols1 = st.columns(5)
+        add_cols1[0].button("+1", key="ts_add_1", use_container_width=True, on_click=_add_to_field, args=("target_size_val", 1))
+        add_cols1[1].button("+10", key="ts_add_10", use_container_width=True, on_click=_add_to_field, args=("target_size_val", 10))
+        add_cols1[2].button("+100", key="ts_add_100", use_container_width=True, on_click=_add_to_field, args=("target_size_val", 100))
+        add_cols1[3].button("+1000", key="ts_add_1000", use_container_width=True, on_click=_add_to_field, args=("target_size_val", 1000))
+        add_cols1[4].button("✖0", key="ts_clear", use_container_width=True, on_click=_clear_field, args=("target_size_val",))
+        target_size = st.number_input("仕込量", min_value=1.0, step=1.0, value=None, format="%.0f", placeholder="例: 1000", key="target_size_val", label_visibility="collapsed")
+        
+        st.markdown("<div style='height:16px;'></div>", unsafe_allow_html=True) # 余白
 
-        with col_in2:
-            st.markdown("<div style='font-weight:900; margin-top:12px;'>💧 石灰水作成量 (kg)</div>", unsafe_allow_html=True)
-            add_cols2 = st.columns(5)
-            for pi, pv in enumerate([1, 10, 100, 1000]):
-                add_cols2[pi].button(f"+{pv}", key=f"lw_add_{pv}", use_container_width=True, on_click=_add_to_field, args=("lime_water_size_val", pv))
-            add_cols2[4].button("✖0", key="lw_clear", use_container_width=True, on_click=_clear_field, args=("lime_water_size_val",))
-            lime_water_size = st.number_input("石灰水量", min_value=0.0, step=1.0, value=None, format="%.0f", placeholder="20", key="lime_water_size_val", label_visibility="collapsed")
+        # ▼ [2] 石灰水作成量 (縦並びの下部)
+        st.markdown("<div style='font-weight:900; margin-bottom:4px;'>💧 石灰水作成量 (kg)</div>", unsafe_allow_html=True)
+        add_cols2 = st.columns(5)
+        add_cols2[0].button("+1", key="lw_add_1", use_container_width=True, on_click=_add_to_field, args=("lime_water_size_val", 1))
+        add_cols2[1].button("+10", key="lw_add_10", use_container_width=True, on_click=_add_to_field, args=("lime_water_size_val", 10))
+        add_cols2[2].button("+100", key="lw_add_100", use_container_width=True, on_click=_add_to_field, args=("lime_water_size_val", 100))
+        add_cols2[3].button("+1000", key="lw_add_1000", use_container_width=True, on_click=_add_to_field, args=("lime_water_size_val", 1000))
+        add_cols2[4].button("✖0", key="lw_clear", use_container_width=True, on_click=_clear_field, args=("lime_water_size_val",))
+        lime_water_size = st.number_input("石灰水量", min_value=0.0, step=1.0, value=None, format="%.0f", placeholder="例: 20", key="lime_water_size_val", label_visibility="collapsed")
             
     st.markdown("<br>", unsafe_allow_html=True)
     operator = st.selectbox("👨‍🏭 製造担当者", inspectors if inspectors else ["未登録"])
@@ -537,7 +527,7 @@ if page == "🏭 製造仕込み":
                 st.text_input("手入力", value=plain_lot, disabled=True, key=f"{txt_key}_disp_{plain_lot}")
                 return plain_lot
 
-        # 🔴 原料リストの描画 (モバイル・縦積みスッキリ化) 🔴
+        # 🔴 原料リストの描画
         for i, item in enumerate(active_recipe[:10]):
             if not isinstance(item, dict): continue
             r_name = str(item.get("原料名", "未定義")).strip()
@@ -561,7 +551,6 @@ if page == "🏭 製造仕込み":
             is_shortage = (not is_water) and (calc_kg > inv_kg)
 
             with st.container(border=True):
-                # ★ モバイルで縦長にならないよう、タイトル部に数値を集約 (st.emptyで後から更新可能に)
                 header_ph = st.empty()
                 if is_shortage:
                     st.markdown(f"<div style='color:#dc2626; font-weight:900; margin-bottom:8px;'>⚠ 在庫不足 (不足 {fmt_kg(calc_kg - inv_kg)}kg)</div>", unsafe_allow_html=True)
@@ -625,7 +614,6 @@ if page == "🏭 製造仕込み":
                         card_entries.append({"原料名": r_name, "kg": actual_total_kg, "lot": final_lot})
                         if final_lot != "─": st.success(f"ロット: {final_lot} を選択中")
 
-                # ★ ヘッダーの描画（実際の登録量を反映）
                 clr = "#ea580c" if not is_water else "#3b82f6"
                 bg_ratio = f"<span style='font-size:0.8rem; color:#64748b; font-weight:normal;'>({base_ratio}%)</span>"
                 header_ph.markdown(f"<h3 style='margin:0; font-size:1.15rem; color:#1e293b; border-bottom:1px solid #e2e8f0; padding-bottom:6px; margin-bottom:8px;'>{icon} {r_name} {bg_ratio} <span style='color:{clr}; float:right; font-size:1.3rem; font-weight:900;'>{fmt_kg(actual_total_kg)} <span style='font-size:0.9rem;'>kg</span></span></h3>", unsafe_allow_html=True)
