@@ -147,19 +147,20 @@ div[data-testid="stRadio"] label[data-baseweb="radio"] input:checked + div {
 .section-title { font-size: 1.15rem; font-weight: 900; color: var(--c-secondary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
 .section-title::before { content: ''; display: block; width: 6px; height: 18px; background-color: var(--c-primary); border-radius: 4px; }
 
-/* --- 入力ウィジェットのレイアウト崩れ防止(標準サイズ・コンパクト) --- */
+/* --- 入力ウィジェットのレイアウト崩れ防止(標準サイズ・タップしやすく調整) --- */
 div[data-baseweb="input"] {
     border-radius: 10px !important;
     border: 1px solid var(--c-border) !important;
     background-color: var(--c-surface) !important;
     align-items: center !important; /* プラスマイナスボタン飛び出し防止 */
+    min-height: 46px !important;
 }
 div[data-baseweb="input"]:focus-within { border-color: var(--c-primary) !important; box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.15) !important; }
-div[data-baseweb="input"] input { font-size: 1.0rem !important; font-weight: 700 !important; color: var(--c-secondary) !important; padding: 8px 12px !important; text-align: center !important; }
+div[data-baseweb="input"] input { font-size: 1.05rem !important; font-weight: 700 !important; color: var(--c-secondary) !important; padding: 10px 12px !important; text-align: center !important; }
 
-/* プラスマイナスボタン(コンパクト) */
+/* プラスマイナスボタン(タップしやすいサイズに調整) */
 button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStepDown"] {
-    min-width: 38px !important; min-height: 38px !important; border-radius: 8px !important; background-color: #f1f5f9 !important; border: 1px solid var(--c-border) !important;
+    min-width: 42px !important; min-height: 42px !important; border-radius: 8px !important; background-color: #f1f5f9 !important; border: 1px solid var(--c-border) !important;
 }
 
 /* --- ④ 希望仕込製品量・石灰水作成量だけは入力しやすいよう特大表示 --- */
@@ -177,10 +178,10 @@ button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStep
 }
 .st-key-qty_inputs_box button[data-testid="stNumberInputStepUp"],
 .st-key-qty_inputs_box button[data-testid="stNumberInputStepDown"] {
-    min-width: 46px !important;
-    min-height: 46px !important;
-    max-width: 46px !important;
-    max-height: 46px !important;
+    min-width: 50px !important;
+    min-height: 50px !important;
+    max-width: 50px !important;
+    max-height: 50px !important;
     flex-shrink: 0 !important;
     box-sizing: border-box !important;
 }
@@ -197,12 +198,21 @@ button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStep
 /* ボタン類(コンパクト) */
 .stButton button {
     background-color: var(--c-surface) !important; border: 1px solid var(--c-border) !important; color: var(--c-secondary) !important;
-    border-radius: 10px !important; font-size: 1.0rem !important; font-weight: 800 !important; padding: 10px 18px !important; transition: all 0.2s; min-height: 44px !important;
+    border-radius: 10px !important; font-size: 1.0rem !important; font-weight: 800 !important; padding: 12px 18px !important; transition: all 0.2s; min-height: 48px !important;
 }
 .stButton button[kind="primary"] {
     background: linear-gradient(135deg, var(--c-primary), var(--c-primary-hover)) !important; border: none !important; color: white !important; box-shadow: 0 4px 10px rgba(234, 88, 12, 0.3) !important;
 }
 .stButton button:active { transform: scale(0.97) !important; }
+
+/* --- スマホ・タブレット向け全体最適化 ---
+   現場作業者(手袋着用を含む)がタップしやすいよう、チェックボックスと
+   プルダウンのタップ領域を拡大。 */
+div[data-testid="stCheckbox"] label { display: flex; align-items: center; gap: 10px; padding: 8px 4px; min-height: 44px; }
+div[data-testid="stCheckbox"] label span[data-baseweb="checkbox"] { transform: scale(1.5); margin-right: 4px; }
+div[data-testid="stCheckbox"] label p { font-size: 1.05rem !important; font-weight: 800 !important; }
+div[data-baseweb="select"] > div { min-height: 48px !important; font-size: 1.05rem !important; }
+div[data-baseweb="popover"] li { min-height: 44px !important; display: flex !important; align-items: center !important; font-size: 1.0rem !important; }
 
 /* --- アラート・手順ガイド(コンパクト) --- */
 .guide-box { background-color: #f8fafc; border-left: 5px solid var(--c-secondary); padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; border-top: 1px solid var(--c-border); border-right: 1px solid var(--c-border); border-bottom: 1px solid var(--c-border); }
@@ -658,12 +668,28 @@ elif page == "🏭 製造仕込み":
     with st.container(key="qty_inputs_box"):
         col_in1, col_in2 = st.columns(2)
         with col_in1:
+            st.caption("👆 よく使う量はワンタップ（手入力も可）")
+            preset_cols1 = st.columns(4)
+            for pi, pv in enumerate([100, 300, 500, 1000]):
+                preset_cols1[pi].button(
+                    f"{pv}", key=f"ts_preset_{pv}", use_container_width=True,
+                    on_click=lambda v=pv: st.session_state.update(target_size_val=float(v))
+                )
             target_size = st.number_input(
-                "🏭 希望仕込製品量 (調合全体 kg)", min_value=1.0, step=1.0, value=None, format="%.0f", placeholder="例: 1000"
+                "🏭 希望仕込製品量 (調合全体 kg)", min_value=1.0, step=1.0, value=None, format="%.0f",
+                placeholder="例: 1000", key="target_size_val"
             )
         with col_in2:
+            st.caption("👆 よく使う量はワンタップ（手入力も可）")
+            preset_cols2 = st.columns(4)
+            for pi, pv in enumerate([10, 20, 30, 50]):
+                preset_cols2[pi].button(
+                    f"{pv}", key=f"lw_preset_{pv}", use_container_width=True,
+                    on_click=lambda v=pv: st.session_state.update(lime_water_size_val=float(v))
+                )
             lime_water_size = st.number_input(
-                "💧 石灰水作成量 (kg)", min_value=0.0, step=1.0, value=None, format="%.0f", placeholder="例: 20"
+                "💧 石灰水作成量 (kg)", min_value=0.0, step=1.0, value=None, format="%.0f",
+                placeholder="例: 20", key="lime_water_size_val"
             )
         
     st.markdown("<br>", unsafe_allow_html=True)
@@ -711,13 +737,32 @@ elif page == "🏭 製造仕込み":
             return opts
 
         def _lot_selectbox(label, mat_name, key):
-            """ロットNo横にメーカー名を併記したプルダウンを表示し、
-            (表示用選択肢, 表示ラベル→実ロットNoの対応表)を返すヘルパー。"""
+            """ロットNo横にメーカー名を併記したタップ式ボタン一覧で選択させるヘルパー。
+            ★【修繕】以前はプルダウン(st.selectbox)で選択していたが、スマホ・タブレットでは
+            タップした瞬間に検索用のソフトウェアキーボードが立ち上がり、選択肢が
+            隠れて選びづらいとの現場の声があった。キーボードを一切使わずに選べる
+            タップ式ボタン一覧に変更することで解消した。"""
             lot_opts = _recent_lot_options(mat_name)
             label_map = {f"{lot} ｜ {maker}": lot for lot, maker in lot_opts}
             choices = ["─ (未選択)", "✏️ 手入力 (リスト外)"] + list(label_map.keys())
-            sel_label = st.selectbox(label, choices, key=key)
-            return sel_label, label_map
+
+            if key not in st.session_state or st.session_state[key] not in choices:
+                st.session_state[key] = choices[0]
+
+            st.markdown(f"<div style='font-weight:800; color:#1e293b; margin:6px 0 4px 0; font-size:0.95rem;'>{label}</div>", unsafe_allow_html=True)
+            for row_start in range(0, len(choices), 2):
+                row_choices = choices[row_start:row_start + 2]
+                cols = st.columns(2)
+                for ci, choice in enumerate(row_choices):
+                    is_sel = (st.session_state[key] == choice)
+                    cols[ci].button(
+                        ("✅ " if is_sel else "") + choice,
+                        key=f"{key}_opt_{row_start + ci}",
+                        type="primary" if is_sel else "secondary",
+                        use_container_width=True,
+                        on_click=lambda c=choice, k=key: st.session_state.update({k: c})
+                    )
+            return st.session_state[key], label_map
 
         def _resolve_lot(sel_label, label_map, txt_key):
             """選択されたロット(メーカー名付き表示ラベル)を実際のロットNoへ変換し、
@@ -808,12 +853,30 @@ elif page == "🏭 製造仕込み":
                             konjac_mats = [m for m in materials if "こんにゃく" in m] or [r_name]
 
                             if blend_on:
-                                st.caption("こんにゃく粉A・Bの配合比率(%)を指定してください。必要量はスライダーの比率で自動按分されます。")
+                                st.caption("こんにゃく粉A・Bの配合比率(%)を指定してください。必要量は比率に応じて自動按分されます。")
                                 total_kg_adj = st.number_input(
                                     "ブレンド合計投入量 (kg)", value=float(calc_kg), step=0.01, format="%.2f",
                                     key=f"konjac_total_{i}{key_suffix}_{round(calc_kg, 4)}"
                                 )
-                                ratio_a = st.slider("こんにゃく粉A の配合比率 (%)", 0, 100, 50, key=f"konjac_ratio_{i}{key_suffix}")
+                                # 【修繕】以前はスライドバーで比率を指定していたが、
+                                #   手袋を着用していると狙った値でぴたりと止めるのが難しいとの
+                                #   現場の声を受け、10%刻みのタップ式ボタン + 微調整用の
+                                #   数値入力に変更した。
+                                ratio_key = f"konjac_ratio_{i}{key_suffix}"
+                                if ratio_key not in st.session_state:
+                                    st.session_state[ratio_key] = 50
+                                st.caption("🧤 配合比率をタップで選択（手袋でも押しやすいボタン式）")
+                                ratio_presets = [10, 20, 30, 40, 50, 60, 70, 80, 90]
+                                for prow in range(0, len(ratio_presets), 3):
+                                    preset_cols = st.columns(3)
+                                    for pidx, pv in enumerate(ratio_presets[prow:prow + 3]):
+                                        is_sel = (st.session_state[ratio_key] == pv)
+                                        preset_cols[pidx].button(
+                                            f"A {pv}%", key=f"{ratio_key}_btn_{pv}", use_container_width=True,
+                                            type="primary" if is_sel else "secondary",
+                                            on_click=lambda v=pv, k=ratio_key: st.session_state.update({k: v})
+                                        )
+                                ratio_a = st.number_input("こんにゃく粉A の配合比率 (%)（微調整）", min_value=0, max_value=100, step=1, key=ratio_key)
                                 ratio_b = 100 - ratio_a
                                 kg_a = round(total_kg_adj * ratio_a / 100.0, 2)
                                 kg_b = round(total_kg_adj - kg_a, 2)
