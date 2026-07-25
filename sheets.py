@@ -15,7 +15,7 @@ COLS_SUP = ["資材ID", "資材名", "カテゴリ", "画像URL", "初期在庫"
 COLS_LOG = ["ログID", "登録日", "資材ID", "処理", "数量", "作業者", "備考", "登録日時"]
 COLS_REC_LOG = ["ログID", "変更日時", "品名", "処理", "変更内容", "作業者"]
 
-# 🌟 配合マスタのカラムを、人間が直接編集しやすいフラットな設計に変更
+# 🌟 配合マスタは横持ち形式(品名ごとに1行)で保存する。下記は移行判定にのみ使う旧形式の列定義。
 COLS_REC = ["品名", "大カテゴリ", "中カテゴリ", "原料名", "配合比率(%)"]
 
 @st.cache_resource(ttl=3600)
@@ -104,66 +104,122 @@ def _scol(n, vs):
     w.update(range_name="A1", values=[["name"]] + [[v] for v in vs])
     st.cache_data.clear()
 
-# ーーー 配合マスタ読込（フラットテーブルをプログラム用の構造に自動変換） ーーー
+# ★【変更】配合マスタのスプレッドシート表示を「縦持ち(原料ごとに行)」から
+#   「横持ち(製品ごとに1行、原料名がそのまま列見出しになる)」に変更。
+#   例: 品名 | 大カテゴリ | 中カテゴリ | こんにゃく粉（国産） | 海藻粉 | 石灰 | 水 ...
+#   スプレッドシート上で製品ごとの配合比率を一覧で見比べやすくなる。
+RECIPE_FIXED_COLS = ["品名", "大カテゴリ", "中カテゴリ"]
+
+# 原料の列並び順(見やすさのため、よく使う原料カテゴリを優先し、それ以外は50音順)
+_ING_PRIORITY_KEYWORDS = ["こんにゃく", "海藻", "でんぷん", "デンプン", "石灰", "カルシウム", "食塩", "水"]
+
+def _ing_sort_key(name):
+    for idx, kw in enumerate(_ING_PRIORITY_KEYWORDS):
+        if kw in name:
+            return (idx, name)
+    return (len(_ING_PRIORITY_KEYWORDS), name)
+
+def _read_recipe_sheet_raw():
+    """配合マスタシートを、実際に書き込まれているヘッダー行に基づいて読み込む
+    (原料列が製品ごとに動的に増減するため、固定カラムリストでは読めない)。"""
+    w = _ws("配合マスタ", RECIPE_FIXED_COLS)
+    all_vals = w.get_all_values()
+    if not all_vals or not all_vals[0]:
+        return [], []
+    header = all_vals[0]
+    data_rows = all_vals[1:]
+    records = []
+    for row in data_rows:
+        row_data = row + [""] * (len(header) - len(row))
+        records.append({header[i]: row_data[i] for i in range(len(header))})
+    return records, header
+
+def _write_recipe_sheet_wide(header, rows):
+    w = _ws("配合マスタ", RECIPE_FIXED_COLS)
+    w.clear()
+    w.update(range_name="A1", values=[header] + [[str(r.get(c, "")) for c in header] for r in rows])
+    st.cache_data.clear()
+
+def _build_wide_recipe_rows(recipe_list):
+    """[{"品名":..,"大カテゴリ":..,"中カテゴリ":..,"配合JSON": [{"原料名":..,"比率":..}, ...] または JSON文字列}]
+    という内部形式から、横持ち形式の (ヘッダー, 行データ) を構築する。"""
+    ing_names = set()
+    wide_rows = []
+    for r in recipe_list:
+        p_name = str(r.get("品名", "")).strip()
+        if not p_name: continue
+        ing_list = r.get("配合JSON", [])
+        if isinstance(ing_list, str):
+            try: ing_list = json.loads(ing_list)
+            except Exception: ing_list = []
+        row = {"品名": p_name, "大カテゴリ": r.get("大カテゴリ", "その他"), "中カテゴリ": r.get("中カテゴリ", "その他")}
+        for ing in ing_list:
+            name = str(ing.get("原料名", "")).strip()
+            if not name: continue
+            row[name] = str(ing.get("比率", ""))
+            ing_names.add(name)
+        wide_rows.append(row)
+    ing_cols = sorted(ing_names, key=_ing_sort_key)
+    return RECIPE_FIXED_COLS + ing_cols, wide_rows
+
+# ーーー 配合マスタ読込（横持ちシートをプログラム用の構造に自動変換） ーーー
 @st.cache_data(ttl=20)
 def load_recipes():
-    rows = _read("配合マスタ", COLS_REC)
-    if not rows:
-        # 初期サンプルもフラットなデータ構造で定義
-        default_recipe = [
-            {"品名": "標準こんにゃく（黒）", "大カテゴリ": "プラント", "中カテゴリ": "黒", "原料名": "こんにゃく粉（国産）", "配合比率(%)": "2.50"},
-            {"品名": "標準こんにゃく（黒）", "大カテゴリ": "プラント", "中カテゴリ": "黒", "原料名": "海藻粉", "配合比率(%)": "0.20"},
-            {"品名": "標準こんにゃく（黒）", "大カテゴリ": "プラント", "中カテゴリ": "黒", "原料名": "石灰", "配合比率(%)": "0.14"},
-            {"品名": "標準こんにゃく（黒）", "大カテゴリ": "プラント", "中カテゴリ": "黒", "原料名": "水", "配合比率(%)": "97.16"}
+    raw_rows, header = _read_recipe_sheet_raw()
+
+    if not raw_rows:
+        # 初期サンプル(横持ち形式で作成)
+        default_recipe = [{
+            "品名": "標準こんにゃく（黒）", "大カテゴリ": "プラント", "中カテゴリ": "黒",
+            "配合JSON": [
+                {"原料名": "こんにゃく粉（国産）", "比率": 2.50},
+                {"原料名": "海藻粉", "比率": 0.20},
+                {"原料名": "石灰", "比率": 0.14},
+                {"原料名": "水", "比率": 97.16},
+            ]
+        }]
+        header, raw_rows = _build_wide_recipe_rows(default_recipe)
+        _write_recipe_sheet_wide(header, raw_rows)
+
+    # ★互換性維持: 旧・縦持ち形式(品名/大カテゴリ/中カテゴリ/原料名/配合比率(%))の
+    #   シートが残っている場合は、データを失わずに自動で横持ち形式へ移行する。
+    if set(header) == {"品名", "大カテゴリ", "中カテゴリ", "原料名", "配合比率(%)"}:
+        grouped = collections.defaultdict(list)
+        meta = {}
+        for r in raw_rows:
+            p_name = str(r.get("品名", "")).strip()
+            if not p_name: continue
+            meta[p_name] = {"大カテゴリ": r.get("大カテゴリ", "その他"), "中カテゴリ": r.get("中カテゴリ", "その他")}
+            grouped[p_name].append({"原料名": r.get("原料名", ""), "比率": _f(r.get("配合比率(%)", 0.0))})
+        migrated = [
+            {"品名": p, "大カテゴリ": meta[p]["大カテゴリ"], "中カテゴリ": meta[p]["中カテゴリ"], "配合JSON": ing_list}
+            for p, ing_list in grouped.items()
         ]
-        _over("配合マスタ", COLS_REC, default_recipe)
-        rows = default_recipe
+        header, raw_rows = _build_wide_recipe_rows(migrated)
+        _write_recipe_sheet_wide(header, raw_rows)
 
-    # 品名ごとにグループ化して、アプリ側での処理に適合させる
-    grouped = collections.defaultdict(list)
-    meta = {}
-    for r in rows:
-        p_name = r.get("品名", "").strip()
-        if not p_name: continue
-        meta[p_name] = {
-            "大カテゴリ": r.get("大カテゴリ", "その他"),
-            "中カテゴリ": r.get("中カテゴリ", "その他")
-        }
-        grouped[p_name].append({
-            "原料名": r.get("原料名", ""),
-            "比率": _f(r.get("配合比率(%)", 0.0))
-        })
-
+    ing_cols = [c for c in header if c not in RECIPE_FIXED_COLS]
     res = []
-    for p_name, ing_list in grouped.items():
+    for r in raw_rows:
+        p_name = str(r.get("品名", "")).strip()
+        if not p_name: continue
+        ing_list = []
+        for col in ing_cols:
+            val = str(r.get(col, "")).strip()
+            if val:
+                ing_list.append({"原料名": col, "比率": _f(val)})
         res.append({
             "品名": p_name,
-            "大カテゴリ": meta[p_name]["大カテゴリ"],
-            "中カテゴリ": meta[p_name]["中カテゴリ"],
-            "配合JSON": json.dumps(ing_list, ensure_ascii=False) # 互換性の維持
+            "大カテゴリ": r.get("大カテゴリ", "その他"),
+            "中カテゴリ": r.get("中カテゴリ", "その他"),
+            "配合JSON": json.dumps(ing_list, ensure_ascii=False)  # 互換性の維持
         })
     return res
 
-# ーーー 配合マスタ書込（保存時は自動でフラットに分解してスプレッドシートに書き込む） ーーー
+# ーーー 配合マスタ書込（保存時は自動で横持ち形式に組み立ててスプレッドシートに書き込む） ーーー
 def save_recipes(recs):
-    flat_rows = []
-    for r in recs:
-        p_name = r["品名"]
-        cat_m = r["大カテゴリ"]
-        cat_s = r["中カテゴリ"]
-        try:
-            ing_list = json.loads(r["配合JSON"]) if isinstance(r["配合JSON"], str) else r["配合JSON"]
-            for ing in ing_list:
-                flat_rows.append({
-                    "品名": p_name,
-                    "大カテゴリ": cat_m,
-                    "中カテゴリ": cat_s,
-                    "原料名": ing["原料名"],
-                    "配合比率(%)": str(ing["比率"])
-                })
-        except:
-            pass
-    _over("配合マスタ", COLS_REC, flat_rows)
+    header, wide_rows = _build_wide_recipe_rows(recs)
+    _write_recipe_sheet_wide(header, wide_rows)
 
 # ーーー 既存関数 ーーー
 @st.cache_data(ttl=20)
