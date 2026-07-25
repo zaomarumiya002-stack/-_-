@@ -201,6 +201,15 @@ def load_brewing():
 def append_brewing(r): _append("仕込み記録", COLS_BRW, r)
 def update_brewing(no, r): _update("仕込み記録", COLS_BRW, "仕込No", str(no), r)
 
+def save_brewing(recs):
+    """仕込み記録を全件洗い替えで保存する。
+    履歴・帳票タブの「対象記録のインライン操作(編集・削除)」機能が
+    app.py側で sheets.save_brewing(list) を呼び出す設計になっていたが、
+    本関数が未実装だったため、その場では常にエラーメッセージが表示される
+    だけで実際には保存できない状態だった。save_supplies/save_recipesと
+    同じ洗い替え方式(_over)で実装し、正しく動作するように修正。"""
+    _over("仕込み記録", COLS_BRW, recs)
+
 def delete_brewing(no):
     w = _ws("仕込み記録", COLS_BRW)
     cvals = w.col_values(COLS_BRW.index("仕込No") + 1)
