@@ -45,7 +45,7 @@ st.markdown("""
     --c-primary: #ea580c;       
     --c-primary-hover: #c2410c;
     --c-secondary: #0f172a;     
-    --c-input-border: #64748b;  
+    --c-input-border: #94a3b8;  
 }
 .stApp { background-color: var(--c-bg); font-family: 'Helvetica Neue', Arial, sans-serif; }
 h1, h2, h3, h4, h5, h6, p, span, div, label { color: var(--c-secondary); }
@@ -55,10 +55,10 @@ h1, h2, h3, h4, h5, h6, p, span, div, label { color: var(--c-secondary); }
     background: var(--c-surface); padding: 18px 24px; border-radius: 12px; margin-bottom: 24px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.08); border-left: 8px solid var(--c-primary);
 }
-.main-header h1 { font-size: 1.6rem !important; margin: 0 0 6px 0 !important; font-weight: 900 !important; color: var(--c-secondary) !important; }
+.main-header h1 { font-size: 1.6rem !important; margin: 0 0 6px 0 !important; font-weight: 900 !important; }
 .main-header p { color: #475569 !important; font-size: 0.95rem !important; margin: 0 !important; font-weight: 700; }
 .form-card { background: var(--c-surface); border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-.section-title { font-size: 1.25rem; font-weight: 900; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; color: var(--c-secondary) !important; }
+.section-title { font-size: 1.25rem; font-weight: 900; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
 .section-title::before { content: ''; display: block; width: 6px; height: 22px; background-color: var(--c-primary); border-radius: 4px; }
 
 /* 入力フィールド */
@@ -154,7 +154,7 @@ except Exception as e:
     st.error("🚨 データの読み込みに失敗しました。Google Sheetsの接続設定を確認してください。")
     st.stop()
 
-# 1枠に「発注点」と「1袋重量」をJSONで同居させるハック
+# --- マスタ拡張: 発注点・1袋重量パース ---
 def parse_op_data(raw_val):
     pt, wt = 0.0, 20.0
     try:
@@ -165,6 +165,33 @@ def parse_op_data(raw_val):
             pt = float(raw_val)
     except: pass
     return pt, wt
+
+# --- マスタ拡張: 石灰増量ルール設定パース ---
+def parse_lime_config(order_points_dict):
+    default_cfg = {
+        "start_month": 6,
+        "end_month": 9,
+        "add_ratio": 0.01,
+        "reason": "夏場の高温対策（品質保持・腐敗防止）"
+    }
+    raw_val = order_points_dict.get("__LIME_CONFIG__", "")
+    try:
+        if raw_val and isinstance(raw_val, str) and raw_val.startswith("{"):
+            data = json.loads(raw_val)
+            default_cfg.update(data)
+    except: pass
+    return default_cfg
+
+# 石灰増量期間内かどうか判定する関数
+def is_lime_boost_active(cfg, target_date=None):
+    if target_date is None: target_date = date.today()
+    m = target_date.month
+    s = int(cfg.get("start_month", 6))
+    e = int(cfg.get("end_month", 9))
+    if s <= e:
+        return s <= m <= e
+    else: # 年を跨ぐ設定の場合 (例: 11月〜2月)
+        return m >= s or m <= e
 
 BIG_CAT_ICONS = {"プラント": "🏭", "OKM": "🟦"}
 SUB_CAT_ICONS = {"白": "⚪", "黒": "⚫", "耐冷": "❄️", "ショクカイ": "🍽️", "めん": "🍜", "おでん": "🍢", "その他": "📦"}
@@ -217,7 +244,6 @@ def get_inventory():
                 for item in items:
                     t_lot = str(item.get("lot", "")).strip()
                     t_kg = float(item.get("kg", 0.0))
-                    # ブレンド時の(40%)表記を安全に消去
                     valid_lots = [l for l in [re.sub(r'\(\d+%\)', '', l_raw).strip() for l_raw in t_lot.split(",")] if l and l != "─"]
                     if valid_lots:
                         kg_per_lot = t_kg / len(valid_lots)
@@ -298,7 +324,6 @@ def render_lot_selector(mat_name, lot_key):
             if man_lot: st.session_state[lot_key] = man_lot; st.rerun()
     return st.session_state[lot_key]
 
-# 【修正済】ボタンID重複を防ぐため、引数の operator_key をボタンkeyにも組み込んでいます。
 def render_operator_selector(operator_key):
     if operator_key not in st.session_state: st.session_state[operator_key] = inspectors[0] if inspectors else "未登録"
     with lot_popover(f"👨‍🏭 担当者: {st.session_state[operator_key]} (タップで変更)"):
@@ -321,7 +346,7 @@ with st.sidebar:
     if st.button("🔄 最新データに更新", use_container_width=True): refresh()
 
 # ═══════════════════════════════════════════════════════════════
-#  🏭 製造仕込み (現場特化UI)
+#  🏭 製造仕込み (季節石灰増量ロジック適用)
 # ═══════════════════════════════════════════════════════════════
 if page == "🏭 製造仕込み":
     st.markdown('<div class="main-header"><h1>🏭 製造仕込み記録</h1><p>投入量は特大文字で表示されます。指示通りに計量してください。</p></div>', unsafe_allow_html=True)
@@ -400,7 +425,10 @@ if page == "🏭 製造仕込み":
         else:
             st.markdown('<div class="section-title" style="margin-top:32px;">📦 準備する原料・ロット</div>', unsafe_allow_html=True)
             submitted_ingredients = []
-            is_summer = 6 <= date.today().month <= 9
+            
+            # 石灰季節増量ルールの読み込みと判定
+            lime_cfg = parse_lime_config(order_points)
+            lime_boost_active = is_lime_boost_active(lime_cfg, brew_date)
 
             for i, item in enumerate(active_recipe[:10]):
                 r_name = str(item.get("原料名", "")).strip()
@@ -408,13 +436,28 @@ if page == "🏭 製造仕込み":
                 is_water, is_lime, is_konjac = ("水" in r_name or "お湯" in r_name), ("石灰" in r_name or "カルシウム" in r_name), ("こんにゃく" in r_name)
                 icon = "💧" if is_water else ("🧂" if is_lime else ("📦" if is_konjac else "🔹"))
 
-                if is_water: calc_kg = max(0.0, target_size * (base_ratio / 100.0) - lime_water_size)
-                elif is_lime: calc_kg = lime_water_size * ((base_ratio + 0.01 if is_summer else base_ratio) / 10.0)
-                else: calc_kg = target_size * (base_ratio / 100.0)
+                # 石灰の場合の特別増量計算
+                lime_msg = ""
+                if is_water: 
+                    calc_kg = max(0.0, target_size * (base_ratio / 100.0) - lime_water_size)
+                elif is_lime: 
+                    eff_ratio = base_ratio
+                    if lime_boost_active:
+                        add_r = float(lime_cfg.get("add_ratio", 0.01))
+                        eff_ratio += add_r
+                        s_m, e_m, r_txt = lime_cfg.get("start_month", 6), lime_cfg.get("end_month", 9), lime_cfg.get("reason", "季節増量")
+                        lime_msg = f"🌡️ 期間増量適用中 ({s_m}月〜{e_m}月: +{add_r}% / 理由: {r_txt})"
+                    calc_kg = lime_water_size * (eff_ratio / 10.0)
+                else: 
+                    calc_kg = target_size * (base_ratio / 100.0)
 
                 with st.container(border=True):
                     st.markdown(f"<div style='font-size:1.3rem; font-weight:900;'>{icon} {r_name}</div>", unsafe_allow_html=True)
                     
+                    if is_lime and lime_msg:
+                        # ★【新規要件】通常データと異なる場合、期間と理由を控えめに表示
+                        st.markdown(f"<div style='font-size:0.85rem; color:#c2410c; font-weight:800; margin-top:2px;'>{lime_msg}</div>", unsafe_allow_html=True)
+
                     if is_water:
                         st.markdown(f"<div style='color:#3b82f6; font-weight:900; font-size:1.6rem; text-align:center; padding:10px 0;'>必要量: {fmt_kg(calc_kg)} kg <br><span style='font-size:1rem;color:#64748b;'>(石灰水除く)</span></div>", unsafe_allow_html=True)
                         submitted_ingredients.append({"原料名": r_name, "kg": round(calc_kg, 2), "lot": "─"})
@@ -482,7 +525,6 @@ if page == "🏭 製造仕込み":
                     "備考": f"{brew_remarks}", "登録日時": datetime.now().isoformat()
                 })
                 
-                # 入力状態をリセット
                 for key in list(st.session_state.keys()):
                     if any(key.startswith(p) for p in ["adj_", "ts_", "lw_", "lot_", "t_size", "l_size", "kr_", "kb_"]):
                         del st.session_state[key]
@@ -493,12 +535,11 @@ if page == "🏭 製造仕込み":
                 refresh()
 
 # ═══════════════════════════════════════════════════════════════
-#  📊 ダッシュボード (超リッチカスタムデザイン)
+#  📊 ダッシュボード
 # ═══════════════════════════════════════════════════════════════
 elif page == "📊 ダッシュボード":
     st.markdown('<div class="main-header"><h1>📊 サマリーと在庫モニター</h1></div>', unsafe_allow_html=True)
     
-    # --- サマリー ---
     df_brw_global = pd.DataFrame(brewing)
     if not df_brw_global.empty:
         df_brw_global["仕込日_dt"] = pd.to_datetime(df_brw_global["仕込日"], errors="coerce")
@@ -523,10 +564,9 @@ elif page == "📊 ダッシュボード":
         curr_bag = curr_kg / wt if wt > 0 else 0
         is_alert = (pt > 0 and curr_bag < pt)
         
-        # 枠色・背景色をアラート状態によって変更
         border_col = "#ef4444" if is_alert else "#cbd5e1"
         bg_col = "#fef2f2" if is_alert else "#ffffff"
-        alert_msg = f"<div style='font-size:0.9rem; color:#ef4444; font-weight:bold; margin-top:8px;'>⚠️ 発注点({fmt_kg(pt)}袋) を下回っています</div>" if is_alert else f"<div style='font-size:0.9rem; color:#64748b; font-weight:bold; margin-top:8px;'>✅ 発注点: {fmt_kg(pt)}袋</div>"
+        alert_msg = f"<div style='font-size:0.9rem; color:#ef4444; font-weight:bold; margin-top:8px;'>⚠️ 発注点({fmt_kg(pt)}袋) 以下</div>" if is_alert else f"<div style='font-size:0.9rem; color:#64748b; font-weight:bold; margin-top:8px;'>✅ 発注点: {fmt_kg(pt)}袋</div>"
 
         with cols[idx % 3]:
             st.markdown(f"""
@@ -536,7 +576,7 @@ elif page == "📊 ダッシュボード":
                     {fmt_kg(curr_kg)}<span style="font-size:1.1rem; color:#64748b; margin-right:8px;">kg</span> 
                     <span style="font-size:1.6rem; color:#0f172a;">({fmt_kg(curr_bag)}袋)</span>
                 </div>
-                <div style="font-size:0.85rem; color:#64748b; margin-bottom:4px;">1袋 = {fmt_kg(wt)} kg 設定</div>
+                <div style="font-size:0.85rem; color:#64748b; margin-bottom:4px;">1袋 = {fmt_kg(wt)} kg 換算</div>
                 {alert_msg}
             </div>
             """, unsafe_allow_html=True)
@@ -820,7 +860,7 @@ elif page == "📈 分析":
             st.markdown('</div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════
-#  ⚙️ マスタ設定
+#  ⚙️ マスタ設定 (石灰増量ルール設定追加)
 # ═══════════════════════════════════════════════════════════════
 elif page == "⚙️ マスタ設定":
     st.markdown('<div class="main-header"><h1>⚙️ マスターデータ管理</h1></div>', unsafe_allow_html=True)
@@ -843,20 +883,55 @@ elif page == "⚙️ マスタ設定":
         st.markdown('</div>', unsafe_allow_html=True)
 
     with t3:
-        st.markdown('<div class="form-card"><p>💡 入荷登録時にここで設定した「1袋重量」が自動で入力されます。</p>', unsafe_allow_html=True)
+        # --- ① 発注点・重量設定 ---
+        st.markdown('<div class="form-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">🚨 原料ごとの発注点・1袋重量</div>', unsafe_allow_html=True)
+        st.caption("💡 入荷登録時にここで設定した「1袋重量」が自動で入力されます。")
         op_rows = []
         for m in materials:
-            pt, wt = parse_op_data(order_points.get(m, 0.0))
-            op_rows.append({"原料名": m, "発注点(袋)": pt, "1袋重量(kg)": wt})
+            if m != "__LIME_CONFIG__":
+                pt, wt = parse_op_data(order_points.get(m, 0.0))
+                op_rows.append({"原料名": m, "発注点(袋)": pt, "1袋重量(kg)": wt})
             
         edited_op = st.data_editor(pd.DataFrame(op_rows), use_container_width=True)
         if st.button("💾 発注点・重量保存", type="primary"):
             new_dict = {}
             for _, r in edited_op.iterrows():
-                if str(r["原料名"]).strip():
-                    new_dict[str(r["原料名"]).strip()] = json.dumps({"pt": float(r["発注点(袋)"]), "wt": float(r["1袋重量(kg)"])})
+                m_name = str(r["原料名"]).strip()
+                if m_name and m_name != "__LIME_CONFIG__":
+                    new_dict[m_name] = json.dumps({"pt": float(r["発注点(袋)"]), "wt": float(r["1袋重量(kg)"])})
+            # 既存の石灰設定を消さないように引き継ぐ
+            if "__LIME_CONFIG__" in order_points:
+                new_dict["__LIME_CONFIG__"] = order_points["__LIME_CONFIG__"]
             sheets.save_order_points(new_dict)
             st.success("保存しました。"); time.sleep(1); refresh()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # --- ② 石灰の季節増量設定 (新設) ---
+        st.markdown('<div class="form-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">🌡️ 石灰の季節増量・調整ルール設定</div>', unsafe_allow_html=True)
+        st.caption("指定した期間(月)の間、製造仕込みでの石灰計算に自動で増量値(%)が加算されます。")
+        
+        cur_lime_cfg = parse_lime_config(order_points)
+        
+        c_l1, c_l2, c_l3 = st.columns(3)
+        l_start = c_l1.selectbox("開始月", list(range(1, 13)), index=int(cur_lime_cfg.get("start_month", 6)) - 1)
+        l_end = c_l2.selectbox("終了月", list(range(1, 13)), index=int(cur_lime_cfg.get("end_month", 9)) - 1)
+        l_ratio = c_l3.number_input("増量値 (配合比率＋％)", min_value=0.000, max_value=1.000, value=float(cur_lime_cfg.get("add_ratio", 0.01)), step=0.001, format="%.3f")
+        
+        l_reason = st.text_input("増量理由・注記 (仕込み画面に表示されます)", value=str(cur_lime_cfg.get("reason", "夏場の高温対策（腐敗・品質保持）")))
+        
+        if st.button("💾 石灰増量ルールを保存", type="primary"):
+            new_dict = dict(order_points)
+            lime_data = {
+                "start_month": int(l_start),
+                "end_month": int(l_end),
+                "add_ratio": float(l_ratio),
+                "reason": str(l_reason)
+            }
+            new_dict["__LIME_CONFIG__"] = json.dumps(lime_data, ensure_ascii=False)
+            sheets.save_order_points(new_dict)
+            st.success("石灰の増量ルールを更新しました。"); time.sleep(1); refresh()
         st.markdown('</div>', unsafe_allow_html=True)
 
     with t4:
