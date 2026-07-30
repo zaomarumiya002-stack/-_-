@@ -154,7 +154,6 @@ except Exception as e:
     st.error("🚨 データの読み込みに失敗しました。Google Sheetsの接続設定を確認してください。")
     st.stop()
 
-# --- マスタ拡張: 発注点・1袋重量パース ---
 def parse_op_data(raw_val):
     pt, wt = 0.0, 20.0
     try:
@@ -166,7 +165,6 @@ def parse_op_data(raw_val):
     except: pass
     return pt, wt
 
-# --- マスタ拡張: 石灰増量ルール設定パース ---
 def parse_lime_config(order_points_dict):
     default_cfg = {
         "start_month": 6,
@@ -182,7 +180,6 @@ def parse_lime_config(order_points_dict):
     except: pass
     return default_cfg
 
-# 石灰増量期間内かどうか判定する関数
 def is_lime_boost_active(cfg, target_date=None):
     if target_date is None: target_date = date.today()
     m = target_date.month
@@ -190,7 +187,7 @@ def is_lime_boost_active(cfg, target_date=None):
     e = int(cfg.get("end_month", 9))
     if s <= e:
         return s <= m <= e
-    else: # 年を跨ぐ設定の場合 (例: 11月〜2月)
+    else:
         return m >= s or m <= e
 
 BIG_CAT_ICONS = {"プラント": "🏭", "OKM": "🟦"}
@@ -284,7 +281,7 @@ def _get_active_lots(mat_name):
     return opts
 
 # ════════════════════════════════════════════════════════════════
-#  カスタムUIコンポーネント (現場特化)
+#  カスタムUIコンポーネント (確定ボタン廃止・即時反映構造へ修繕)
 # ════════════════════════════════════════════════════════════════
 def _change_adj(key, val):
     st.session_state[key] = st.session_state.get(key, 0.0) + val
@@ -307,21 +304,33 @@ def render_amount_adjuster(title, base_val, adj_key):
     return act_val
 
 def render_lot_selector(mat_name, lot_key):
+    """確定ボタン不要！タップまたは手入力の瞬間に即時反映されるロバストなロット選択器"""
     active_lots = _get_active_lots(mat_name)
-    if lot_key not in st.session_state: st.session_state[lot_key] = active_lots[0] if active_lots else "未選択"
-    with lot_popover(f"📦 ロット: {st.session_state[lot_key]} (タップで変更)"):
-        st.markdown(f"<h4 style='text-align:center;'>{mat_name} のロット選択</h4>", unsafe_allow_html=True)
-        if active_lots:
-            for lot in active_lots:
-                if st.button(f"{lot} (在庫あり)", key=f"btn_{lot_key}_{lot}", use_container_width=True):
-                    st.session_state[lot_key] = lot
-                    st.rerun()
+    has_active = len(active_lots) > 0
+    options = active_lots + ["✏️ リスト外 (手入力)"] if has_active else ["✏️ リスト外 (手入力)"]
+    
+    curr_val = st.session_state.get(lot_key, active_lots[0] if has_active else "─")
+    
+    # 初期選択位置の決定
+    if curr_val in active_lots:
+        default_idx = active_lots.index(curr_val)
+    elif curr_val not in ["─", "未選択", ""]:
+        default_idx = len(options) - 1
+    else:
+        default_idx = 0
+
+    with lot_popover(f"📦 ロット: {curr_val} (タップで選択)"):
+        st.markdown(f"#### 📦 {mat_name} のロット選択")
+        sel_option = st.radio("選択してください", options, index=default_idx, key=f"rad_{lot_key}")
+        
+        if sel_option == "✏️ リスト外 (手入力)":
+            manual_in = st.text_input("ロット番号を入力 (自動確定)", value=curr_val if curr_val not in active_lots else "", key=f"txt_{lot_key}")
+            final_lot = manual_in.strip() if manual_in.strip() else "─"
         else:
-            st.info("在庫のあるロットが見つかりません。下から手入力してください。")
-        st.markdown("---")
-        man_lot = st.text_input("📝 手入力 (リスト外)", key=f"man_in_{lot_key}")
-        if st.button("確定", key=f"man_btn_{lot_key}", type="primary", use_container_width=True):
-            if man_lot: st.session_state[lot_key] = man_lot; st.rerun()
+            final_lot = sel_option
+            
+        st.session_state[lot_key] = final_lot
+
     return st.session_state[lot_key]
 
 def render_operator_selector(operator_key):
@@ -346,7 +355,7 @@ with st.sidebar:
     if st.button("🔄 最新データに更新", use_container_width=True): refresh()
 
 # ═══════════════════════════════════════════════════════════════
-#  🏭 製造仕込み (季節石灰増量ロジック適用)
+#  🏭 製造仕込み
 # ═══════════════════════════════════════════════════════════════
 if page == "🏭 製造仕込み":
     st.markdown('<div class="main-header"><h1>🏭 製造仕込み記録</h1><p>投入量は特大文字で表示されます。指示通りに計量してください。</p></div>', unsafe_allow_html=True)
@@ -426,7 +435,6 @@ if page == "🏭 製造仕込み":
             st.markdown('<div class="section-title" style="margin-top:32px;">📦 準備する原料・ロット</div>', unsafe_allow_html=True)
             submitted_ingredients = []
             
-            # 石灰季節増量ルールの読み込みと判定
             lime_cfg = parse_lime_config(order_points)
             lime_boost_active = is_lime_boost_active(lime_cfg, brew_date)
 
@@ -436,7 +444,6 @@ if page == "🏭 製造仕込み":
                 is_water, is_lime, is_konjac = ("水" in r_name or "お湯" in r_name), ("石灰" in r_name or "カルシウム" in r_name), ("こんにゃく" in r_name)
                 icon = "💧" if is_water else ("🧂" if is_lime else ("📦" if is_konjac else "🔹"))
 
-                # 石灰の場合の特別増量計算
                 lime_msg = ""
                 if is_water: 
                     calc_kg = max(0.0, target_size * (base_ratio / 100.0) - lime_water_size)
@@ -455,7 +462,6 @@ if page == "🏭 製造仕込み":
                     st.markdown(f"<div style='font-size:1.3rem; font-weight:900;'>{icon} {r_name}</div>", unsafe_allow_html=True)
                     
                     if is_lime and lime_msg:
-                        # ★【新規要件】通常データと異なる場合、期間と理由を控えめに表示
                         st.markdown(f"<div style='font-size:0.85rem; color:#c2410c; font-weight:800; margin-top:2px;'>{lime_msg}</div>", unsafe_allow_html=True)
 
                     if is_water:
@@ -515,8 +521,9 @@ if page == "🏭 製造仕込み":
                     elif "デンプン" in n or "でんぷん" in n: st_kg += amt; st_lot = lot if st_lot == "─" else (st_lot if lot in st_lot else f"{st_lot} / {lot}")
                     elif "石灰" in n or "カルシウム" in n: lime_kg += amt
 
+                next_no = sheets.next_brewing_no(brewing)
                 sheets.append_brewing({
-                    "仕込No": sheets.next_brewing_no(brewing), "仕込日": str(brew_date), "品名": selected_p,
+                    "仕込No": next_no, "仕込日": str(brew_date), "品名": selected_p,
                     "メーカー": operator, "主原料ロット": k_lot, "仕込量(kg)": round(target_size, 2),
                     "こんにゃく精粉(kg)": round(k_kg, 2), "海藻粉(kg)": round(s_kg, 2), "海藻粉ロット": s_lot,
                     "デンプン(kg)": round(st_kg, 2), "デンプンロット": st_lot, "デンプン種別": "-",
@@ -525,13 +532,22 @@ if page == "🏭 製造仕込み":
                     "備考": f"{brew_remarks}", "登録日時": datetime.now().isoformat()
                 })
                 
+                # 入力状態をリセット
                 for key in list(st.session_state.keys()):
                     if any(key.startswith(p) for p in ["adj_", "ts_", "lw_", "lot_", "t_size", "l_size", "kr_", "kb_"]):
                         del st.session_state[key]
                 
-                st.balloons()
-                st.success(f"✅ 【{selected_p}】の製造記録を保存しました！画面をリセットします...")
-                time.sleep(2.0)
+                st.toast("✅ 製造記録を保存しました", icon="💾")
+                st.markdown(f"""
+                <div style="background-color: #dcfce7; border: 2px solid #22c55e; border-radius: 12px; padding: 18px; margin-top: 16px; text-align: center;">
+                    <div style="font-size: 1.4rem; font-weight: 900; color: #15803d;">✅ 製造記録を正しく登録しました (仕込No. {next_no})</div>
+                    <div style="font-size: 1.1rem; color: #166534; margin-top: 6px; font-weight: 800;">
+                        【{selected_p}】 仕込量: {fmt_kg(target_size)} kg ｜ 担当: {operator}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                time.sleep(1.8)
                 refresh()
 
 # ═══════════════════════════════════════════════════════════════
@@ -860,7 +876,7 @@ elif page == "📈 分析":
             st.markdown('</div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════
-#  ⚙️ マスタ設定 (石灰増量ルール設定追加)
+#  ⚙️ マスタ設定
 # ═══════════════════════════════════════════════════════════════
 elif page == "⚙️ マスタ設定":
     st.markdown('<div class="main-header"><h1>⚙️ マスターデータ管理</h1></div>', unsafe_allow_html=True)
@@ -883,7 +899,6 @@ elif page == "⚙️ マスタ設定":
         st.markdown('</div>', unsafe_allow_html=True)
 
     with t3:
-        # --- ① 発注点・重量設定 ---
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
         st.markdown('<div class="section-title">🚨 原料ごとの発注点・1袋重量</div>', unsafe_allow_html=True)
         st.caption("💡 入荷登録時にここで設定した「1袋重量」が自動で入力されます。")
@@ -900,14 +915,12 @@ elif page == "⚙️ マスタ設定":
                 m_name = str(r["原料名"]).strip()
                 if m_name and m_name != "__LIME_CONFIG__":
                     new_dict[m_name] = json.dumps({"pt": float(r["発注点(袋)"]), "wt": float(r["1袋重量(kg)"])})
-            # 既存の石灰設定を消さないように引き継ぐ
             if "__LIME_CONFIG__" in order_points:
                 new_dict["__LIME_CONFIG__"] = order_points["__LIME_CONFIG__"]
             sheets.save_order_points(new_dict)
             st.success("保存しました。"); time.sleep(1); refresh()
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # --- ② 石灰の季節増量設定 (新設) ---
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
         st.markdown('<div class="section-title">🌡️ 石灰の季節増量・調整ルール設定</div>', unsafe_allow_html=True)
         st.caption("指定した期間(月)の間、製造仕込みでの石灰計算に自動で増量値(%)が加算されます。")
