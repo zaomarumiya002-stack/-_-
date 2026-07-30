@@ -377,7 +377,6 @@ if page == "🏭 製造仕込み":
                     
                     elif is_konjac:
                         with lot_popover("📦 ロット選択 / 🧪 ブレンド設定"):
-                            # 🚨 セッション干渉バグ修正: keyに製品名(selected_p)を含めて完全に分離
                             blend_key = f"kb_{selected_p}_{i}"
                             blend_on = st.checkbox("🧪 2種類のこんにゃく粉をブレンドする", key=blend_key)
                             konjac_mats = [m for m in materials if "こんにゃく" in m] or [r_name]
@@ -448,10 +447,8 @@ if page == "🏭 製造仕込み":
                     "その他添加物": json.dumps(submitted_ingredients, ensure_ascii=False),
                     "備考": f"{brew_remarks}", "登録日時": datetime.now().isoformat()
                 })
-                # 保存完了後、次の入力のためにセッションをリセット
                 st.session_state["t_size"] = None
                 st.session_state["l_size"] = None
-                
                 st.balloons()
                 st.success(f"✅ 【{selected_p}】の製造記録を保存しました！画面を更新します...")
                 time.sleep(2.0)
@@ -523,8 +520,7 @@ elif page == "🧹 資材管理":
     if not supplies: st.warning("資材が未登録です。マスタ設定よりご登録ください。")
     else:
         supply_inventory = {}
-        for s in supplies:
-            supply_inventory[s.get("資材ID")] = float(s.get("初期在庫") or 0.0)
+        for s in supplies: supply_inventory[s.get("資材ID")] = float(s.get("初期在庫") or 0.0)
         for log in supply_logs:
             sid = log.get("資材ID")
             if sid in supply_inventory:
@@ -629,8 +625,9 @@ elif page == "⚙️ マスタ設定":
                 def_rat_val = float(init_items[j]["比率"]) if j < len(init_items) else 0.00
                 mat_idx = def_mats.index(def_mat_val) if def_mat_val in def_mats else 0
                 
-                ing_mat = c_n.selectbox(f"成分 {j+1}", def_mats, index=mat_idx)
-                ing_ratio = c_w.number_input("比率(％)", min_value=0.00, value=def_rat_val, step=0.01)
+                uid = f"{init_name}_{j}" if target_recipe else f"new_{j}"
+                ing_mat = c_n.selectbox(f"成分 {j+1}", def_mats, index=mat_idx, key=f"rmat_{uid}")
+                ing_ratio = c_w.number_input("比率(％)", min_value=0.00, value=def_rat_val, step=0.01, key=f"rrat_{uid}")
                 cols_recipe.append({"name": ing_mat, "ratio": ing_ratio})
             
             if st.form_submit_button("💾 レシピを保存"):
