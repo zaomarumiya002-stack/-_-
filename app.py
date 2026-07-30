@@ -11,6 +11,7 @@ import traceback
 import plotly.graph_objects as go
 import plotly.express as px
 
+# Excel出力用 (HACCP/ISO監査対応)
 try:
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
@@ -19,6 +20,7 @@ try:
 except ImportError:
     HAS_OPENPYXL = False
 
+# 資材画像アップロード用
 try:
     from PIL import Image
     HAS_PIL = True
@@ -124,6 +126,9 @@ div[data-testid="stRadio"] label[data-baseweb="radio"] input:checked + div p { c
 # ════════════════════════════════════════════════════════════════
 #  ユーティリティ & データロード
 # ════════════════════════════════════════════════════════════════
+def lot_popover(label):
+    return st.popover(label, use_container_width=True) if hasattr(st, "popover") else st.expander(label)
+
 def refresh():
     st.cache_data.clear()
     st.rerun()
@@ -181,7 +186,7 @@ def safe_parse_recipe(recipe_val):
     return [{"原料名": str(i.get("原料名", "")).strip(), "比率": float(i.get("比率", 0.0))} for i in data if isinstance(i, dict) and str(i.get("原料名", "")).strip()]
 
 # ════════════════════════════════════════════════════════════════
-#  在庫・ロット計算 (在庫あり限定フィルタ用)
+#  在庫・ロット計算 (ブレンドパーセント安全消去対応)
 # ════════════════════════════════════════════════════════════════
 def get_inventory():
     inv = {}
@@ -200,7 +205,8 @@ def get_inventory():
                 for item in items:
                     t_lot = str(item.get("lot", "")).strip()
                     t_kg = float(item.get("kg", 0.0))
-                    valid_lots = [l for l in [re.sub(r'\(.*?\)', '', l_raw).strip() for l_raw in t_lot.split(",")] if l and l != "─"]
+                    # L001(40%) 等のパーセント表記だけを安全に消去
+                    valid_lots = [l for l in [re.sub(r'\(\d+%\)', '', l_raw).strip() for l_raw in t_lot.split(",")] if l and l != "─"]
                     if valid_lots:
                         kg_per_lot = t_kg / len(valid_lots)
                         for l in valid_lots:
@@ -232,7 +238,6 @@ def _get_active_lots(mat_name):
         if v["原料種別"] == mat_name and v["現在庫(kg)"] > 0.01:
             if v["ロットNo"] not in opts: opts.append(v["ロットNo"])
     
-    # もし在庫ありロットがなければ、入荷履歴から最新のものをフォールバック表示
     if not opts:
         recent = sorted(arrivals, key=lambda x: x.get("入荷日", ""), reverse=True)
         for a in recent:
@@ -246,10 +251,10 @@ def _get_active_lots(mat_name):
 #  【新設】現場特化型 カスタムUIコンポーネント
 # ════════════════════════════════════════════════════════════════
 def _change_adj(key, val):
-    st.session_state[key] += val
+    st.session_state[key] = st.session_state.get(key, 0.0) + val
 
 def render_amount_adjuster(title, base_val, adj_key):
-    """超特大の投入量表示と、両脇の±0.1微調整ボタンを描画するコンポーネント"""
+    """超特大の投入量表示と、両脇の±0.1微調整ボタン"""
     if adj_key not in st.session_state: st.session_state[adj_key] = 0.0
     act_val = round(base_val + st.session_state[adj_key], 2)
     if act_val < 0: act_val = 0.0
@@ -274,7 +279,7 @@ def render_lot_selector(mat_name, lot_key):
     if lot_key not in st.session_state:
         st.session_state[lot_key] = active_lots[0] if active_lots else "未選択"
         
-    with st.popover(f"📦 ロット: {st.session_state[lot_key]} (タップで変更)", use_container_width=True):
+    with lot_popover(f"📦 ロット: {st.session_state[lot_key]} (タップで変更)"):
         st.markdown(f"<h4 style='text-align:center;'>{mat_name} のロット選択</h4>", unsafe_allow_html=True)
         if active_lots:
             for lot in active_lots:
@@ -297,7 +302,7 @@ def render_operator_selector(operator_key):
     if operator_key not in st.session_state:
         st.session_state[operator_key] = inspectors[0] if inspectors else "未登録"
         
-    with st.popover(f"👨‍🏭 担当者: {st.session_state[operator_key]} (タップで変更)", use_container_width=True):
+    with lot_popover(f"👨‍🏭 担当者: {st.session_state[operator_key]} (タップで変更)"):
         st.write("担当者をタップしてください")
         for insp in inspectors:
             if st.button(insp, key=f"btn_insp_{insp}", use_container_width=True):
@@ -430,20 +435,20 @@ if page == "🏭 製造仕込み":
                             btn_cols = st.columns(9)
                             for pidx, pv in enumerate(range(10, 100, 10)):
                                 is_sel = (st.session_state[ratio_key] == pv)
-                                btn_cols[pidx].button(f"{pv}%", key=f"rbtn_{ratio_key}_{pv}", on_click=lambda k, v: st.session_state.update({k: v}), args=(ratio_key, pv), type="primary" if is_sel else "secondary")
+                                btn_cols[pidx].button(f"{pv}%", key=f"rbtn_{ratio_key}_{pv}", on_click=lambda k, v: st.session_state.update({k: v}), args=(ratio_key, pv), type="primary" if is_sel else "secondary", use_container_width=True)
                             
                             ratio_a = st.session_state[ratio_key]
                             ratio_b = 100 - ratio_a
                             
                             st.markdown("---")
                             # A の特大入力＆ロット
-                            mat_a = st.radio("原料Aの種別", konjac_mats, key=f"kma_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
+                            mat_a = st.radio("🅰️ 原料種別", konjac_mats, key=f"kma_{selected_p}_{i}", horizontal=True)
                             act_a = render_amount_adjuster(f"🅰️ 投入量 ({ratio_a}%)", calc_kg * ratio_a / 100.0, f"adj_a_{selected_p}_{i}")
                             lot_a = render_lot_selector(mat_a, f"lot_a_{selected_p}_{i}")
                             
                             st.markdown("---")
                             # B の特大入力＆ロット
-                            mat_b = st.radio("原料Bの種別", konjac_mats, index=1 if len(konjac_mats)>1 else 0, key=f"kmb_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
+                            mat_b = st.radio("🅱️ 原料種別", konjac_mats, index=1 if len(konjac_mats)>1 else 0, key=f"kmb_{selected_p}_{i}", horizontal=True)
                             act_b = render_amount_adjuster(f"🅱️ 投入量 ({ratio_b}%)", calc_kg * ratio_b / 100.0, f"adj_b_{selected_p}_{i}")
                             lot_b = render_lot_selector(mat_b, f"lot_b_{selected_p}_{i}")
 
@@ -486,7 +491,7 @@ if page == "🏭 製造仕込み":
                 
                 # 保存完了後、すべての入力状態をクリーンにリセットする
                 for key in list(st.session_state.keys()):
-                    if any(key.startswith(p) for p in ["adj_", "ts_", "lw_", "lot_", "t_size", "l_size"]):
+                    if any(key.startswith(p) for p in ["adj_", "ts_", "lw_", "lot_", "t_size", "l_size", "kr_", "kb_"]):
                         del st.session_state[key]
                 
                 st.balloons()
