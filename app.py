@@ -198,7 +198,7 @@ def safe_parse_recipe(recipe_val):
     return [{"原料名": str(i.get("原料名", "")).strip(), "比率": float(i.get("比率", 0.0))} for i in data if isinstance(i, dict) and str(i.get("原料名", "")).strip()]
 
 # ════════════════════════════════════════════════════════════════
-#  在庫・ロット計算 (ブレンドパーセント安全消去対応)
+#  在庫・ロット計算
 # ════════════════════════════════════════════════════════════════
 def get_inventory():
     inv = {}
@@ -298,12 +298,13 @@ def render_lot_selector(mat_name, lot_key):
             if man_lot: st.session_state[lot_key] = man_lot; st.rerun()
     return st.session_state[lot_key]
 
+# 【修正済】ボタンID重複を防ぐため、引数の operator_key をボタンkeyにも組み込んでいます。
 def render_operator_selector(operator_key):
     if operator_key not in st.session_state: st.session_state[operator_key] = inspectors[0] if inspectors else "未登録"
     with lot_popover(f"👨‍🏭 担当者: {st.session_state[operator_key]} (タップで変更)"):
         st.write("担当者をタップしてください")
         for insp in inspectors:
-            if st.button(insp, key=f"btn_insp_{insp}", use_container_width=True):
+            if st.button(insp, key=f"btn_insp_{operator_key}_{insp}", use_container_width=True):
                 st.session_state[operator_key] = insp; st.rerun()
     return st.session_state[operator_key]
 
@@ -481,6 +482,7 @@ if page == "🏭 製造仕込み":
                     "備考": f"{brew_remarks}", "登録日時": datetime.now().isoformat()
                 })
                 
+                # 入力状態をリセット
                 for key in list(st.session_state.keys()):
                     if any(key.startswith(p) for p in ["adj_", "ts_", "lw_", "lot_", "t_size", "l_size", "kr_", "kb_"]):
                         del st.session_state[key]
@@ -521,9 +523,10 @@ elif page == "📊 ダッシュボード":
         curr_bag = curr_kg / wt if wt > 0 else 0
         is_alert = (pt > 0 and curr_bag < pt)
         
+        # 枠色・背景色をアラート状態によって変更
         border_col = "#ef4444" if is_alert else "#cbd5e1"
         bg_col = "#fef2f2" if is_alert else "#ffffff"
-        alert_msg = f"<div style='font-size:0.9rem; color:#ef4444; font-weight:bold; margin-top:8px;'>⚠️ 発注点({fmt_kg(pt)}袋) 以下</div>" if is_alert else f"<div style='font-size:0.9rem; color:#64748b; font-weight:bold; margin-top:8px;'>✅ 発注点: {fmt_kg(pt)}袋</div>"
+        alert_msg = f"<div style='font-size:0.9rem; color:#ef4444; font-weight:bold; margin-top:8px;'>⚠️ 発注点({fmt_kg(pt)}袋) を下回っています</div>" if is_alert else f"<div style='font-size:0.9rem; color:#64748b; font-weight:bold; margin-top:8px;'>✅ 発注点: {fmt_kg(pt)}袋</div>"
 
         with cols[idx % 3]:
             st.markdown(f"""
@@ -533,7 +536,7 @@ elif page == "📊 ダッシュボード":
                     {fmt_kg(curr_kg)}<span style="font-size:1.1rem; color:#64748b; margin-right:8px;">kg</span> 
                     <span style="font-size:1.6rem; color:#0f172a;">({fmt_kg(curr_bag)}袋)</span>
                 </div>
-                <div style="font-size:0.85rem; color:#64748b; margin-bottom:4px;">1袋 = {fmt_kg(wt)} kg 換算</div>
+                <div style="font-size:0.85rem; color:#64748b; margin-bottom:4px;">1袋 = {fmt_kg(wt)} kg 設定</div>
                 {alert_msg}
             </div>
             """, unsafe_allow_html=True)
@@ -743,8 +746,8 @@ elif page == "📋 履歴・帳票":
                     ws.cell(row=r_idx, column=2, value=str(getattr(row, "仕込No", "")))
                     ws.cell(row=r_idx, column=3, value=str(getattr(row, "品名", "")))
                     ws.cell(row=r_idx, column=4, value=str(getattr(row, "メーカー", "")))
-                    ws.cell(row=r_idx, column=5, value=float(getattr(row, "_6", 0) or 0)) # 仕込量(kg)
-                    ws.cell(row=r_idx, column=6, value=float(getattr(row, "_14", 0) or 0)) # 石灰水(L)
+                    ws.cell(row=r_idx, column=5, value=float(getattr(row, "_6", 0) or 0))
+                    ws.cell(row=r_idx, column=6, value=float(getattr(row, "_14", 0) or 0))
                     ws.cell(row=r_idx, column=7, value=str(getattr(row, "備考", "")))
                 return wb
                 
