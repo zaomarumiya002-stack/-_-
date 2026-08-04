@@ -281,6 +281,21 @@ def _get_active_lots(mat_name):
     return opts
 
 # ════════════════════════════════════════════════════════════════
+#  資材(消耗品)現在庫算出ロジック(共通化)
+#  以前は「在庫一覧・入出庫」タブの中だけで計算しており、棚卸調整タブなど
+#  他の場所から再利用できなかったため、共通関数として切り出した。
+# ════════════════════════════════════════════════════════════════
+def get_supply_inventory():
+    inv = {s.get("資材ID"): float(s.get("初期在庫") or 0.0) for s in supplies}
+    for log in supply_logs:
+        sid = log.get("資材ID")
+        if sid in inv:
+            qty = float(log.get("数量") or 0.0)
+            if log.get("処理") == "入荷": inv[sid] += qty
+            elif log.get("処理") == "使用": inv[sid] -= qty
+    return inv
+
+# ════════════════════════════════════════════════════════════════
 #  カスタムUIコンポーネント (確定ボタン廃止・即時反映構造へ修繕)
 # ════════════════════════════════════════════════════════════════
 def _change_adj(key, val):
@@ -304,13 +319,32 @@ def render_amount_adjuster(title, base_val, adj_key):
     return act_val
 
 def render_lot_selector(mat_name, lot_key):
-    """確定ボタン不要！タップまたは手入力の瞬間に即時反映されるロバストなロット選択器"""
+    """確定ボタン不要！タップまたは手入力の瞬間に即時反映されるロバストなロット選択器
+    ★【修繕】以前はポップオーバーの起動ボタンに表示される「現在のロット」が、
+    クリックした直後でも常に1手遅れ(古い値のまま)で表示されるバグがあった。
+    原因は、ボタンのラベル文字列がラジオボタン自身の選択結果が確定する前の
+    セッション値を使って組み立てられていたこと。ラジオボタン自身の内部
+    セッション値を優先して参照するよう修正し、選択結果をポップオーバーの
+    外側にも大きく表示することで、選択が即座に反映されているとひと目で
+    わかるようにした。"""
     active_lots = _get_active_lots(mat_name)
     has_active = len(active_lots) > 0
-    options = active_lots + ["✏️ リスト外 (手入力)"] if has_active else ["✏️ リスト外 (手入力)"]
-    
-    curr_val = st.session_state.get(lot_key, active_lots[0] if has_active else "─")
-    
+    options = (active_lots + ["✏️ リスト外 (手入力)"]) if has_active else ["✏️ リスト外 (手入力)"]
+
+    rad_key = f"rad_{lot_key}"
+    txt_key = f"txt_{lot_key}"
+
+    # ラジオボタン自身のセッション値(クリック直後は既に更新されている)を最優先で
+    # 参照することで、ボタン表示が「1手遅れ」になる不具合を解消する。
+    if rad_key in st.session_state and st.session_state[rad_key] in options:
+        sel_now = st.session_state[rad_key]
+        if sel_now == "✏️ リスト外 (手入力)":
+            curr_val = (st.session_state.get(txt_key, "") or "").strip() or "─"
+        else:
+            curr_val = sel_now
+    else:
+        curr_val = st.session_state.get(lot_key, active_lots[0] if has_active else "─")
+
     # 初期選択位置の決定
     if curr_val in active_lots:
         default_idx = active_lots.index(curr_val)
@@ -321,15 +355,21 @@ def render_lot_selector(mat_name, lot_key):
 
     with lot_popover(f"📦 ロット: {curr_val} (タップで選択)"):
         st.markdown(f"#### 📦 {mat_name} のロット選択")
-        sel_option = st.radio("選択してください", options, index=default_idx, key=f"rad_{lot_key}")
+        sel_option = st.radio("選択してください", options, index=default_idx, key=rad_key)
         
         if sel_option == "✏️ リスト外 (手入力)":
-            manual_in = st.text_input("ロット番号を入力 (自動確定)", value=curr_val if curr_val not in active_lots else "", key=f"txt_{lot_key}")
+            manual_in = st.text_input("ロット番号を入力 (自動確定)", value=curr_val if curr_val not in active_lots else "", key=txt_key)
             final_lot = manual_in.strip() if manual_in.strip() else "─"
         else:
             final_lot = sel_option
             
         st.session_state[lot_key] = final_lot
+
+    # ポップオーバーを開かなくても選択結果がひと目でわかるよう、外側にも明示表示
+    if st.session_state[lot_key] != "─":
+        st.markdown(f"<div style='margin-top:6px; font-weight:900; color:#1d4ed8;'>🔵 選択中のロット: {st.session_state[lot_key]}</div>", unsafe_allow_html=True)
+    else:
+        st.markdown("<div style='margin-top:6px; font-weight:900; color:#15803d;'>🟢 ロット未選択</div>", unsafe_allow_html=True)
 
     return st.session_state[lot_key]
 
@@ -489,12 +529,12 @@ if page == "🏭 製造仕込み":
                             st.markdown("---")
                             mat_a = st.radio("🅰️ 原料種別", konjac_mats, key=f"kma_{selected_p}_{i}", horizontal=True)
                             act_a = render_amount_adjuster(f"🅰️ 投入量 ({ratio_a}%)", calc_kg * ratio_a / 100.0, f"adj_a_{selected_p}_{i}")
-                            lot_a = render_lot_selector(mat_a, f"lot_a_{selected_p}_{i}")
+                            lot_a = render_lot_selector(mat_a, f"lot_a_{selected_p}_{i}_{mat_a}")
                             
                             st.markdown("---")
                             mat_b = st.radio("🅱️ 原料種別", konjac_mats, index=1 if len(konjac_mats)>1 else 0, key=f"kmb_{selected_p}_{i}", horizontal=True)
                             act_b = render_amount_adjuster(f"🅱️ 投入量 ({ratio_b}%)", calc_kg * ratio_b / 100.0, f"adj_b_{selected_p}_{i}")
-                            lot_b = render_lot_selector(mat_b, f"lot_b_{selected_p}_{i}")
+                            lot_b = render_lot_selector(mat_b, f"lot_b_{selected_p}_{i}_{mat_b}")
 
                             submitted_ingredients.append({"原料名": mat_a, "kg": act_a, "lot": f"{lot_a}({ratio_a}%)"})
                             submitted_ingredients.append({"原料名": mat_b, "kg": act_b, "lot": f"{lot_b}({ratio_b}%)"})
@@ -533,8 +573,12 @@ if page == "🏭 製造仕込み":
                 })
                 
                 # 入力状態をリセット
+                # 【修繕】以前はロット選択の内部キー(rad_/txt_)やブレンド原料選択キー
+                # (kma_/kmb_/rbtn_)がリセット対象に含まれておらず、前回選択したロットや
+                # ブレンド原料が次回の登録に無言で引き継がれてしまう可能性があった
+                # (トレーサビリティ上のリスクとなるため修正)。
                 for key in list(st.session_state.keys()):
-                    if any(key.startswith(p) for p in ["adj_", "ts_", "lw_", "lot_", "t_size", "l_size", "kr_", "kb_"]):
+                    if any(key.startswith(p) for p in ["adj_", "ts_", "lw_", "lot_", "t_size", "l_size", "kr_", "kb_", "rad_", "txt_", "kma_", "kmb_", "rbtn_"]):
                         del st.session_state[key]
                 
                 st.toast("✅ 製造記録を保存しました", icon="💾")
@@ -662,18 +706,38 @@ elif page == "📦 在庫・棚卸":
         
     with t_adj:
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">⚖️ 棚卸調整（実地数量をそのまま入力）</div>', unsafe_allow_html=True)
+        st.caption("💡 製造仕込みの登録によって減算されていく理論在庫と、実際の在庫数がズレてしまった場合はこちらで調整してください。差分を計算する必要はありません。**実際に数えた数量をそのまま入力**すれば、保存した瞬間からその数量が現在庫になります。")
+        # 【新規実装】以前は「差分(袋数)」を利用者自身が暗算して入力する方式で、
+        #   計算ミスによる在庫のズレを誘発しやすかった。実地棚卸数量を直接入力し、
+        #   差分はシステム側で自動計算する方式に変更した。
         if inventory_data:
-            tgt_list = {f"{v['原料種別']} (ロット:{v['ロットNo']}) - 現在:{v['現在庫(袋)']}袋": v["入荷No"] for v in inventory_data.values()}
+            tgt_list = {f"{v['原料種別']} (ロット:{v['ロットNo']}) - 理論在庫:{fmt_kg(v['現在庫(袋)'])}袋": v["入荷No"] for v in inventory_data.values()}
             selected_tgt = st.selectbox("調整対象ロット", list(tgt_list.keys()))
-            diff_bags = st.number_input("理論在庫との差分（袋数） ※増やす場合はプラス、減らす場合はマイナス", value=0.0, step=1.0)
-            reason_txt = st.text_input("調整理由")
+            target_ano = tgt_list[selected_tgt]
+            theoretical_bags = next((v["現在庫(袋)"] for v in inventory_data.values() if v["入荷No"] == target_ano), 0.0)
+
+            st.metric("📐 現在の理論在庫", f"{fmt_kg(theoretical_bags)} 袋")
+            actual_bags = st.number_input("📋 実地棚卸で数えた実在庫数量（袋）", min_value=0.0, value=round(theoretical_bags, 2), step=1.0)
+            diff_bags = round(actual_bags - theoretical_bags, 2)
+
+            if diff_bags > 0:
+                st.success(f"✅ 差分 +{fmt_kg(diff_bags)}袋 を自動計算して保存します → 保存後の在庫: **{fmt_kg(actual_bags)}袋**")
+            elif diff_bags < 0:
+                st.warning(f"⚠️ 差分 {fmt_kg(diff_bags)}袋 を自動計算して保存します → 保存後の在庫: **{fmt_kg(actual_bags)}袋**")
+            else:
+                st.info("理論在庫と一致しています。差分はありません。")
+
+            reason_txt = st.text_input("調整理由（例: 棚卸差異、破損、計量誤差など）")
             op = render_operator_selector("adj_op")
-            if st.button("💾 在庫を調整する", type="primary"):
+            if st.button("💾 実地数量で在庫を確定する", type="primary", use_container_width=True):
                 sheets.append_adjustment({
-                    "調整ID": f"ADJ-{datetime.now().strftime('%Y%m%d%H%M%S')}", "入荷No": tgt_list[selected_tgt],
-                    "調整日": str(date.today()), "調整袋数": diff_bags, "理由": reason_txt, "担当者": op, "登録日時": datetime.now().isoformat()
+                    "調整ID": f"ADJ-{datetime.now().strftime('%Y%m%d%H%M%S')}", "入荷No": target_ano,
+                    "調整日": str(date.today()), "調整袋数": diff_bags,
+                    "理由": f"【棚卸調整:実地{fmt_kg(actual_bags)}袋に更新】{reason_txt}",
+                    "担当者": op, "登録日時": datetime.now().isoformat()
                 })
-                st.success("調整を保存しました。")
+                st.success(f"✅ 現在庫を {fmt_kg(actual_bags)}袋 に更新しました。")
                 time.sleep(1.5)
                 refresh()
         st.markdown('</div>', unsafe_allow_html=True)
@@ -683,18 +747,12 @@ elif page == "📦 在庫・棚卸":
 # ═══════════════════════════════════════════════════════════════
 elif page == "🧹 資材管理":
     st.markdown('<div class="main-header"><h1>🧹 資材・消耗品管理</h1></div>', unsafe_allow_html=True)
-    t_s1, t_s2 = st.tabs(["📋 在庫一覧・入出庫", "🕒 ログ管理"])
+    t_s1, t_s2, t_s3 = st.tabs(["📋 在庫一覧・入出庫", "🕒 ログ管理", "⚖️ 棚卸調整"])
     
     with t_s1:
         if not supplies: st.warning("資材が未登録です。マスタ設定よりご登録ください。")
         else:
-            supply_inventory = {s.get("資材ID"): float(s.get("初期在庫") or 0.0) for s in supplies}
-            for log in supply_logs:
-                sid = log.get("資材ID")
-                if sid in supply_inventory:
-                    qty = float(log.get("数量") or 0.0)
-                    if log.get("処理") == "入荷": supply_inventory[sid] += qty
-                    elif log.get("処理") == "使用": supply_inventory[sid] -= qty
+            supply_inventory = get_supply_inventory()
 
             cols_grid = st.columns(min(3, len(supplies)))
             for idx, s in enumerate(supplies):
@@ -724,7 +782,7 @@ elif page == "🧹 資材管理":
             df_logs = pd.DataFrame(supply_logs)
             df_logs["資材名"] = df_logs["資材ID"].map(id_name_map)
             df_logs_sorted = df_logs.sort_values("登録日", ascending=False)
-            st.dataframe(df_logs_sorted[["登録日", "資材名", "処理", "数量", "作業者"]].head(50), use_container_width=True, hide_index=True)
+            st.dataframe(df_logs_sorted[["登録日", "資材名", "処理", "数量", "作業者", "備考"]].head(50), use_container_width=True, hide_index=True)
             
             st.markdown('<div class="section-title">🚨 ログの取り消し・削除</div>', unsafe_allow_html=True)
             log_options = {f"{r.get('登録日','')} / {r.get('資材名','')} / {r.get('処理','')} {fmt_kg(r.get('数量',0))}": r.get("ログID", "") for _, r in df_logs_sorted.head(30).iterrows()}
@@ -733,6 +791,54 @@ elif page == "🧹 資材管理":
                 if st.button("🗑️ このログを削除", type="primary"):
                     sheets.delete_supply_log(log_options[sel_log])
                     st.success("削除しました。"); time.sleep(1); refresh()
+        else:
+            st.info("入出庫ログはまだありません。")
+
+    with t_s3:
+        st.markdown('<div class="form-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">⚖️ 資材の棚卸調整（実地数量をそのまま入力）</div>', unsafe_allow_html=True)
+        st.caption("💡 入出庫の記録漏れなどで理論在庫と実際の在庫がズレてしまった場合はこちらで調整してください。差分を計算する必要はありません。**実際に数えた数量をそのまま入力**すれば、保存した瞬間からその数量が現在庫になります。")
+        # 【新規実装】資材にも原料と同様の「実地数量をそのまま入力する」棚卸調整機能を追加。
+        #   以前は資材の在庫を補正する手段が入荷/使用ログの手動積み増ししかなく、
+        #   ズレを直す際に暗算が必要で誤りが起きやすかった。
+        if supplies:
+            supply_inventory_adj = get_supply_inventory()
+            tgt_sup_list = {f"{s.get('資材名')} - 理論在庫:{fmt_kg(supply_inventory_adj.get(s.get('資材ID'), 0.0))}": s.get("資材ID") for s in supplies}
+            sel_sup_label = st.selectbox("調整対象資材", list(tgt_sup_list.keys()))
+            sel_sid = tgt_sup_list[sel_sup_label]
+            theoretical_qty = supply_inventory_adj.get(sel_sid, 0.0)
+
+            st.metric("📐 現在の理論在庫", fmt_kg(theoretical_qty))
+            actual_qty = st.number_input("📋 実地棚卸で数えた実在庫数量", min_value=0.0, value=round(theoretical_qty, 2), step=1.0)
+            diff_qty = round(actual_qty - theoretical_qty, 2)
+
+            if diff_qty > 0:
+                st.success(f"✅ 差分 +{fmt_kg(diff_qty)} を「入荷」として自動記録します → 保存後の在庫: **{fmt_kg(actual_qty)}**")
+            elif diff_qty < 0:
+                st.warning(f"⚠️ 差分 {fmt_kg(diff_qty)} を「使用」として自動記録します → 保存後の在庫: **{fmt_kg(actual_qty)}**")
+            else:
+                st.info("理論在庫と一致しています。差分はありません。")
+
+            reason_txt2 = st.text_input("調整理由（例: 棚卸差異、破損など）", key="sup_adj_reason")
+            op2 = render_operator_selector("sup_adj_op")
+
+            if st.button("💾 実地数量で在庫を確定する", type="primary", use_container_width=True, key="sup_adj_save"):
+                if diff_qty != 0:
+                    sheets.append_supply_log({
+                        "ログID": f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+                        "登録日": str(date.today()), "資材ID": sel_sid,
+                        "処理": "入荷" if diff_qty > 0 else "使用",
+                        "数量": abs(diff_qty),
+                        "作業者": op2,
+                        "備考": f"【棚卸調整:実地{fmt_kg(actual_qty)}に更新】{reason_txt2}",
+                        "登録日時": datetime.now().isoformat()
+                    })
+                st.success(f"✅ 現在庫を {fmt_kg(actual_qty)} に更新しました。")
+                time.sleep(1.5)
+                refresh()
+        else:
+            st.warning("資材が未登録です。マスタ設定よりご登録ください。")
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════
 #  🔍 トレース
@@ -746,7 +852,22 @@ elif page == "🔍 トレース":
         lot_list = sorted(list(set([str(a.get("ロットNo", "")).strip() for a in arrivals if a.get("ロットNo")])), reverse=True)
         tgt_lot = st.selectbox("検索する原料ロット", lot_list if lot_list else ["なし"])
         if st.button("➡️ 追跡開始", type="primary", use_container_width=True):
-            match_brw = [b for b in brewing if tgt_lot in b.get("その他添加物", "")]
+            # 【修繕】以前は「その他添加物」のJSON文字列に対する単純な部分一致
+            # (例: ロット"L1"が"L123"にも誤ヒットしてしまう)でトレースしており、
+            # 食品トレーサビリティ上、誤った製造記録を拾ってしまう危険があった。
+            # JSONを正しくパースし、ロット番号を完全一致で照合するよう修正。
+            match_brw = []
+            for b in brewing:
+                try:
+                    items = json.loads(b.get("その他添加物", "[]"))
+                except Exception:
+                    items = []
+                for item in items:
+                    lot_field = str(item.get("lot", ""))
+                    lots_in_field = [re.sub(r'\(\d+%\)', '', x).strip() for x in lot_field.split(",")]
+                    if tgt_lot in lots_in_field:
+                        match_brw.append(b)
+                        break
             if match_brw: st.dataframe(pd.DataFrame(match_brw)[["仕込日", "品名", "仕込量(kg)"]], use_container_width=True, hide_index=True)
             else: st.warning("履歴がありません。")
     else:
@@ -792,19 +913,23 @@ elif page == "📋 履歴・帳票":
         
         if HAS_OPENPYXL and not filtered_df.empty:
             def generate_excel_report(df, start_d, end_d):
+                # 【修繕】以前は itertuples() の位置依存の属性名(_6, _14 等)で
+                #   「仕込量(kg)」「石灰水(L)」を参照していた。これはスプレッドシートの
+                #   列順が変わった場合に無言で誤った列の値を書き出してしまう危険な実装
+                #   だったため、列名で明示的に取得する安全な方式に修正した。
                 wb = Workbook()
                 ws = wb.active
                 ws.title = "製造記録"
                 headers = ["製造日", "仕込No", "製品名", "担当者", "製造量(kg)", "石灰水(L)", "備考"]
                 for col_idx, h in enumerate(headers, 1): ws.cell(row=1, column=col_idx, value=h)
-                for r_idx, row in enumerate(df.itertuples(), 2):
-                    ws.cell(row=r_idx, column=1, value=str(getattr(row, "仕込日", "")))
-                    ws.cell(row=r_idx, column=2, value=str(getattr(row, "仕込No", "")))
-                    ws.cell(row=r_idx, column=3, value=str(getattr(row, "品名", "")))
-                    ws.cell(row=r_idx, column=4, value=str(getattr(row, "メーカー", "")))
-                    ws.cell(row=r_idx, column=5, value=float(getattr(row, "_6", 0) or 0))
-                    ws.cell(row=r_idx, column=6, value=float(getattr(row, "_14", 0) or 0))
-                    ws.cell(row=r_idx, column=7, value=str(getattr(row, "備考", "")))
+                for r_idx, (_, row) in enumerate(df.iterrows(), 2):
+                    ws.cell(row=r_idx, column=1, value=str(row.get("仕込日", "")))
+                    ws.cell(row=r_idx, column=2, value=str(row.get("仕込No", "")))
+                    ws.cell(row=r_idx, column=3, value=str(row.get("品名", "")))
+                    ws.cell(row=r_idx, column=4, value=str(row.get("メーカー", "")))
+                    ws.cell(row=r_idx, column=5, value=float(row.get("仕込量(kg)", 0) or 0))
+                    ws.cell(row=r_idx, column=6, value=float(row.get("石灰水(L)", 0) or 0))
+                    ws.cell(row=r_idx, column=7, value=str(row.get("備考", "")))
                 return wb
                 
             wb = generate_excel_report(filtered_df, s_date.strftime("%Y/%m/%d"), e_date.strftime("%Y/%m/%d"))
