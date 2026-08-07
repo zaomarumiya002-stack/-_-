@@ -120,6 +120,48 @@ div[data-testid="stRadio"] label[data-baseweb="radio"] input:checked + div p { c
     background: #f8fafc !important; border: none !important; margin-top: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.2) !important;
 }
 [data-testid="stSidebar"] .stButton button p { color: #0f172a !important; font-weight: 900 !important; }
+
+/* ════════ 数値の視認性（表・カード共通） ════════ */
+.stMetric, div[data-testid="stMetric"] {
+    background: var(--c-surface); border-radius: 12px; padding: 14px 16px; border: 2px solid #e2e8f0;
+}
+div[data-testid="stMetricValue"] { font-size: 1.9rem !important; font-weight: 900 !important; font-variant-numeric: tabular-nums; }
+div[data-testid="stMetricLabel"] { font-weight: 800 !important; }
+/* dataframe/表の数字を等幅・右寄せにして桁ズレ・小数ノイズを視認しやすくする */
+div[data-testid="stDataFrame"] { font-variant-numeric: tabular-nums; }
+div[data-testid="stDataFrame"] * { font-size: 0.98rem !important; }
+
+/* カテゴリ選択チップ（資材管理など） */
+.cat-chip-wrap { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+
+/* ダッシュボード原料カードの数値 */
+.mat-card-value { font-variant-numeric: tabular-nums; }
+
+/* ════════ タブレット (≤1024px) ════════ */
+@media (max-width: 1024px) {
+    .main-header h1 { font-size: 1.4rem !important; }
+    .form-card { padding: 18px !important; }
+    div[data-baseweb="input"] input, div[data-baseweb="select"], div[data-testid="stDateInput"] input { font-size: 1.1rem !important; }
+}
+
+/* ════════ スマートフォン (≤640px) ════════ */
+@media (max-width: 640px) {
+    .block-container { padding-left: 0.8rem !important; padding-right: 0.8rem !important; padding-top: 1rem !important; }
+    .main-header { padding: 14px 16px; }
+    .main-header h1 { font-size: 1.15rem !important; }
+    .main-header p { font-size: 0.8rem !important; }
+    .form-card { padding: 14px !important; border-radius: 10px; }
+    .section-title { font-size: 1.05rem; }
+    /* ボタン・入力欄は指で押しやすい最小サイズを維持しつつ幅いっぱいに */
+    .stButton button { font-size: 1rem !important; min-height: 52px !important; width: 100%; }
+    div[data-baseweb="input"], div[data-baseweb="select"] > div, div[data-testid="stDateInput"] > div { min-height: 52px !important; }
+    div[data-baseweb="input"] input, div[data-baseweb="select"], div[data-testid="stDateInput"] input { font-size: 1.05rem !important; }
+    div[data-testid="stRadio"] label { min-width: 100%; padding: 12px !important; }
+    div[data-testid="stMetricValue"] { font-size: 1.5rem !important; }
+    div[data-testid="stDataFrame"] * { font-size: 0.85rem !important; }
+    /* 横スクロールでの見切れ防止 */
+    .stApp { overflow-x: hidden; }
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -208,6 +250,16 @@ def fmt_kg(val):
         return f"{val:.3f}".rstrip('0').rstrip('.')
     except: return str(val)
 
+def fmt_df_numeric(df, cols):
+    """表(st.dataframe)に出す数値列の不要な小数点以下ノイズ(浮動小数点誤差等)を
+    fmt_kgと同じ丸め規則で除去してから文字列化する。現場で見づらいと指摘のあった
+    「0.30000000000000004袋」のような表示を防ぐための共通処理。"""
+    df = df.copy()
+    for c in cols:
+        if c in df.columns:
+            df[c] = df[c].apply(fmt_kg)
+    return df
+
 def safe_parse_recipe(recipe_val):
     if not recipe_val: return []
     data = recipe_val
@@ -279,6 +331,14 @@ def _get_active_lots(mat_name):
                 if l and l not in opts: opts.append(l)
                 if len(opts) >= 5: break
     return opts
+
+def get_lots_for_material(mat_name):
+    """特定の原料種別に属する入荷ロットを、現在庫が多い順に返す。
+    ダッシュボードの「主要原料モニター」からの増減・棚卸調整で、
+    どのロットに対して差分を計上するかを選ぶために利用する。"""
+    lots = [v for v in inventory_data.values() if v["原料種別"] == mat_name]
+    lots.sort(key=lambda v: v["現在庫(袋)"], reverse=True)
+    return lots
 
 # ════════════════════════════════════════════════════════════════
 #  資材(消耗品)現在庫算出ロジック(共通化)
@@ -630,9 +690,9 @@ elif page == "📊 ダッシュボード":
 
         with cols[idx % 3]:
             st.markdown(f"""
-            <div style="background:{bg_col}; border:2px solid {border_col}; border-radius:12px; padding:18px; margin-bottom:16px;">
+            <div style="background:{bg_col}; border:2px solid {border_col}; border-radius:12px; padding:18px; margin-bottom:8px;">
                 <div style="font-weight:900; color:#0f172a; font-size:1.15rem;">{m}</div>
-                <div style="font-size:2.2rem; font-weight:900; color:#ea580c; margin:6px 0 2px 0;">
+                <div class="mat-card-value" style="font-size:2.2rem; font-weight:900; color:#ea580c; margin:6px 0 2px 0;">
                     {fmt_kg(curr_kg)}<span style="font-size:1.1rem; color:#64748b; margin-right:8px;">kg</span> 
                     <span style="font-size:1.6rem; color:#0f172a;">({fmt_kg(curr_bag)}袋)</span>
                 </div>
@@ -640,6 +700,78 @@ elif page == "📊 ダッシュボード":
                 {alert_msg}
             </div>
             """, unsafe_allow_html=True)
+
+            # ════════════════════════════════════════════════════════
+            # 【新規実装】以前はダッシュボードの主要原料モニターが表示専用で、
+            #   在庫を増減・修正するには別タブ「📦 在庫・棚卸」まで移動する
+            #   必要があった。資材管理タブと同様に、この場でワンタップの
+            #   クイック増減と、実地数量を入力するだけの棚卸調整ができる
+            #   ようにした。内部的には既存の入荷ロット単位の調整
+            #   (sheets.append_adjustment)をそのまま利用しており、
+            #   データ構造やこれまでの調整履歴には影響しない。
+            # ════════════════════════════════════════════════════════
+            mat_lots = get_lots_for_material(m)
+            with lot_popover(f"🔧 {m} を増減・棚卸調整"):
+                if not mat_lots:
+                    st.info("この原料の入荷記録がありません。まず「📥 入荷登録」を行ってください。")
+                else:
+                    st.markdown(f"#### 🔧 {m} の在庫調整")
+                    adj_mode = st.radio("調整方法", ["➕➖ クイック増減(1袋単位)", "📋 棚卸(実地数量で確定)"], key=f"dash_mode_{m}")
+
+                    lot_label_map = {f"{v['ロットNo']} (現在庫:{fmt_kg(v['現在庫(袋)'])}袋)": v["入荷No"] for v in mat_lots}
+                    if len(lot_label_map) > 1:
+                        sel_lot_label = st.selectbox("対象ロット（差分を計上するロット）", list(lot_label_map.keys()), key=f"dash_lot_{m}")
+                    else:
+                        sel_lot_label = list(lot_label_map.keys())[0]
+                        st.caption(f"📦 対象ロット: {sel_lot_label}")
+                    target_ano = lot_label_map[sel_lot_label]
+                    target_lot_data = next(v for v in mat_lots if v["入荷No"] == target_ano)
+
+                    if "クイック" in adj_mode:
+                        st.caption("👆 タップした瞬間に在庫へ即時反映されます（確認なし）")
+                        op_q = render_operator_selector(f"dash_qop_{m}")
+
+                        def _dash_quick_adj(ano, delta, op_name):
+                            sheets.append_adjustment({
+                                "調整ID": f"ADJ-{datetime.now().strftime('%Y%m%d%H%M%S%f')}", "入荷No": ano,
+                                "調整日": str(date.today()), "調整袋数": delta,
+                                "理由": "【ダッシュボードからのクイック増減】",
+                                "担当者": op_name, "登録日時": datetime.now().isoformat()
+                            })
+
+                        qc1, qc2, qc3, qc4 = st.columns(4)
+                        if qc1.button("➖10", key=f"dq_m10_{m}", use_container_width=True):
+                            _dash_quick_adj(target_ano, -10, op_q); st.toast(f"✅ {m} を -10袋 しました"); time.sleep(1.0); refresh()
+                        if qc2.button("➖1", key=f"dq_m1_{m}", use_container_width=True):
+                            _dash_quick_adj(target_ano, -1, op_q); st.toast(f"✅ {m} を -1袋 しました"); time.sleep(1.0); refresh()
+                        if qc3.button("➕1", key=f"dq_p1_{m}", use_container_width=True):
+                            _dash_quick_adj(target_ano, 1, op_q); st.toast(f"✅ {m} を +1袋 しました"); time.sleep(1.0); refresh()
+                        if qc4.button("➕10", key=f"dq_p10_{m}", use_container_width=True):
+                            _dash_quick_adj(target_ano, 10, op_q); st.toast(f"✅ {m} を +10袋 しました"); time.sleep(1.0); refresh()
+                    else:
+                        st.caption("💡 実際に数えた「この原料全体の在庫数量(袋)」をそのまま入力してください。理論在庫との差分は自動計算され、選択中ロットに反映されます。")
+                        actual_total_bag = st.number_input("📋 実地棚卸で数えた実在庫数量（袋・原料全体）", min_value=0.0, value=round(curr_bag, 2), step=1.0, key=f"dash_actual_{m}")
+                        diff_total = round(actual_total_bag - curr_bag, 2)
+                        if diff_total > 0:
+                            st.success(f"✅ 差分 +{fmt_kg(diff_total)}袋 をロット「{target_lot_data['ロットNo']}」に反映します → 保存後の{m}全体在庫: **{fmt_kg(actual_total_bag)}袋**")
+                        elif diff_total < 0:
+                            st.warning(f"⚠️ 差分 {fmt_kg(diff_total)}袋 をロット「{target_lot_data['ロットNo']}」に反映します → 保存後の{m}全体在庫: **{fmt_kg(actual_total_bag)}袋**")
+                        else:
+                            st.info("理論在庫と一致しています。差分はありません。")
+
+                        reason_dash = st.text_input("調整理由（例: 棚卸差異、破損、計量誤差など）", key=f"dash_reason_{m}")
+                        op_dash = render_operator_selector(f"dash_op_{m}")
+                        if st.button("💾 実地数量で在庫を確定する", type="primary", use_container_width=True, key=f"dash_save_{m}"):
+                            sheets.append_adjustment({
+                                "調整ID": f"ADJ-{datetime.now().strftime('%Y%m%d%H%M%S')}", "入荷No": target_ano,
+                                "調整日": str(date.today()), "調整袋数": diff_total,
+                                "理由": f"【ダッシュボード棚卸調整:{m}全体を実地{fmt_kg(actual_total_bag)}袋に更新】{reason_dash}",
+                                "担当者": op_dash, "登録日時": datetime.now().isoformat()
+                            })
+                            st.success(f"✅ {m} の在庫を {fmt_kg(actual_total_bag)}袋 に更新しました。")
+                            time.sleep(1.5)
+                            refresh()
+            st.markdown("<div style='margin-bottom:16px;'></div>", unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════
 #  📥 入荷登録
@@ -688,7 +820,7 @@ elif page == "📥 入荷登録":
     with t_hist:
         if arrivals:
             df_arr = pd.DataFrame(arrivals)[["入荷日", "原料種別", "ロットNo", "メーカー", "総量(kg)"]][::-1]
-            st.dataframe(df_arr.head(50), use_container_width=True, hide_index=True)
+            st.dataframe(fmt_df_numeric(df_arr.head(50), ["総量(kg)"]), use_container_width=True, hide_index=True)
         else: st.info("入荷履歴はありません。")
 
 # ═══════════════════════════════════════════════════════════════
@@ -701,7 +833,8 @@ elif page == "📦 在庫・棚卸":
     with t_inv:
         active_inv = [v for v in inventory_data.values() if v["現在庫(袋)"] > 0.0]
         if active_inv:
-            st.dataframe(pd.DataFrame(active_inv)[["原料種別", "ロットNo", "入荷袋数", "使用袋数", "調整袋数", "現在庫(袋)", "現在庫(kg)"]], use_container_width=True, hide_index=True)
+            df_active_inv = pd.DataFrame(active_inv)[["原料種別", "ロットNo", "入荷袋数", "使用袋数", "調整袋数", "現在庫(袋)", "現在庫(kg)"]]
+            st.dataframe(fmt_df_numeric(df_active_inv, ["入荷袋数", "使用袋数", "調整袋数", "現在庫(袋)", "現在庫(kg)"]), use_container_width=True, hide_index=True)
         else: st.info("在庫データがありません。")
         
     with t_adj:
@@ -754,17 +887,57 @@ elif page == "🧹 資材管理":
         else:
             supply_inventory = get_supply_inventory()
 
-            cols_grid = st.columns(min(3, len(supplies)))
-            for idx, s in enumerate(supplies):
+            # ════════════════════════════════════════════════════════
+            # 【新規実装】資材の種類が増えるほど一覧が縦に長くなり、目的の
+            #   資材を探しにくいという指摘があったため、まず「カテゴリ」を
+            #   選び、そのカテゴリに紐づく資材だけを表示する2段階の絞り込み
+            #   方式に変更した（マスタ設定タブで登録した「カテゴリ」を利用）。
+            # ════════════════════════════════════════════════════════
+            cat_list = []
+            for s in supplies:
+                c = str(s.get("カテゴリ") or "").strip() or "未分類"
+                if c not in cat_list: cat_list.append(c)
+            cat_list = sorted(cat_list)
+            cat_options = ["📋 すべて表示"] + [f"{_deterministic_icon(c, _ICON_POOL)} {c}" for c in cat_list]
+
+            st.markdown('<div style="font-weight:900; margin-bottom:8px;">① カテゴリを選択</div>', unsafe_allow_html=True)
+            sel_cat_label = st.radio("カテゴリ", cat_options, horizontal=True, key="supply_cat_filter", label_visibility="collapsed")
+            if sel_cat_label == "📋 すべて表示":
+                filtered_supplies = supplies
+            else:
+                sel_cat_name = cat_list[cat_options.index(sel_cat_label) - 1]
+                filtered_supplies = [s for s in supplies if (str(s.get("カテゴリ") or "").strip() or "未分類") == sel_cat_name]
+
+            st.caption(f"📦 {len(filtered_supplies)} / {len(supplies)} 件の資材を表示中")
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            if not filtered_supplies:
+                st.info("このカテゴリに登録されている資材はありません。")
+
+            cols_grid = st.columns(min(3, len(filtered_supplies))) if filtered_supplies else []
+            for idx, s in enumerate(filtered_supplies):
                 sid = s.get("資材ID")
                 with cols_grid[idx % 3]:
                     with st.container(border=True):
                         if s.get("画像URL"): st.image(s.get("画像URL"), width=60)
                         st.markdown(f"**{s.get('資材名')}**")
+                        st.caption(f"🏷️ {s.get('カテゴリ') or '未分類'}")
                         st.metric("現在庫", fmt_kg(supply_inventory.get(sid, 0.0)))
                         with lot_popover("🔄 入出庫"):
                             action = st.radio("処理", ["➖ 使用", "➕ 補充"], key=f"act_{sid}", horizontal=True)
-                            qty = st.number_input("数量", min_value=1.0, value=1.0, step=1.0, key=f"qty_{sid}")
+
+                            # 【新規実装】現場での運用を考慮し、数量を毎回手入力しなくても
+                            #   よく使う数量をワンタップで指定できるクイックボタンを追加。
+                            #   （タップ後も入力欄で微調整可能）
+                            qkey = f"qty_{sid}"
+                            if qkey not in st.session_state: st.session_state[qkey] = 1.0
+                            st.caption("👆 よく使う数量をタップ")
+                            qbtns = st.columns(4)
+                            for qi, qv in enumerate([1, 5, 10, 50]):
+                                qbtns[qi].button(f"{qv}", key=f"qbtn_{sid}_{qv}", use_container_width=True,
+                                                  on_click=lambda k, v: st.session_state.update({k: float(v)}), args=(qkey, qv))
+                            qty = st.number_input("数量", min_value=1.0, step=1.0, key=qkey)
+
                             op = render_operator_selector(f"op_{sid}")
                             if st.button("💾 保存", key=f"btn_{sid}", type="primary", use_container_width=True):
                                 sheets.append_supply_log({
@@ -772,6 +945,7 @@ elif page == "🧹 資材管理":
                                     "登録日": str(date.today()), "資材ID": sid, "処理": "使用" if "使用" in action else "入荷", 
                                     "数量": qty, "作業者": op, "備考": "", "登録日時": datetime.now().isoformat()
                                 })
+                                st.session_state[qkey] = 1.0
                                 st.success("記録しました")
                                 time.sleep(1.0)
                                 refresh()
@@ -782,7 +956,7 @@ elif page == "🧹 資材管理":
             df_logs = pd.DataFrame(supply_logs)
             df_logs["資材名"] = df_logs["資材ID"].map(id_name_map)
             df_logs_sorted = df_logs.sort_values("登録日", ascending=False)
-            st.dataframe(df_logs_sorted[["登録日", "資材名", "処理", "数量", "作業者", "備考"]].head(50), use_container_width=True, hide_index=True)
+            st.dataframe(fmt_df_numeric(df_logs_sorted[["登録日", "資材名", "処理", "数量", "作業者", "備考"]].head(50), ["数量"]), use_container_width=True, hide_index=True)
             
             st.markdown('<div class="section-title">🚨 ログの取り消し・削除</div>', unsafe_allow_html=True)
             log_options = {f"{r.get('登録日','')} / {r.get('資材名','')} / {r.get('処理','')} {fmt_kg(r.get('数量',0))}": r.get("ログID", "") for _, r in df_logs_sorted.head(30).iterrows()}
@@ -868,7 +1042,7 @@ elif page == "🔍 トレース":
                     if tgt_lot in lots_in_field:
                         match_brw.append(b)
                         break
-            if match_brw: st.dataframe(pd.DataFrame(match_brw)[["仕込日", "品名", "仕込量(kg)"]], use_container_width=True, hide_index=True)
+            if match_brw: st.dataframe(fmt_df_numeric(pd.DataFrame(match_brw)[["仕込日", "品名", "仕込量(kg)"]], ["仕込量(kg)"]), use_container_width=True, hide_index=True)
             else: st.warning("履歴がありません。")
     else:
         brw_opts = {f"No.{b.get('仕込No')} - {b.get('品名')} ({b.get('仕込日')})": b for b in brewing}
@@ -937,7 +1111,7 @@ elif page == "📋 履歴・帳票":
             wb.save(excel_buffer)
             st.download_button("🖨️ Excel帳票をダウンロード", data=excel_buffer.getvalue(), file_name=f"製造記録_{s_date}_{e_date}.xlsx", type="primary")
         
-        st.dataframe(filtered_df[["仕込日", "仕込No", "品名", "仕込量(kg)", "主原料ロット", "備考"]], use_container_width=True, hide_index=True)
+        st.dataframe(fmt_df_numeric(filtered_df[["仕込日", "仕込No", "品名", "仕込量(kg)", "主原料ロット", "備考"]], ["仕込量(kg)"]), use_container_width=True, hide_index=True)
         st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown('<div class="form-card"><div class="section-title">✏️ インライン編集・削除</div>', unsafe_allow_html=True)
