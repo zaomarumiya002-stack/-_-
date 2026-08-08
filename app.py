@@ -40,96 +40,134 @@ st.set_page_config(
 st.markdown("""
 <style>
 :root {
-    --c-bg: #e2e8f0;            
-    --c-surface: #ffffff;       
-    --c-primary: #ea580c;       
+    --c-bg: #f4f6f9;
+    --c-surface: #ffffff;
+    --c-surface-alt: #f8fafc;
+    --c-primary: #ea580c;
+    --c-primary-soft: #fff1e8;
     --c-primary-hover: #c2410c;
-    --c-secondary: #0f172a;     
-    --c-input-border: #94a3b8;  
+    --c-secondary: #101828;
+    --c-muted: #667085;
+    --c-border: #e4e7ec;
+    --c-input-border: #d0d5dd;
+    --c-success: #12b76a;
+    --c-danger: #ef4444;
+    --radius-lg: 16px;
+    --radius-md: 12px;
+    --radius-sm: 8px;
+    --shadow-card: 0 1px 2px rgba(16,24,40,0.04), 0 4px 16px rgba(16,24,40,0.06);
+    --shadow-card-hover: 0 2px 4px rgba(16,24,40,0.06), 0 8px 24px rgba(16,24,40,0.09);
 }
-.stApp { background-color: var(--c-bg); font-family: 'Helvetica Neue', Arial, sans-serif; }
-h1, h2, h3, h4, h5, h6, p, span, div, label { color: var(--c-secondary); }
+html, body, .stApp {
+    background-color: var(--c-bg) !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", Roboto, Arial, sans-serif !important;
+}
+h1, h2, h3, h4, h5, h6, p, span, div, label { color: var(--c-secondary); letter-spacing: -0.01em; }
+.block-container { padding-top: 1.6rem !important; max-width: 1280px; }
 
-/* ヘッダー・カード */
+/* ════════ ヘッダー・カード（市販SaaS風の柔らかいシャドウ＋角丸） ════════ */
 .main-header {
-    background: var(--c-surface); padding: 18px 24px; border-radius: 12px; margin-bottom: 24px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.08); border-left: 8px solid var(--c-primary);
+    background: var(--c-surface); padding: 20px 26px; border-radius: var(--radius-lg); margin-bottom: 22px;
+    box-shadow: var(--shadow-card); border: 1px solid var(--c-border); border-left: 4px solid var(--c-primary);
 }
-.main-header h1 { font-size: 1.6rem !important; margin: 0 0 6px 0 !important; font-weight: 900 !important; }
-.main-header p { color: #475569 !important; font-size: 0.95rem !important; margin: 0 !important; font-weight: 700; }
-.form-card { background: var(--c-surface); border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-.section-title { font-size: 1.25rem; font-weight: 900; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
-.section-title::before { content: ''; display: block; width: 6px; height: 22px; background-color: var(--c-primary); border-radius: 4px; }
+.main-header h1 { font-size: 1.55rem !important; margin: 0 0 4px 0 !important; font-weight: 800 !important; letter-spacing: -0.02em; }
+.main-header p { color: var(--c-muted) !important; font-size: 0.92rem !important; margin: 0 !important; font-weight: 600; }
+.form-card {
+    background: var(--c-surface); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 20px;
+    box-shadow: var(--shadow-card); border: 1px solid var(--c-border); transition: box-shadow 0.15s ease;
+}
+.section-title { font-size: 1.15rem; font-weight: 800; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; letter-spacing: -0.01em; }
+.section-title::before { content: ''; display: block; width: 4px; height: 20px; background-color: var(--c-primary); border-radius: 4px; }
 
-/* 入力フィールド */
+/* コンテナ(border=True)も同じカードトーンに統一 */
+div[data-testid="stVerticalBlockBorderWrapper"] > div {
+    border-radius: var(--radius-md) !important; border-color: var(--c-border) !important;
+    box-shadow: var(--shadow-card);
+}
+
+/* ════════ 入力フィールド：フラットで洗練された市販ソフト風 ════════ */
 div[data-baseweb="input"], div[data-baseweb="select"] > div, div[data-testid="stDateInput"] > div {
-    background-color: #ffffff !important; border: 2px solid var(--c-input-border) !important;
-    border-radius: 8px !important; min-height: 56px !important; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+    background-color: var(--c-surface-alt) !important; border: 1.5px solid var(--c-input-border) !important;
+    border-radius: var(--radius-sm) !important; min-height: 52px !important; box-shadow: none !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 div[data-baseweb="input"]:focus-within, div[data-baseweb="select"] > div:focus-within, div[data-testid="stDateInput"] > div:focus-within {
-    border-color: var(--c-primary) !important; box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.25) !important;
+    border-color: var(--c-primary) !important; box-shadow: 0 0 0 4px var(--c-primary-soft) !important; background-color: var(--c-surface) !important;
 }
 div[data-baseweb="input"] input, div[data-baseweb="select"], div[data-testid="stDateInput"] input { 
-    font-size: 1.2rem !important; font-weight: 900 !important; color: #000000 !important; padding: 0 14px !important; text-align: center !important;
+    font-size: 1.1rem !important; font-weight: 700 !important; color: var(--c-secondary) !important; padding: 0 14px !important; text-align: center !important;
 }
 button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStepDown"] {
-    min-width: 65px !important; min-height: 56px !important; border-radius: 8px !important; 
-    background-color: #f1f5f9 !important; color: #000000 !important; 
-    border-left: 2px solid var(--c-input-border) !important; border-right: 2px solid var(--c-input-border) !important;
+    min-width: 60px !important; min-height: 52px !important; border-radius: var(--radius-sm) !important; 
+    background-color: var(--c-surface) !important; color: var(--c-secondary) !important; 
+    border-left: 1.5px solid var(--c-input-border) !important; border-right: 1.5px solid var(--c-input-border) !important;
 }
-::placeholder { color: #94a3b8 !important; opacity: 1 !important; font-weight: 600 !important; }
+::placeholder { color: #98a2b3 !important; opacity: 1 !important; font-weight: 500 !important; }
+label p { font-weight: 700 !important; color: var(--c-muted) !important; font-size: 0.88rem !important; }
 
-/* ラジオボタンのタイル化 */
-div[data-testid="stRadio"] > div { display: flex; flex-wrap: wrap; gap: 10px !important; }
+/* ════════ ラジオボタンのタイル化（セグメントコントロール風） ════════ */
+div[data-testid="stRadio"] > div { display: flex; flex-wrap: wrap; gap: 8px !important; }
 div[data-testid="stRadio"] label {
-    background-color: #f8fafc; padding: 14px 16px !important; border-radius: 10px;
-    border: 2px solid var(--c-input-border) !important; font-weight: 800 !important; cursor: pointer;
-    text-align: center; flex: 1 1 auto; justify-content: center; min-width: 120px; transition: all 0.2s ease;
+    background-color: var(--c-surface-alt); padding: 12px 16px !important; border-radius: var(--radius-sm);
+    border: 1.5px solid var(--c-border) !important; font-weight: 700 !important; cursor: pointer;
+    text-align: center; flex: 1 1 auto; justify-content: center; min-width: 110px; transition: all 0.15s ease;
 }
-div[data-testid="stRadio"] label p { font-size: 1.1rem !important; font-weight: 900 !important; color: var(--c-secondary) !important; }
+div[data-testid="stRadio"] label:hover { border-color: var(--c-primary) !important; }
+div[data-testid="stRadio"] label p { font-size: 1rem !important; font-weight: 700 !important; color: var(--c-secondary) !important; }
 div[data-testid="stRadio"] label[data-baseweb="radio"] input:checked + div {
     background-color: var(--c-primary) !important; border-color: var(--c-primary) !important; 
-    box-shadow: 0 6px 12px rgba(234, 88, 12, 0.3); transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(234, 88, 12, 0.25);
 }
 div[data-testid="stRadio"] label[data-baseweb="radio"] input:checked + div p { color: #ffffff !important; }
 
-/* ボタン */
+/* ════════ ボタン：市販ソフトらしいフラット＆明快なプライマリボタン ════════ */
 .stButton button {
-    border-radius: 10px !important; font-weight: 900 !important; font-size: 1.1rem !important; padding: 12px 16px !important;
-    min-height: 56px !important; transition: all 0.1s; border: 2px solid var(--c-input-border) !important; 
-    background: #ffffff !important; color: var(--c-secondary) !important;
+    border-radius: var(--radius-sm) !important; font-weight: 700 !important; font-size: 1rem !important; padding: 12px 18px !important;
+    min-height: 52px !important; transition: all 0.12s ease; border: 1.5px solid var(--c-border) !important; 
+    background: var(--c-surface) !important; color: var(--c-secondary) !important;
 }
+.stButton button:hover { border-color: var(--c-primary) !important; color: var(--c-primary) !important; }
 .stButton button[kind="primary"] {
-    background: linear-gradient(135deg, var(--c-primary), var(--c-primary-hover)) !important; 
-    color: #ffffff !important; border: none !important; box-shadow: 0 4px 12px rgba(234, 88, 12, 0.35) !important;
+    background: var(--c-primary) !important; 
+    color: #ffffff !important; border: none !important; box-shadow: 0 2px 8px rgba(234, 88, 12, 0.3) !important;
 }
-.stButton button:active { transform: scale(0.96) !important; }
+.stButton button[kind="primary"]:hover { background: var(--c-primary-hover) !important; color: #ffffff !important; }
+.stButton button:active { transform: scale(0.97) !important; }
 
-/* サイドバー */
-[data-testid="stSidebar"] { background-color: var(--c-secondary) !important; padding-top: 1rem; }
+/* ════════ サイドバー：モダンなナビゲーションパネル ════════ */
+[data-testid="stSidebar"] { background-color: #14171f !important; padding-top: 1rem; }
 [data-testid="stSidebar"], [data-testid="stSidebar"] div, [data-testid="stSidebar"] span { color: #ffffff !important; }
+[data-testid="stSidebar"] div[role="radiogroup"] { display: flex; flex-direction: column; gap: 4px; }
 [data-testid="stSidebar"] div[role="radiogroup"] label {
-    background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.15) !important;
-    padding: 12px 16px !important; border-radius: 8px !important; margin-bottom: 8px !important; transition: all 0.2s ease;
+    background: transparent !important; border: none !important;
+    padding: 11px 14px !important; border-radius: var(--radius-sm) !important; margin-bottom: 0 !important; transition: all 0.15s ease;
 }
-[data-testid="stSidebar"] div[role="radiogroup"] label p { font-size: 1.1rem !important; font-weight: 900 !important; color: #ffffff !important; }
+[data-testid="stSidebar"] div[role="radiogroup"] label:hover { background: rgba(255,255,255,0.06) !important; }
+[data-testid="stSidebar"] div[role="radiogroup"] label p { font-size: 1rem !important; font-weight: 600 !important; color: rgba(255,255,255,0.75) !important; }
 [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
-    background: var(--c-primary) !important; border-color: var(--c-primary-hover) !important; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    background: var(--c-primary) !important;
 }
+[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p { color: #ffffff !important; font-weight: 800 !important; }
 [data-testid="stSidebar"] .stButton button {
-    background: #f8fafc !important; border: none !important; margin-top: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.2) !important;
+    background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.15) !important; margin-top: 20px; box-shadow: none !important;
 }
-[data-testid="stSidebar"] .stButton button p { color: #0f172a !important; font-weight: 900 !important; }
+[data-testid="stSidebar"] .stButton button p { color: #ffffff !important; font-weight: 700 !important; }
+[data-testid="stSidebar"] .stButton button:hover { background: rgba(255,255,255,0.16) !important; border-color: rgba(255,255,255,0.3) !important; }
 
 /* ════════ 数値の視認性（表・カード共通） ════════ */
 .stMetric, div[data-testid="stMetric"] {
-    background: var(--c-surface); border-radius: 12px; padding: 14px 16px; border: 2px solid #e2e8f0;
+    background: var(--c-surface); border-radius: var(--radius-md); padding: 14px 16px; border: 1.5px solid var(--c-border);
 }
-div[data-testid="stMetricValue"] { font-size: 1.9rem !important; font-weight: 900 !important; font-variant-numeric: tabular-nums; }
-div[data-testid="stMetricLabel"] { font-weight: 800 !important; }
+div[data-testid="stMetricValue"] { font-size: 1.8rem !important; font-weight: 800 !important; font-variant-numeric: tabular-nums; }
+div[data-testid="stMetricLabel"] { font-weight: 700 !important; color: var(--c-muted) !important; }
 /* dataframe/表の数字を等幅・右寄せにして桁ズレ・小数ノイズを視認しやすくする */
-div[data-testid="stDataFrame"] { font-variant-numeric: tabular-nums; }
-div[data-testid="stDataFrame"] * { font-size: 0.98rem !important; }
+div[data-testid="stDataFrame"] { font-variant-numeric: tabular-nums; border-radius: var(--radius-md); overflow: hidden; }
+div[data-testid="stDataFrame"] * { font-size: 0.95rem !important; }
+
+/* タブ：市販ソフトのようなアンダーライン式 */
+button[data-baseweb="tab"] { font-weight: 700 !important; font-size: 1rem !important; padding: 10px 4px !important; }
+div[data-baseweb="tab-highlight"] { background-color: var(--c-primary) !important; height: 3px !important; }
+div[data-baseweb="tab-border"] { background-color: var(--c-border) !important; }
 
 /* カテゴリ選択チップ（資材管理など） */
 .cat-chip-wrap { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
@@ -139,31 +177,32 @@ div[data-testid="stDataFrame"] * { font-size: 0.98rem !important; }
 
 /* ════════ タブレット (≤1024px) ════════ */
 @media (max-width: 1024px) {
-    .main-header h1 { font-size: 1.4rem !important; }
+    .main-header h1 { font-size: 1.35rem !important; }
     .form-card { padding: 18px !important; }
-    div[data-baseweb="input"] input, div[data-baseweb="select"], div[data-testid="stDateInput"] input { font-size: 1.1rem !important; }
+    div[data-baseweb="input"] input, div[data-baseweb="select"], div[data-testid="stDateInput"] input { font-size: 1.05rem !important; }
 }
 
 /* ════════ スマートフォン (≤640px) ════════ */
 @media (max-width: 640px) {
     .block-container { padding-left: 0.8rem !important; padding-right: 0.8rem !important; padding-top: 1rem !important; }
     .main-header { padding: 14px 16px; }
-    .main-header h1 { font-size: 1.15rem !important; }
-    .main-header p { font-size: 0.8rem !important; }
-    .form-card { padding: 14px !important; border-radius: 10px; }
-    .section-title { font-size: 1.05rem; }
+    .main-header h1 { font-size: 1.1rem !important; }
+    .main-header p { font-size: 0.78rem !important; }
+    .form-card { padding: 14px !important; border-radius: var(--radius-md); }
+    .section-title { font-size: 1.02rem; }
     /* ボタン・入力欄は指で押しやすい最小サイズを維持しつつ幅いっぱいに */
-    .stButton button { font-size: 1rem !important; min-height: 52px !important; width: 100%; }
-    div[data-baseweb="input"], div[data-baseweb="select"] > div, div[data-testid="stDateInput"] > div { min-height: 52px !important; }
-    div[data-baseweb="input"] input, div[data-baseweb="select"], div[data-testid="stDateInput"] input { font-size: 1.05rem !important; }
+    .stButton button { font-size: 0.98rem !important; min-height: 50px !important; width: 100%; }
+    div[data-baseweb="input"], div[data-baseweb="select"] > div, div[data-testid="stDateInput"] > div { min-height: 50px !important; }
+    div[data-baseweb="input"] input, div[data-baseweb="select"], div[data-testid="stDateInput"] input { font-size: 1.02rem !important; }
     div[data-testid="stRadio"] label { min-width: 100%; padding: 12px !important; }
-    div[data-testid="stMetricValue"] { font-size: 1.5rem !important; }
+    div[data-testid="stMetricValue"] { font-size: 1.45rem !important; }
     div[data-testid="stDataFrame"] * { font-size: 0.85rem !important; }
     /* 横スクロールでの見切れ防止 */
     .stApp { overflow-x: hidden; }
 }
 </style>
 """, unsafe_allow_html=True)
+
 
 # ════════════════════════════════════════════════════════════════
 #  ユーティリティ & データロード
@@ -232,7 +271,26 @@ def is_lime_boost_active(cfg, target_date=None):
     else:
         return m >= s or m <= e
 
-BIG_CAT_ICONS = {"プラント": "🏭", "OKM": "🟦"}
+# ════════════════════════════════════════════════════════════════
+#  こんにゃく粉「グレード」マスタ
+#  【新規実装】新しいスプレッドシートのタブを増やさずに済むよう、
+#  石灰の季節設定(__LIME_CONFIG__)と同じ手法で、発注点マスタの
+#  予約キー(__GRADE_LIST__)にJSON配列として保存する。
+# ════════════════════════════════════════════════════════════════
+def parse_grade_list(order_points_dict):
+    raw_val = order_points_dict.get("__GRADE_LIST__", "")
+    try:
+        if raw_val and isinstance(raw_val, str) and raw_val.startswith("["):
+            data = json.loads(raw_val)
+            if isinstance(data, list):
+                return [str(x).strip() for x in data if str(x).strip()]
+    except: pass
+    return []
+
+def is_konjac_material(name):
+    return "こんにゃく" in str(name)
+
+BIG_CAT_ICONS = {"プラント": "🏭", "OKM": "🟦", "手詰め": "✋"}
 SUB_CAT_ICONS = {"白": "⚪", "黒": "⚫", "耐冷": "❄️", "ショクカイ": "🍽️", "めん": "🍜", "おでん": "🍢", "その他": "📦"}
 _ICON_POOL = ["🔵", "🟢", "🟡", "🟣", "🟠", "🔴", "🟤", "🔷", "🔶", "🔹", "🔸", "⬛", "⬜", "🟥", "🟩", "🟦"]
 _PRODUCT_ICON_POOL = ["🍥", "🥢", "🌿", "🎍", "🧊", "🍡", "🧵", "🏷️", "📌", "🧺", "🔖", "🧫"]
@@ -273,6 +331,21 @@ def safe_parse_recipe(recipe_val):
     if not isinstance(data, list): data = []
     return [{"原料名": str(i.get("原料名", "")).strip(), "比率": float(i.get("比率", 0.0))} for i in data if isinstance(i, dict) and str(i.get("原料名", "")).strip()]
 
+def safe_parse_seasoning_recipe(recipe_val):
+    """調味料の希釈レシピ用パーサー。通常レシピの「比率(%)」とは異なり、
+    「希釈倍率」(例: 20倍に薄める)をキーに持つ点が異なる。"""
+    if not recipe_val: return []
+    data = recipe_val
+    if not isinstance(data, (dict, list)):
+        try:
+            for _ in range(3):
+                if isinstance(data, str): data = json.loads(data)
+                else: break
+        except: data = []
+    if isinstance(data, dict): data = [data]
+    if not isinstance(data, list): data = []
+    return [{"原料名": str(i.get("原料名", "")).strip(), "希釈倍率": max(float(i.get("希釈倍率", 1.0)), 0.01)} for i in data if isinstance(i, dict) and str(i.get("原料名", "")).strip()]
+
 # ════════════════════════════════════════════════════════════════
 #  在庫・ロット計算
 # ════════════════════════════════════════════════════════════════
@@ -283,6 +356,7 @@ def get_inventory():
         if not ano: continue
         inv[ano] = {
             "入荷No": ano, "ロットNo": str(a.get("ロットNo", "")).strip(), "原料種別": str(a.get("原料種別", "")).strip(), 
+            "メーカー": str(a.get("メーカー", "")).strip() or "未指定", "グレード": str(a.get("グレード", "")).strip() or "-",
             "1袋重量": float(a.get("1袋重量(kg)") or 20.0), "入荷袋数": float(a.get("袋数") or 0.0), "使用量(kg)": 0.0, "調整袋数": 0.0
         }
     for b in brewing:
@@ -465,10 +539,17 @@ if page == "🏭 製造仕込み":
     with col_d: brew_date = st.date_input("📅 仕込日", value=date.today())
     st.markdown("<br>", unsafe_allow_html=True)
 
-    p_recipes = {r.get("品名", "未定義"): {"大カテゴリ": r.get("大カテゴリ", "その他"), "中カテゴリ": r.get("中カテゴリ", "その他"), "成分": safe_parse_recipe(r.get("配合JSON"))} for r in recipes_raw}
+    # 【新規実装】調味料(希釈)レシピは①ラインの製品選択には含めず、後述の
+    #   別セクション「調味料の希釈計算」で扱う。また「手詰め」は登録レシピが
+    #   まだ無くても常にラインとして選択できるよう、固定の基本ライン一覧と
+    #   実際に登録されている大カテゴリを合わせて表示する。
+    p_recipes = {r.get("品名", "未定義"): {"大カテゴリ": r.get("大カテゴリ", "その他"), "中カテゴリ": r.get("中カテゴリ", "その他"), "成分": safe_parse_recipe(r.get("配合JSON"))} for r in recipes_raw if r.get("大カテゴリ") != "調味料"}
+    seasoning_recipes_all = [r for r in recipes_raw if r.get("大カテゴリ") == "調味料"]
 
     st.markdown('<div style="font-weight:900; margin-bottom:8px;">① ラインを選択</div>', unsafe_allow_html=True)
-    big_cats = sorted({v["大カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ")})
+    BASE_BIG_CAT_ORDER = ["プラント", "OKM", "手詰め"]
+    dynamic_cats = {v["大カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ")}
+    big_cats = list(BASE_BIG_CAT_ORDER) + sorted(dynamic_cats - set(BASE_BIG_CAT_ORDER))
     big_cat_labels = [f"{big_cat_icon(c)} {c}" for c in big_cats]
     sel_big_label = st.radio("ライン", big_cat_labels, horizontal=True, label_visibility="collapsed") if big_cats else None
     big_cat = big_cats[big_cat_labels.index(sel_big_label)] if sel_big_label else None
@@ -610,6 +691,34 @@ if page == "🏭 製造仕込み":
                         final_lot = render_lot_selector(r_name, f"lot_{selected_p}_{i}")
                         submitted_ingredients.append({"原料名": r_name, "kg": act_kg, "lot": final_lot})
 
+            # ════════════════════════════════════════════════════════
+            # 【新規実装】調味料(タカノ爪・調味液など)の希釈計算セクション。
+            #   通常の製品レシピとは別区分(大カテゴリ="調味料")で管理されている
+            #   レシピを使い、希釈対象量(できあがり量)を入力するだけで必要な
+            #   原液投入量を自動計算する。投入した原液はロットとともに
+            #   submitted_ingredients に追加され、通常原料と同じ仕組みで在庫
+            #   から自動的に消費される(その他添加物JSON経由・既存ロジック流用)。
+            # ════════════════════════════════════════════════════════
+            if seasoning_recipes_all:
+                st.markdown('<div class="section-title" style="margin-top:32px;">🌶️ 調味料の希釈計算・投入記録</div>', unsafe_allow_html=True)
+                st.caption("💡 使用する調味料にチェックを入れ、希釈対象量（できあがり量）を入力すると、必要な原液投入量が自動計算されます。")
+                for sr_idx, sr in enumerate(seasoning_recipes_all):
+                    sr_name = sr.get("品名", "調味料")
+                    sr_items = safe_parse_seasoning_recipe(sr.get("配合JSON"))
+                    if not sr_items: continue
+                    with st.container(border=True):
+                        use_season = st.checkbox(f"🌶️ {sr_name} を使用する", key=f"use_season_{selected_p}_{sr_idx}")
+                        if use_season:
+                            target_vol_key = f"season_vol_{selected_p}_{sr_idx}"
+                            target_vol = st.number_input("希釈対象量（できあがり量・kg）", min_value=0.0, value=st.session_state.get(target_vol_key, 0.0), step=0.1, key=target_vol_key)
+                            for si, sitem in enumerate(sr_items):
+                                s_mat, s_dil = sitem["原料名"], sitem["希釈倍率"]
+                                need_kg = target_vol / s_dil if s_dil > 0 else 0.0
+                                st.markdown(f"<div style='font-size:0.9rem; color:#64748b; margin-top:6px;'>🔹 {s_mat}（希釈倍率 {fmt_kg(s_dil)}倍）</div>", unsafe_allow_html=True)
+                                s_act_kg = render_amount_adjuster(f"投入量({s_mat})", need_kg, f"adj_season_{selected_p}_{sr_idx}_{si}")
+                                s_lot = render_lot_selector(s_mat, f"lot_season_{selected_p}_{sr_idx}_{si}")
+                                submitted_ingredients.append({"原料名": s_mat, "kg": s_act_kg, "lot": s_lot})
+
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("💾 この内容で製造記録を保存する", type="primary", use_container_width=True):
                 k_kg = s_kg = st_kg = lime_kg = 0.0
@@ -638,7 +747,7 @@ if page == "🏭 製造仕込み":
                 # ブレンド原料が次回の登録に無言で引き継がれてしまう可能性があった
                 # (トレーサビリティ上のリスクとなるため修正)。
                 for key in list(st.session_state.keys()):
-                    if any(key.startswith(p) for p in ["adj_", "ts_", "lw_", "lot_", "t_size", "l_size", "kr_", "kb_", "rad_", "txt_", "kma_", "kmb_", "rbtn_"]):
+                    if any(key.startswith(p) for p in ["adj_", "ts_", "lw_", "lot_", "t_size", "l_size", "kr_", "kb_", "rad_", "txt_", "kma_", "kmb_", "rbtn_", "use_season_", "season_vol_"]):
                         del st.session_state[key]
                 
                 st.toast("✅ 製造記録を保存しました", icon="💾")
@@ -771,6 +880,33 @@ elif page == "📊 ダッシュボード":
                             st.success(f"✅ {m} の在庫を {fmt_kg(actual_total_bag)}袋 に更新しました。")
                             time.sleep(1.5)
                             refresh()
+            # ════════════════════════════════════════════════════════
+            # 【新規実装】こんにゃく粉はメーカー・グレードによって在庫を
+            #   分けて把握したいという要望に対応。原料カード自体の「総量」
+            #   表示はそのまま維持しつつ、その下にメーカー×グレード別の
+            #   内訳を展開表示できるようにした。
+            # ════════════════════════════════════════════════════════
+            if is_konjac_material(m) and mat_lots:
+                breakdown = {}
+                for v in mat_lots:
+                    key = (v["メーカー"], v["グレード"])
+                    breakdown.setdefault(key, {"kg": 0.0, "bag": 0.0})
+                    breakdown[key]["kg"] += v["現在庫(kg)"]
+                    breakdown[key]["bag"] += v["現在庫(袋)"]
+                with st.expander(f"🏷️ {m} のメーカー・グレード別内訳"):
+                    any_row = False
+                    for (mk, gr), vals in sorted(breakdown.items()):
+                        if vals["kg"] <= 0.001: continue
+                        any_row = True
+                        st.markdown(f"""
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-bottom:1px solid #e2e8f0;">
+                            <div style="font-weight:800;">🏢 {mk} ／ 🏷️ {gr}</div>
+                            <div class="mat-card-value" style="font-weight:900; color:#ea580c;">{fmt_kg(vals['kg'])} kg（{fmt_kg(vals['bag'])}袋）</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    if not any_row:
+                        st.caption("現在庫のあるメーカー・グレードはありません。")
+
             st.markdown("<div style='margin-bottom:16px;'></div>", unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════
@@ -792,6 +928,17 @@ elif page == "📥 入荷登録":
         
         m_type = st.selectbox("原料種別", materials if materials else ["未登録"])
         _, default_wt = parse_op_data(order_points.get(m_type, 0.0))
+
+        # 【新規実装】こんにゃく粉はメーカー及びグレードによって在庫を分けて
+        #   管理したいという要望に対応。原料種別に「こんにゃく」を含む場合のみ、
+        #   マスタ設定で登録したグレード一覧から選択できるようにする。
+        grade_val = "-"
+        if is_konjac_material(m_type):
+            grade_list = parse_grade_list(order_points)
+            if grade_list:
+                grade_val = st.selectbox("🏷️ グレード", grade_list)
+            else:
+                st.warning("⚠️ グレードが未登録です。「⚙️ マスタ設定 → 🏷️ グレード」タブで登録してください。")
         
         c1, c2 = st.columns(2)
         bags_qty = c1.number_input("入荷袋数", min_value=1.0, value=10.0, step=1.0)
@@ -808,7 +955,7 @@ elif page == "📥 入荷登録":
             else:
                 sheets.append_arrival({
                     "入荷No": new_no, "入荷日": str(arr_date), "メーカー": maker_sel, "ロットNo": lot_val,
-                    "原料種別": m_type, "袋数": bags_qty, "1袋重量(kg)": weight_per_bag, "総量(kg)": bags_qty * weight_per_bag,
+                    "原料種別": m_type, "グレード": grade_val, "袋数": bags_qty, "1袋重量(kg)": weight_per_bag, "総量(kg)": bags_qty * weight_per_bag,
                     "外観": chk_app, "品名・規格確認": chk_app, "賞味期限": chk_app, "異物": chk_app,
                     "担当者": operator, "備考": "", "登録日時": datetime.now().isoformat()
                 })
@@ -819,7 +966,10 @@ elif page == "📥 入荷登録":
         
     with t_hist:
         if arrivals:
-            df_arr = pd.DataFrame(arrivals)[["入荷日", "原料種別", "ロットNo", "メーカー", "総量(kg)"]][::-1]
+            df_arr = pd.DataFrame(arrivals)
+            hist_cols = ["入荷日", "原料種別", "ロットNo", "メーカー", "総量(kg)"]
+            if "グレード" in df_arr.columns: hist_cols.insert(3, "グレード")
+            df_arr = df_arr[hist_cols][::-1]
             st.dataframe(fmt_df_numeric(df_arr.head(50), ["総量(kg)"]), use_container_width=True, hide_index=True)
         else: st.info("入荷履歴はありません。")
 
@@ -1179,7 +1329,7 @@ elif page == "📈 分析":
 # ═══════════════════════════════════════════════════════════════
 elif page == "⚙️ マスタ設定":
     st.markdown('<div class="main-header"><h1>⚙️ マスターデータ管理</h1></div>', unsafe_allow_html=True)
-    t1, t2, t3, t4, t5 = st.tabs(["⚗️ 原料", "🏢 担当者", "🚨 発注点・重量", "🧪 レシピ", "📦 資材"])
+    t1, t2, t3, t4, t5, t6 = st.tabs(["⚗️ 原料", "🏢 担当者", "🚨 発注点・重量", "🧪 レシピ", "📦 資材", "🏷️ グレード"])
     
     with t1:
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
@@ -1203,7 +1353,7 @@ elif page == "⚙️ マスタ設定":
         st.caption("💡 入荷登録時にここで設定した「1袋重量」が自動で入力されます。")
         op_rows = []
         for m in materials:
-            if m != "__LIME_CONFIG__":
+            if not str(m).startswith("__"):
                 pt, wt = parse_op_data(order_points.get(m, 0.0))
                 op_rows.append({"原料名": m, "発注点(袋)": pt, "1袋重量(kg)": wt})
             
@@ -1212,10 +1362,15 @@ elif page == "⚙️ マスタ設定":
             new_dict = {}
             for _, r in edited_op.iterrows():
                 m_name = str(r["原料名"]).strip()
-                if m_name and m_name != "__LIME_CONFIG__":
+                if m_name and not m_name.startswith("__"):
                     new_dict[m_name] = json.dumps({"pt": float(r["発注点(袋)"]), "wt": float(r["1袋重量(kg)"])})
-            if "__LIME_CONFIG__" in order_points:
-                new_dict["__LIME_CONFIG__"] = order_points["__LIME_CONFIG__"]
+            # 【修繕】以前はここで新しい辞書を空から作り直し、__LIME_CONFIG__ だけを
+            #   個別に復元していたため、後から追加した予約キー(__GRADE_LIST__ 等)を
+            #   保存すると消えてしまうデータ消失バグがあった。"__"で始まる予約キーは
+            #   すべて自動的に引き継ぐよう修正した。
+            for k, v in order_points.items():
+                if k.startswith("__"):
+                    new_dict[k] = v
             sheets.save_order_points(new_dict)
             st.success("保存しました。"); time.sleep(1); refresh()
         st.markdown('</div>', unsafe_allow_html=True)
@@ -1247,46 +1402,108 @@ elif page == "⚙️ マスタ設定":
         st.markdown('</div>', unsafe_allow_html=True)
 
     with t4:
-        st.markdown('<div class="form-card">', unsafe_allow_html=True)
-        edit_mode = st.radio("操作を選択", ["新規作成", "既存レシピの編集"], horizontal=True)
-        target_recipe, old_json = None, "[]"
-        if edit_mode == "既存レシピの編集" and recipes_raw:
-            target_name = st.selectbox("編集するレシピ", [r["品名"] for r in recipes_raw])
-            target_recipe = next((r for r in recipes_raw if r["品名"] == target_name), None)
-            if target_recipe: old_json = target_recipe.get("配合JSON", "[]")
-        
-        init_name = target_recipe["品名"] if target_recipe else ""
-        init_cat_m = "OKM" if target_recipe and target_recipe.get("大カテゴリ") == "OKM" else "プラント"
-        init_cat_s = target_recipe.get("中カテゴリ", "黒") if target_recipe else "黒"
-        try: init_items = json.loads(old_json) if isinstance(old_json, str) else old_json
-        except: init_items = []
-        def_mats = ["(未設定)", "水"] + materials
-        
-        with st.form("recipe_form"):
-            cat_main = st.radio("大カテゴリ", ["🏭 プラント", "🟦 OKM"], index=0 if init_cat_m == "プラント" else 1, horizontal=True)
-            cat_sub = st.radio("中カテゴリ", ["⚪ 白", "⚫ 黒", "❄️ 耐冷", "🍽️ ショクカイ", "🍜 めん", "📦 その他"], 
-                               index=["白","黒","耐冷","ショクカイ","めん","その他"].index(init_cat_s) if init_cat_s in ["白","黒","耐冷","ショクカイ","めん","その他"] else 1, horizontal=True)
-            new_p_name = st.text_input("製品名", value=init_name, disabled=(target_recipe is not None))
-            
-            cols_recipe = []
-            for j in range(10):
-                c_n, c_w = st.columns([2, 1])
-                def_mat_val = init_items[j]["原料名"] if j < len(init_items) else "(未設定)"
-                def_rat_val = float(init_items[j]["比率"]) if j < len(init_items) else 0.00
-                uid = f"{init_name}_{j}" if target_recipe else f"new_{j}"
-                ing_mat = c_n.selectbox(f"成分 {j+1}", def_mats, index=def_mats.index(def_mat_val) if def_mat_val in def_mats else 0, key=f"rmat_{uid}")
-                ing_ratio = c_w.number_input("比率(％)", min_value=0.00, value=def_rat_val, step=0.01, key=f"rrat_{uid}")
-                cols_recipe.append({"name": ing_mat, "ratio": ing_ratio})
-            
-            if st.form_submit_button("💾 レシピを保存"):
-                valid_items = [{"原料名": i["name"], "比率": float(i["ratio"])} for i in cols_recipe if i["name"] != "(未設定)" and i["ratio"] > 0]
-                cat_str = "プラント" if "プラント" in cat_main else "OKM"
-                sub_str = cat_sub.split(" ")[1] if cat_str == "プラント" else "その他"
-                updated_recipes = [r for r in recipes_raw if r["品名"] != new_p_name]
-                updated_recipes.append({"品名": new_p_name, "大カテゴリ": cat_str, "中カテゴリ": sub_str, "配合JSON": json.dumps(valid_items, ensure_ascii=False)})
-                sheets.save_recipes(updated_recipes)
-                st.success("レシピを保存しました。"); time.sleep(1); refresh()
-        st.markdown('</div>', unsafe_allow_html=True)
+        # 【新規実装】従来は「プラント/OKM」の通常レシピしか作れなかったが、
+        #   ①製造仕込みの③ラインに「手詰め」を追加したのに合わせてレシピ側も
+        #   3ライン対応にした。また調味料(タカノ爪・調味液等)の希釈レシピは
+        #   通常レシピと配合ロジックが異なる(％配合ではなく希釈倍率)ため、
+        #   レシピ種別で切り替える別フォームとして新設した。
+        recipe_kind = st.radio("レシピ種別を選択", ["🍽️ 通常レシピ（仕込み配合）", "🌶️ 調味料レシピ（希釈）"], horizontal=True, key="recipe_kind_sel")
+
+        if "通常" in recipe_kind:
+            st.markdown('<div class="form-card">', unsafe_allow_html=True)
+            normal_recipes = [r for r in recipes_raw if r.get("大カテゴリ") != "調味料"]
+            edit_mode = st.radio("操作を選択", ["新規作成", "既存レシピの編集"], horizontal=True, key="normal_edit_mode")
+            target_recipe, old_json = None, "[]"
+            if edit_mode == "既存レシピの編集" and normal_recipes:
+                target_name = st.selectbox("編集するレシピ", [r["品名"] for r in normal_recipes], key="normal_target_sel")
+                target_recipe = next((r for r in normal_recipes if r["品名"] == target_name), None)
+                if target_recipe: old_json = target_recipe.get("配合JSON", "[]")
+
+            BIG_CAT_OPTIONS = ["🏭 プラント", "🟦 OKM", "✋ 手詰め"]
+            BIG_CAT_KEYS = ["プラント", "OKM", "手詰め"]
+
+            init_name = target_recipe["品名"] if target_recipe else ""
+            init_cat_m = target_recipe.get("大カテゴリ") if target_recipe and target_recipe.get("大カテゴリ") in BIG_CAT_KEYS else "プラント"
+            init_cat_s = target_recipe.get("中カテゴリ", "黒") if target_recipe else "黒"
+            try: init_items = json.loads(old_json) if isinstance(old_json, str) else old_json
+            except: init_items = []
+            def_mats = ["(未設定)", "水"] + materials
+
+            with st.form("recipe_form"):
+                cat_main = st.radio("大カテゴリ(ライン)", BIG_CAT_OPTIONS, index=BIG_CAT_KEYS.index(init_cat_m), horizontal=True)
+                cat_sub = st.radio("中カテゴリ", ["⚪ 白", "⚫ 黒", "❄️ 耐冷", "🍽️ ショクカイ", "🍜 めん", "📦 その他"], 
+                                   index=["白","黒","耐冷","ショクカイ","めん","その他"].index(init_cat_s) if init_cat_s in ["白","黒","耐冷","ショクカイ","めん","その他"] else 1, horizontal=True)
+                new_p_name = st.text_input("製品名", value=init_name, disabled=(target_recipe is not None))
+                
+                cols_recipe = []
+                for j in range(10):
+                    c_n, c_w = st.columns([2, 1])
+                    def_mat_val = init_items[j]["原料名"] if j < len(init_items) else "(未設定)"
+                    def_rat_val = float(init_items[j]["比率"]) if j < len(init_items) else 0.00
+                    uid = f"{init_name}_{j}" if target_recipe else f"new_{j}"
+                    ing_mat = c_n.selectbox(f"成分 {j+1}", def_mats, index=def_mats.index(def_mat_val) if def_mat_val in def_mats else 0, key=f"rmat_{uid}")
+                    ing_ratio = c_w.number_input("比率(％)", min_value=0.00, value=def_rat_val, step=0.01, key=f"rrat_{uid}")
+                    cols_recipe.append({"name": ing_mat, "ratio": ing_ratio})
+                
+                if st.form_submit_button("💾 レシピを保存"):
+                    valid_items = [{"原料名": i["name"], "比率": float(i["ratio"])} for i in cols_recipe if i["name"] != "(未設定)" and i["ratio"] > 0]
+                    cat_str = BIG_CAT_KEYS[BIG_CAT_OPTIONS.index(cat_main)]
+                    sub_str = cat_sub.split(" ")[1] if cat_str == "プラント" else "その他"
+                    updated_recipes = [r for r in recipes_raw if r["品名"] != new_p_name]
+                    updated_recipes.append({"品名": new_p_name, "大カテゴリ": cat_str, "中カテゴリ": sub_str, "配合JSON": json.dumps(valid_items, ensure_ascii=False)})
+                    sheets.save_recipes(updated_recipes)
+                    st.success("レシピを保存しました。"); time.sleep(1); refresh()
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        else:
+            st.markdown('<div class="form-card">', unsafe_allow_html=True)
+            st.markdown('<div class="section-title">🌶️ 調味料 希釈レシピ設定</div>', unsafe_allow_html=True)
+            st.caption("タカノ爪・調味液など、希釈して使う調味料のレシピです。「希釈倍率」を設定すると、製造仕込み画面で希釈対象量(できあがり量)から必要な原液投入量が自動計算されます。")
+            seasoning_recipes = [r for r in recipes_raw if r.get("大カテゴリ") == "調味料"]
+            s_edit_mode = st.radio("操作を選択", ["新規作成", "既存レシピの編集"], horizontal=True, key="season_edit_mode")
+            s_target, s_old_json = None, "[]"
+            if s_edit_mode == "既存レシピの編集" and seasoning_recipes:
+                s_target_name = st.selectbox("編集する調味料レシピ", [r["品名"] for r in seasoning_recipes], key="season_target_sel")
+                s_target = next((r for r in seasoning_recipes if r["品名"] == s_target_name), None)
+                if s_target: s_old_json = s_target.get("配合JSON", "[]")
+
+            s_init_name = s_target["品名"] if s_target else ""
+            try: s_init_items = json.loads(s_old_json) if isinstance(s_old_json, str) else s_old_json
+            except: s_init_items = []
+            season_def_mats = ["(未設定)"] + materials
+
+            with st.form("seasoning_recipe_form"):
+                s_new_name = st.text_input("調味料レシピ名（例: タカノ爪希釈液）", value=s_init_name, disabled=(s_target is not None))
+                st.caption("💡 通常は1レシピにつき原料1つで十分ですが、複数原料を希釈配合する場合は複数行に入力してください。")
+                s_cols_recipe = []
+                for j in range(5):
+                    c_n, c_r = st.columns([2, 1])
+                    def_mat_val = s_init_items[j]["原料名"] if j < len(s_init_items) else "(未設定)"
+                    def_ratio_val = float(s_init_items[j]["希釈倍率"]) if j < len(s_init_items) else 1.0
+                    uid = f"{s_init_name}_{j}" if s_target else f"snew_{j}"
+                    ing_mat = c_n.selectbox(f"原料 {j+1}", season_def_mats, index=season_def_mats.index(def_mat_val) if def_mat_val in season_def_mats else 0, key=f"smat_{uid}")
+                    ing_dil = c_r.number_input("希釈倍率", min_value=0.1, value=def_ratio_val, step=0.1, key=f"sdil_{uid}", help="原液1に対し何倍に薄めるか（例: 20なら原液1に対し合計20の量にする）")
+                    s_cols_recipe.append({"name": ing_mat, "dil": ing_dil})
+
+                if st.form_submit_button("💾 調味料レシピを保存"):
+                    if not s_new_name.strip():
+                        st.error("レシピ名は必須です。")
+                    else:
+                        valid_s_items = [{"原料名": i["name"], "希釈倍率": float(i["dil"])} for i in s_cols_recipe if i["name"] != "(未設定)"]
+                        updated_recipes = [r for r in recipes_raw if r["品名"] != s_new_name]
+                        updated_recipes.append({"品名": s_new_name, "大カテゴリ": "調味料", "中カテゴリ": "希釈", "配合JSON": json.dumps(valid_s_items, ensure_ascii=False)})
+                        sheets.save_recipes(updated_recipes)
+                        st.success("調味料レシピを保存しました。"); time.sleep(1); refresh()
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            if seasoning_recipes:
+                st.markdown('<div class="form-card">', unsafe_allow_html=True)
+                st.markdown('<div class="section-title">📋 登録済み調味料レシピ一覧</div>', unsafe_allow_html=True)
+                for sr in seasoning_recipes:
+                    items = safe_parse_seasoning_recipe(sr.get("配合JSON"))
+                    detail = " / ".join([f"{it['原料名']}(×{fmt_kg(it['希釈倍率'])})" for it in items]) or "未設定"
+                    st.markdown(f"🌶️ **{sr.get('品名')}** — {detail}")
+                st.markdown('</div>', unsafe_allow_html=True)
 
     with t5:
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
@@ -1308,4 +1525,18 @@ elif page == "⚙️ マスタ設定":
                     cur_sup.append({"資材ID": f"SUP-{datetime.now().strftime('%Y%m%d%H%M%S')}", "資材名": new_s_name, "カテゴリ": new_s_cat, "画像URL": img_str, "初期在庫": 0, "発注点": 10, "登録日": str(date.today())})
                     sheets.save_supplies(cur_sup)
                     st.success("資材を登録しました。"); time.sleep(1); refresh()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with t6:
+        st.markdown('<div class="form-card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">🏷️ こんにゃく粉 グレードマスタ</div>', unsafe_allow_html=True)
+        st.caption("💡 ここで登録したグレードが「📥 入荷登録」画面でこんにゃく粉を選んだ際に選択肢として表示され、ダッシュボードでメーカー×グレード別の在庫内訳に使われます。")
+        cur_grades = parse_grade_list(order_points)
+        ed_grade = st.data_editor(pd.DataFrame({"グレード名": cur_grades}), num_rows="dynamic", use_container_width=True, key="grade_editor")
+        if st.button("💾 グレードマスタ保存", type="primary"):
+            new_grades = [str(x).strip() for x in ed_grade["グレード名"].tolist() if str(x).strip()]
+            new_dict = dict(order_points)
+            new_dict["__GRADE_LIST__"] = json.dumps(new_grades, ensure_ascii=False)
+            sheets.save_order_points(new_dict)
+            st.success("グレードマスタを保存しました。"); time.sleep(1); refresh()
         st.markdown('</div>', unsafe_allow_html=True)
