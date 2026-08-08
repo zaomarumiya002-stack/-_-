@@ -6,7 +6,7 @@ import time
 import base64
 import re
 from io import BytesIO
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import traceback
 import plotly.graph_objects as go
 import plotly.express as px
@@ -66,9 +66,19 @@ h1, h2, h3, h4, h5, h6, p, span, div, label { color: var(--c-secondary); letter-
 .block-container { padding-top: 1.6rem !important; max-width: 1280px; }
 
 /* ════════ ヘッダー・カード（市販SaaS風の柔らかいシャドウ＋角丸） ════════ */
+/* 【修繕】border(全周)とborder-left(太いアクセント線)を併用すると、
+   ブラウザによっては角丸(border-radius)の左上/左下コーナーで2つの
+   ボーダーがうまく合成されず「見切れたような」表示になる不具合があった。
+   position:relative + overflow:hidden の親要素に対して、アクセント線を
+   ::before の絶対配置バーとして重ねることで、角丸に沿って自然にクリップ
+   されるようにし、見切れを解消した。 */
 .main-header {
-    background: var(--c-surface); padding: 20px 26px; border-radius: var(--radius-lg); margin-bottom: 22px;
-    box-shadow: var(--shadow-card); border: 1px solid var(--c-border); border-left: 4px solid var(--c-primary);
+    background: var(--c-surface); padding: 20px 26px 20px 30px; border-radius: var(--radius-lg); margin-bottom: 22px;
+    box-shadow: var(--shadow-card); border: 1px solid var(--c-border);
+    position: relative; overflow: hidden;
+}
+.main-header::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c-primary);
 }
 .main-header h1 { font-size: 1.55rem !important; margin: 0 0 4px 0 !important; font-weight: 800 !important; letter-spacing: -0.02em; }
 .main-header p { color: var(--c-muted) !important; font-size: 0.92rem !important; margin: 0 !important; font-weight: 600; }
@@ -289,6 +299,26 @@ def parse_grade_list(order_points_dict):
 
 def is_konjac_material(name):
     return "こんにゃく" in str(name)
+
+# ════════════════════════════════════════════════════════════════
+#  発注管理（発注日・個数・メーカー・納品予定日 / 入荷済み処理）
+#  【新規実装】グレードマスタと同じ手法で、発注点マスタの予約キー
+#  (__PURCHASE_ORDERS__)にJSON配列として保存する。これにより新しい
+#  スプレッドシートのタブやsheets.pyの変更を必要としない。
+# ════════════════════════════════════════════════════════════════
+def parse_purchase_orders(order_points_dict):
+    raw_val = order_points_dict.get("__PURCHASE_ORDERS__", "")
+    try:
+        if raw_val and isinstance(raw_val, str) and raw_val.startswith("["):
+            data = json.loads(raw_val)
+            if isinstance(data, list): return data
+    except: pass
+    return []
+
+def save_purchase_orders(order_points_dict, orders_list):
+    new_dict = dict(order_points_dict)
+    new_dict["__PURCHASE_ORDERS__"] = json.dumps(orders_list, ensure_ascii=False)
+    sheets.save_order_points(new_dict)
 
 BIG_CAT_ICONS = {"プラント": "🏭", "OKM": "🟦", "手詰め": "✋"}
 SUB_CAT_ICONS = {"白": "⚪", "黒": "⚫", "耐冷": "❄️", "ショクカイ": "🍽️", "めん": "🍜", "おでん": "🍢", "その他": "📦"}
@@ -522,7 +552,7 @@ def render_operator_selector(operator_key):
 with st.sidebar:
     st.markdown('<div style="font-size:1.5rem; font-weight:900; margin-bottom:1rem; color:white; display:flex; align-items:center; gap:8px;">🏭 <span>製造ERP</span></div>', unsafe_allow_html=True)
     page = st.radio("メニュー", [
-        "🏭 製造仕込み", "📊 ダッシュボード", "📥 入荷登録", "📦 在庫・棚卸", 
+        "🏭 製造仕込み", "📊 ダッシュボード", "📝 発注管理", "📥 入荷登録", "📦 在庫・棚卸", 
         "🧹 資材管理", "🔍 トレース", "📋 履歴・帳票", "📈 分析", "⚙️ マスタ設定"
     ], label_visibility="collapsed")
     st.markdown("---")
@@ -777,11 +807,17 @@ elif page == "📊 ダッシュボード":
         today_count = len(df_brw_today)
     else: today_total_kg = today_count = 0
 
-    c1, c2 = st.columns(2)
+    c1, c2, c3 = st.columns(3)
     with c1: st.metric("📦 本日の総製造量", f"{fmt_kg(today_total_kg)} kg", f"{today_count} 件製造")
     with c2:
         alert_count = sum(1 for m in materials if parse_op_data(order_points.get(m, 0.0))[0] > 0 and type_totals_bag.get(m, 0.0) < parse_op_data(order_points.get(m, 0.0))[0])
         st.metric("⚠️ 在庫不足原料", f"{alert_count} 品目")
+    with c3:
+        # 【新規実装】発注管理と連動し、未入荷の発注件数をダッシュボードでも確認できるようにした
+        po_all = parse_purchase_orders(order_points)
+        po_pending = [o for o in po_all if o.get("ステータス") != "入荷済み"]
+        po_overdue = sum(1 for o in po_pending if o.get("納品予定日") and o["納品予定日"] < str(date.today()))
+        st.metric("📝 未入荷の発注", f"{len(po_pending)} 件", f"うち超過 {po_overdue} 件" if po_overdue else None, delta_color="inverse")
 
     st.markdown("---")
     st.markdown('<div class="section-title">📦 主要原料 現在庫とアラート</div>', unsafe_allow_html=True)
@@ -908,6 +944,117 @@ elif page == "📊 ダッシュボード":
                         st.caption("現在庫のあるメーカー・グレードはありません。")
 
             st.markdown("<div style='margin-bottom:16px;'></div>", unsafe_allow_html=True)
+
+# ═══════════════════════════════════════════════════════════════
+#  📝 発注管理
+# ═══════════════════════════════════════════════════════════════
+elif page == "📝 発注管理":
+    st.markdown('<div class="main-header"><h1>📝 原料 発注管理</h1><p>発注してから入荷するまでの状況を一元管理。入荷済み処理を行うとそのまま在庫に加算されます。</p></div>', unsafe_allow_html=True)
+
+    all_orders = parse_purchase_orders(order_points)
+    pending_orders = [o for o in all_orders if o.get("ステータス") != "入荷済み"]
+    done_orders = [o for o in all_orders if o.get("ステータス") == "入荷済み"]
+    today_str = str(date.today())
+    overdue_count = sum(1 for o in pending_orders if o.get("納品予定日") and o["納品予定日"] < today_str)
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("🕐 未入荷の発注", f"{len(pending_orders)} 件")
+    c2.metric("⚠️ 納品予定日超過", f"{overdue_count} 件")
+    c3.metric("✅ 入荷済み(累計)", f"{len(done_orders)} 件")
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    t_new, t_list = st.tabs(["➕ 新規発注登録", "📋 発注一覧・入荷処理"])
+
+    with t_new:
+        st.markdown('<div class="form-card">', unsafe_allow_html=True)
+        with st.form("new_order_form"):
+            o_mat = st.selectbox("原料名", materials if materials else ["未登録"])
+            o_maker = st.selectbox("メーカー", makers if makers else ["未登録"])
+            c_a, c_b = st.columns(2)
+            o_date = c_a.date_input("発注日", value=date.today())
+            o_due = c_b.date_input("納品予定日", value=date.today() + timedelta(days=7))
+            o_qty = st.number_input("発注個数（袋）", min_value=1.0, value=10.0, step=1.0)
+            o_note = st.text_input("備考（任意）")
+            if st.form_submit_button("💾 発注を登録する", type="primary", use_container_width=True):
+                new_order = {
+                    "発注ID": f"PO-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+                    "発注日": str(o_date), "原料名": o_mat, "メーカー": o_maker,
+                    "個数": o_qty, "納品予定日": str(o_due), "ステータス": "未入荷",
+                    "紐づく入荷No": "", "備考": o_note, "登録日時": datetime.now().isoformat()
+                }
+                all_orders.append(new_order)
+                save_purchase_orders(order_points, all_orders)
+                st.success("発注を登録しました。"); time.sleep(1); refresh()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with t_list:
+        if not pending_orders and not done_orders:
+            st.info("登録されている発注はありません。「➕ 新規発注登録」タブから登録してください。")
+
+        if pending_orders:
+            st.markdown('<div class="section-title">🕐 未入荷の発注</div>', unsafe_allow_html=True)
+            for o in sorted(pending_orders, key=lambda x: x.get("納品予定日", "")):
+                is_overdue = bool(o.get("納品予定日")) and o["納品予定日"] < today_str
+                with st.container(border=True):
+                    c_i, c_b = st.columns([3, 1])
+                    with c_i:
+                        overdue_badge = " ⚠️ 納品予定日超過" if is_overdue else ""
+                        st.markdown(f"**📦 {o.get('原料名')}**　🏢 {o.get('メーカー')}　📦 {fmt_kg(o.get('個数'))}袋{overdue_badge}")
+                        st.caption(f"発注日: {o.get('発注日')}　／　納品予定日: {o.get('納品予定日')}　／　備考: {o.get('備考') or 'なし'}")
+                    with c_b:
+                        # ════════════════════════════════════════════════
+                        # 【新規実装】発注→入荷済み処理。ここで入荷内容を確定
+                        #   すると、既存の入荷登録(sheets.append_arrival)を
+                        #   そのまま呼び出して在庫にも加算される。発注記録は
+                        #   ステータスが「入荷済み」に更新され、紐づく入荷No
+                        #   も記録されるためトレースが可能。
+                        # ════════════════════════════════════════════════
+                        with lot_popover("✅ 入荷済み処理"):
+                            oid = o.get("発注ID")
+                            st.markdown(f"#### ✅ {o.get('原料名')} の入荷処理")
+                            st.caption("実際に入荷した内容を確認・修正のうえ登録すると、在庫に加算されます。")
+                            arr_lot = st.text_input("ロットNo ＊必須", key=f"po_lot_{oid}")
+                            po_grade = "-"
+                            if is_konjac_material(o.get("原料名")):
+                                grade_list = parse_grade_list(order_points)
+                                if grade_list:
+                                    po_grade = st.selectbox("🏷️ グレード", grade_list, key=f"po_grade_{oid}")
+                                else:
+                                    st.warning("⚠️ グレード未登録（マスタ設定で登録可）")
+                            _, po_default_wt = parse_op_data(order_points.get(o.get("原料名"), 0.0))
+                            pc1, pc2 = st.columns(2)
+                            po_bags = pc1.number_input("入荷袋数", min_value=1.0, value=float(o.get("個数", 1.0)), step=1.0, key=f"po_bags_{oid}")
+                            po_wpb = pc2.number_input("1袋重量(kg)", min_value=1.0, value=float(po_default_wt), step=1.0, key=f"po_wpb_{oid}")
+                            st.caption(f"💡 合計入荷重量: **{fmt_kg(po_bags * po_wpb)} kg**")
+                            po_op = render_operator_selector(f"po_op_{oid}")
+                            if st.button("💾 入荷登録して在庫に加算する", type="primary", use_container_width=True, key=f"po_save_{oid}"):
+                                if not arr_lot:
+                                    st.error("ロットNoは必須です。")
+                                else:
+                                    new_ano = sheets.next_arrival_no(arrivals)
+                                    sheets.append_arrival({
+                                        "入荷No": new_ano, "入荷日": str(date.today()), "メーカー": o.get("メーカー"), "ロットNo": arr_lot,
+                                        "原料種別": o.get("原料名"), "グレード": po_grade, "袋数": po_bags, "1袋重量(kg)": po_wpb, "総量(kg)": po_bags * po_wpb,
+                                        "外観": "OK（すべて正常）", "品名・規格確認": "OK（すべて正常）", "賞味期限": "OK（すべて正常）", "異物": "OK（すべて正常）",
+                                        "担当者": po_op, "備考": f"【発注管理より入荷処理】{oid}", "登録日時": datetime.now().isoformat()
+                                    })
+                                    for oo in all_orders:
+                                        if oo.get("発注ID") == oid:
+                                            oo["ステータス"] = "入荷済み"
+                                            oo["紐づく入荷No"] = new_ano
+                                            oo["入荷処理日"] = str(date.today())
+                                    save_purchase_orders(order_points, all_orders)
+                                    st.success(f"入荷を登録し、在庫に加算しました（入荷No: {new_ano}）。")
+                                    time.sleep(1.5)
+                                    refresh()
+                    if is_overdue:
+                        st.markdown(f"<div style='color:var(--c-danger); font-weight:800; font-size:0.85rem; margin-top:4px;'>⚠️ 納品予定日（{o.get('納品予定日')}）を過ぎています。メーカーに確認してください。</div>", unsafe_allow_html=True)
+
+        if done_orders:
+            st.markdown('<div class="section-title" style="margin-top:28px;">✅ 入荷済みの発注（履歴）</div>', unsafe_allow_html=True)
+            df_done = pd.DataFrame(sorted(done_orders, key=lambda x: x.get("入荷処理日", ""), reverse=True))
+            show_cols = [c for c in ["発注日", "原料名", "メーカー", "個数", "納品予定日", "入荷処理日", "紐づく入荷No"] if c in df_done.columns]
+            st.dataframe(fmt_df_numeric(df_done[show_cols].head(50), ["個数"]), use_container_width=True, hide_index=True)
 
 # ═══════════════════════════════════════════════════════════════
 #  📥 入荷登録
