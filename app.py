@@ -217,8 +217,8 @@ div[data-baseweb="tab-border"] { background-color: var(--c-border) !important; }
 # ════════════════════════════════════════════════════════════════
 #  ユーティリティ & データロード
 # ════════════════════════════════════════════════════════════════
-def lot_popover(label):
-    return st.popover(label, use_container_width=True) if hasattr(st, "popover") else st.expander(label)
+def lot_popover(label, key=None):
+    return st.popover(label, use_container_width=True, key=key) if hasattr(st, "popover") else st.expander(label)
 
 def refresh():
     st.cache_data.clear()
@@ -558,11 +558,23 @@ def render_lot_selector(mat_name, lot_key):
 
 def render_operator_selector(operator_key):
     if operator_key not in st.session_state: st.session_state[operator_key] = inspectors[0] if inspectors else "未登録"
-    with lot_popover(f"👨‍🏭 担当者: {st.session_state[operator_key]} (タップで変更)"):
+    # ════════════════════════════════════════════════════════════════
+    # 【新規実装】担当者選択のように「1回タップしたら選択完了」の単発入力は、
+    #   選んだ瞬間にポップオーバーが自動的に閉じてほしいという要望に対応。
+    #   Streamlitのポップオーバーは通常、内部のウィジェット操作では自動で
+    #   閉じない仕様のため、タップのたびにポップオーバー自体のkeyを変更して
+    #   「新しい(閉じた状態の)ポップオーバー」として再生成させることで、
+    #   実質的な自動クローズを実現している。
+    # ════════════════════════════════════════════════════════════════
+    ver_key = f"_popver_{operator_key}"
+    ver = st.session_state.get(ver_key, 0)
+    with lot_popover(f"👨‍🏭 担当者: {st.session_state[operator_key]} (タップで変更)", key=f"pop_{operator_key}_{ver}"):
         st.write("担当者をタップしてください")
         for insp in inspectors:
-            if st.button(insp, key=f"btn_insp_{operator_key}_{insp}", use_container_width=True):
-                st.session_state[operator_key] = insp; st.rerun()
+            if st.button(insp, key=f"btn_insp_{operator_key}_{insp}_{ver}", use_container_width=True):
+                st.session_state[operator_key] = insp
+                st.session_state[ver_key] = ver + 1
+                st.rerun()
     return st.session_state[operator_key]
 
 # ════════════════════════════════════════════════════════════════
@@ -1045,16 +1057,32 @@ elif page == "📝 発注管理":
                             po_bags = pc1.number_input("入荷袋数", min_value=1.0, value=float(o.get("個数", 1.0)), step=1.0, key=f"po_bags_{oid}")
                             po_wpb = pc2.number_input("1袋重量(kg)", min_value=1.0, value=float(po_default_wt), step=1.0, key=f"po_wpb_{oid}")
                             st.caption(f"💡 合計入荷重量: **{fmt_kg(po_bags * po_wpb)} kg**")
+
+                            # 【修繕】以前はここだけ受入検査を省略し、無条件で
+                            #   「OK（すべて正常）」を記録してしまっていた。受入検査は
+                            #   食品安全上重要なため、通常の入荷登録と同じ4項目の
+                            #   個別チェックを必須にした。
+                            st.markdown("**🔍 受入品質検査（項目ごとに必ず確認）**")
+                            po_items = [("外観", "📦 外観"), ("品名・規格確認", "🏷️ 品名・規格"), ("賞味期限", "📅 賞味期限"), ("異物", "🔍 異物混入")]
+                            po_chk = {}
+                            for key_name, label in po_items:
+                                po_chk[key_name] = st.radio(label, ["未確認", "✅ 正常", "❌ 異常あり"], index=0, key=f"po_chk_{oid}_{key_name}", horizontal=True)
+                            po_unconfirmed = [label for key_name, label in po_items if po_chk[key_name] == "未確認"]
+                            if po_unconfirmed:
+                                st.warning(f"⚠️ 未確認: {'、'.join(po_unconfirmed)}")
+
                             po_op = render_operator_selector(f"po_op_{oid}")
                             if st.button("💾 入荷登録して在庫に加算する", type="primary", use_container_width=True, key=f"po_save_{oid}"):
                                 if not arr_lot:
                                     st.error("ロットNoは必須です。")
+                                elif po_unconfirmed:
+                                    st.error("受入品質検査が未完了です。すべての項目を確認してください。")
                                 else:
                                     new_ano = sheets.next_arrival_no(arrivals)
                                     sheets.append_arrival({
                                         "入荷No": new_ano, "入荷日": str(date.today()), "メーカー": o.get("メーカー"), "ロットNo": arr_lot,
                                         "原料種別": o.get("原料名"), "グレード": po_grade, "袋数": po_bags, "1袋重量(kg)": po_wpb, "総量(kg)": po_bags * po_wpb,
-                                        "外観": "OK（すべて正常）", "品名・規格確認": "OK（すべて正常）", "賞味期限": "OK（すべて正常）", "異物": "OK（すべて正常）",
+                                        "外観": po_chk["外観"], "品名・規格確認": po_chk["品名・規格確認"], "賞味期限": po_chk["賞味期限"], "異物": po_chk["異物"],
                                         "担当者": po_op, "備考": f"【発注管理より入荷処理】{oid}", "登録日時": datetime.now().isoformat()
                                     })
                                     for oo in all_orders:
@@ -1111,19 +1139,46 @@ elif page == "📥 入荷登録":
         weight_per_bag = c2.number_input("1袋重量 (kg) ※自動セット済", min_value=1.0, value=float(default_wt), step=1.0)
         st.info(f"💡 合計入荷重量: **{fmt_kg(bags_qty * weight_per_bag)} kg**")
         
-        st.markdown('<div class="section-title" style="margin-top:20px;">🔍 受入品質検査</div>', unsafe_allow_html=True)
-        chk_app = st.selectbox("外観・規格・賞味期限・異物 総合評価", ["OK（すべて正常）", "NG（異常あり）"])
+        # ════════════════════════════════════════════════════════════════
+        # 【修繕】以前は「外観・規格・賞味期限・異物」をまとめて1つの
+        #   セレクトボックスで「OK（すべて正常）」を選ぶだけの仕様だったため、
+        #   実質チェックせずに流してしまえる状態だった。受入検査は品質・
+        #   食品安全上重要なため、4項目それぞれについて「未確認／✅正常／
+        #   ❌異常あり」を個別に選ばせ、全項目を確認しないと登録できない
+        #   仕様に変更した。
+        # ════════════════════════════════════════════════════════════════
+        st.markdown('<div class="section-title" style="margin-top:20px;">🔍 受入品質検査（項目ごとに必ず確認）</div>', unsafe_allow_html=True)
+        st.caption("💡 受入検査は品質・食品安全の要です。「総合OK」で済ませず、1項目ずつ現物を確認してチェックしてください。")
+
+        INSPECT_ITEMS = [("外観", "📦 外観"), ("品名・規格確認", "🏷️ 品名・規格"), ("賞味期限", "📅 賞味期限"), ("異物", "🔍 異物混入")]
+        chk_results = {}
+        cols_chk = st.columns(2)
+        for idx, (key_name, label) in enumerate(INSPECT_ITEMS):
+            with cols_chk[idx % 2]:
+                with st.container(border=True):
+                    st.markdown(f"**{label}**")
+                    chk_results[key_name] = st.radio(label, ["未確認", "✅ 正常", "❌ 異常あり"], index=0, key=f"chk_{key_name}", horizontal=True, label_visibility="collapsed")
+
+        unconfirmed = [label for (key_name, label) in INSPECT_ITEMS if chk_results[key_name] == "未確認"]
+        ng_items = [label for (key_name, label) in INSPECT_ITEMS if chk_results[key_name] == "❌ 異常あり"]
+        if unconfirmed:
+            st.warning(f"⚠️ 未確認の項目があります: {'、'.join(unconfirmed)}　※全項目のチェックが必須です")
+        if ng_items:
+            st.error(f"🚨 異常ありと判定された項目があります: {'、'.join(ng_items)}　※詳細を備考に記入し、必要に応じて責任者に報告してください")
+
+        chk_note = st.text_input("備考（異常があった場合は詳細を記入してください）")
         operator = render_operator_selector("arr_op")
         
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("💾 入荷記録を登録する", type="primary", use_container_width=True):
             if not lot_val: st.error("ロットNoは必須項目です。")
+            elif unconfirmed: st.error("受入品質検査が未完了です。すべての項目を確認してください。")
             else:
                 sheets.append_arrival({
                     "入荷No": new_no, "入荷日": str(arr_date), "メーカー": maker_sel, "ロットNo": lot_val,
                     "原料種別": m_type, "グレード": grade_val, "袋数": bags_qty, "1袋重量(kg)": weight_per_bag, "総量(kg)": bags_qty * weight_per_bag,
-                    "外観": chk_app, "品名・規格確認": chk_app, "賞味期限": chk_app, "異物": chk_app,
-                    "担当者": operator, "備考": "", "登録日時": datetime.now().isoformat()
+                    "外観": chk_results["外観"], "品名・規格確認": chk_results["品名・規格確認"], "賞味期限": chk_results["賞味期限"], "異物": chk_results["異物"],
+                    "担当者": operator, "備考": chk_note, "登録日時": datetime.now().isoformat()
                 })
                 st.success("入荷記録を保存しました。")
                 time.sleep(1.5)
