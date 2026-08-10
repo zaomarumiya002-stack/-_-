@@ -297,8 +297,16 @@ def parse_grade_list(order_points_dict):
     except: pass
     return []
 
+# 【修繕】原料マスタの表記ゆれ(こんにゃく/コンニャク/蒟蒻/konnyaku)によって
+#   グレード選択欄が出ない問題があった。カタカナはひらがなに正規化したうえで
+#   判定するよう修正し、漢字表記・ローマ字表記にも対応した。
+def _katakana_to_hiragana(s):
+    return "".join(chr(ord(c) - 0x60) if "ァ" <= c <= "ヶ" else c for c in s)
+
 def is_konjac_material(name):
-    return "こんにゃく" in str(name)
+    s = str(name)
+    s_hira = _katakana_to_hiragana(s)
+    return ("こんにゃく" in s_hira) or ("蒟蒻" in s) or ("konnyaku" in s.lower())
 
 # ════════════════════════════════════════════════════════════════
 #  発注管理（発注日・個数・メーカー・納品予定日 / 入荷済み処理）
@@ -385,7 +393,7 @@ def get_inventory():
         ano = str(a.get("入荷No", "")).strip()
         if not ano: continue
         inv[ano] = {
-            "入荷No": ano, "ロットNo": str(a.get("ロットNo", "")).strip(), "原料種別": str(a.get("原料種別", "")).strip(), 
+            "入荷No": ano, "入荷日": str(a.get("入荷日", "")).strip() or "-", "ロットNo": str(a.get("ロットNo", "")).strip(), "原料種別": str(a.get("原料種別", "")).strip(), 
             "メーカー": str(a.get("メーカー", "")).strip() or "未指定", "グレード": str(a.get("グレード", "")).strip() or "-",
             "1袋重量": float(a.get("1袋重量(kg)") or 20.0), "入荷袋数": float(a.get("袋数") or 0.0), "使用量(kg)": 0.0, "調整袋数": 0.0
         }
@@ -519,7 +527,18 @@ def render_lot_selector(mat_name, lot_key):
 
     with lot_popover(f"📦 ロット: {curr_val} (タップで選択)"):
         st.markdown(f"#### 📦 {mat_name} のロット選択")
-        sel_option = st.radio("選択してください", options, index=default_idx, key=rad_key)
+        # 【新規実装】原料の入荷日を確認できるよう、ロット選択の表示ラベルにのみ
+        #   入荷日を付記する(保存される値は従来通りロットNoのみ・在庫消費の
+        #   マッチングロジックには一切影響しない)。
+        lot_date_map = {}
+        for v in inventory_data.values():
+            if v["原料種別"] == mat_name and v["ロットNo"] not in lot_date_map:
+                lot_date_map[v["ロットNo"]] = v["入荷日"]
+        def _lot_fmt(x):
+            if x == "✏️ リスト外 (手入力)": return x
+            d = lot_date_map.get(x)
+            return f"{x}（入荷日:{d}）" if d else x
+        sel_option = st.radio("選択してください", options, index=default_idx, key=rad_key, format_func=_lot_fmt)
         
         if sel_option == "✏️ リスト外 (手入力)":
             manual_in = st.text_input("ロット番号を入力 (自動確定)", value=curr_val if curr_val not in active_lots else "", key=txt_key)
@@ -1130,7 +1149,9 @@ elif page == "📦 在庫・棚卸":
     with t_inv:
         active_inv = [v for v in inventory_data.values() if v["現在庫(袋)"] > 0.0]
         if active_inv:
-            df_active_inv = pd.DataFrame(active_inv)[["原料種別", "ロットNo", "入荷袋数", "使用袋数", "調整袋数", "現在庫(袋)", "現在庫(kg)"]]
+            # 【新規実装】原料の入荷日が一覧から確認できるよう列を追加。
+            #   古い入荷日順に並べることで、先入れ先出し(FIFO)の判断もしやすくした。
+            df_active_inv = pd.DataFrame(sorted(active_inv, key=lambda v: v["入荷日"]))[["入荷日", "原料種別", "メーカー", "グレード", "ロットNo", "入荷袋数", "使用袋数", "調整袋数", "現在庫(袋)", "現在庫(kg)"]]
             st.dataframe(fmt_df_numeric(df_active_inv, ["入荷袋数", "使用袋数", "調整袋数", "現在庫(袋)", "現在庫(kg)"]), use_container_width=True, hide_index=True)
         else: st.info("在庫データがありません。")
         
@@ -1142,7 +1163,7 @@ elif page == "📦 在庫・棚卸":
         #   計算ミスによる在庫のズレを誘発しやすかった。実地棚卸数量を直接入力し、
         #   差分はシステム側で自動計算する方式に変更した。
         if inventory_data:
-            tgt_list = {f"{v['原料種別']} (ロット:{v['ロットNo']}) - 理論在庫:{fmt_kg(v['現在庫(袋)'])}袋": v["入荷No"] for v in inventory_data.values()}
+            tgt_list = {f"{v['原料種別']} (ロット:{v['ロットNo']} / 入荷日:{v['入荷日']}) - 理論在庫:{fmt_kg(v['現在庫(袋)'])}袋": v["入荷No"] for v in inventory_data.values()}
             selected_tgt = st.selectbox("調整対象ロット", list(tgt_list.keys()))
             target_ano = tgt_list[selected_tgt]
             theoretical_bags = next((v["現在庫(袋)"] for v in inventory_data.values() if v["入荷No"] == target_ano), 0.0)
@@ -1462,13 +1483,34 @@ elif page == "📈 分析":
         c1, c2 = st.columns(2)
         with c1:
             st.markdown('<div class="form-card">', unsafe_allow_html=True)
-            pie_data = df_brw_global.groupby("品名")["仕込量(kg)"].sum().reset_index()
-            st.plotly_chart(px.pie(pie_data, names="品名", values="仕込量(kg)", title="製品構成比", hole=0.4), use_container_width=True)
+            # ════════════════════════════════════════════════════════
+            # 【修繕】円グラフは品目数が多いとスライスが細切れになり、
+            #   ラベルが重なって詳細が読めず「意味がない」状態だった。
+            #   面積で構成比を直感的に把握でき、ホバーで正確な数値・
+            #   比率も確認できるツリーマップに変更した。
+            # ════════════════════════════════════════════════════════
+            pie_data = df_brw_global.groupby("品名")["仕込量(kg)"].sum().reset_index().sort_values("仕込量(kg)", ascending=False)
+            pie_data = pie_data[pie_data["仕込量(kg)"] > 0]
+            fig_tree = px.treemap(
+                pie_data, path=["品名"], values="仕込量(kg)",
+                color="仕込量(kg)", color_continuous_scale=["#fde4d0", "#ea580c"],
+                title="製品構成比（面積・色の濃さ＝製造量）"
+            )
+            fig_tree.update_traces(
+                texttemplate="<b>%{label}</b><br>%{value:,.0f} kg（%{percentParent}）",
+                textfont_size=14, textposition="middle center"
+            )
+            fig_tree.update_layout(margin=dict(t=50, l=6, r=6, b=6), coloraxis_showscale=False)
+            st.plotly_chart(fig_tree, use_container_width=True)
+            st.caption("💡 面積が大きいほど製造量が多い品目です。タップ（ホバー）すると正確な数量・比率が表示されます。")
             st.markdown('</div>', unsafe_allow_html=True)
         with c2:
             st.markdown('<div class="form-card">', unsafe_allow_html=True)
-            top10 = pie_data.sort_values("仕込量(kg)", ascending=True).tail(10)
-            st.plotly_chart(px.bar(top10, x="仕込量(kg)", y="品名", orientation='h', title="製造量 TOP10"), use_container_width=True)
+            topN = pie_data.sort_values("仕込量(kg)", ascending=True).tail(15)
+            fig_bar = px.bar(topN, x="仕込量(kg)", y="品名", orientation='h', title="製造量 上位15品目", text="仕込量(kg)")
+            fig_bar.update_traces(texttemplate="%{text:,.0f} kg", textposition="outside", marker_color="#ea580c", cliponaxis=False)
+            fig_bar.update_layout(height=max(380, 34 * len(topN)), plot_bgcolor="#f8fafc", margin=dict(l=6, r=70, t=50, b=6), yaxis_title="", xaxis_title="仕込量(kg)")
+            st.plotly_chart(fig_bar, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════
