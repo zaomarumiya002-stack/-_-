@@ -473,21 +473,29 @@ def get_supply_inventory():
 def _change_adj(key, val):
     st.session_state[key] = st.session_state.get(key, 0.0) + val
 
+def _lot_radio_on_change(rad_key, ver_key):
+    """【新規実装】ロット選択で、一覧からロットをタップした場合はポップオーバーを
+    自動的に閉じる。「✏️ リスト外(手入力)」を選んだ場合は、続けて文字入力する
+    必要があるため自動クローズの対象外とする。"""
+    sel = st.session_state.get(rad_key)
+    if sel != "✏️ リスト外 (手入力)":
+        st.session_state[ver_key] = st.session_state.get(ver_key, 0) + 1
+
 def render_amount_adjuster(title, base_val, adj_key):
     if adj_key not in st.session_state: st.session_state[adj_key] = 0.0
     act_val = round(base_val + st.session_state[adj_key], 2)
     if act_val < 0: act_val = 0.0
     
     col1, col2, col3 = st.columns([1, 2, 1])
-    with col1: st.button("➖ 0.1", key=f"dec_{adj_key}", on_click=_change_adj, args=(adj_key, -0.1), use_container_width=True)
+    with col1: st.button("➖", key=f"dec_{adj_key}", on_click=_change_adj, args=(adj_key, -0.1), use_container_width=True, help="0.1kg減らす")
     with col2:
         st.markdown(f"""
-        <div style='text-align:center; padding:10px 0; background-color:#fff7ed; border-radius:12px; border:2px solid #fdba74;'>
-            <div style='color:#c2410c; font-weight:900; font-size:1.1rem; margin-bottom:4px;'>{title}</div>
-            <div style='font-size:3.2rem; font-weight:900; color:#ea580c; line-height:1;'>{fmt_kg(act_val)} <span style='font-size:1.4rem; color:#f97316;'>kg</span></div>
+        <div style='text-align:center; padding:8px 4px; background-color:#fff7ed; border-radius:12px; border:2px solid #fdba74;'>
+            <div style='color:#c2410c; font-weight:900; font-size:0.9rem; margin-bottom:2px; line-height:1.3;'>{title}</div>
+            <div style='font-size:2.1rem; font-weight:900; color:#ea580c; line-height:1;'>{fmt_kg(act_val)} <span style='font-size:1.05rem; color:#f97316;'>kg</span></div>
         </div>
         """, unsafe_allow_html=True)
-    with col3: st.button("➕ 0.1", key=f"inc_{adj_key}", on_click=_change_adj, args=(adj_key, 0.1), use_container_width=True)
+    with col3: st.button("➕", key=f"inc_{adj_key}", on_click=_change_adj, args=(adj_key, 0.1), use_container_width=True, help="0.1kg増やす")
     return act_val
 
 def render_lot_selector(mat_name, lot_key):
@@ -505,6 +513,8 @@ def render_lot_selector(mat_name, lot_key):
 
     rad_key = f"rad_{lot_key}"
     txt_key = f"txt_{lot_key}"
+    ver_key = f"_popver_{lot_key}"
+    ver = st.session_state.get(ver_key, 0)
 
     # ラジオボタン自身のセッション値(クリック直後は既に更新されている)を最優先で
     # 参照することで、ボタン表示が「1手遅れ」になる不具合を解消する。
@@ -525,7 +535,7 @@ def render_lot_selector(mat_name, lot_key):
     else:
         default_idx = 0
 
-    with lot_popover(f"📦 ロット: {curr_val} (タップで選択)"):
+    with lot_popover(f"📦 ロット: {curr_val} (タップで選択)", key=f"potlot_{lot_key}_{ver}"):
         st.markdown(f"#### 📦 {mat_name} のロット選択")
         # 【新規実装】原料の入荷日を確認できるよう、ロット選択の表示ラベルにのみ
         #   入荷日を付記する(保存される値は従来通りロットNoのみ・在庫消費の
@@ -538,7 +548,10 @@ def render_lot_selector(mat_name, lot_key):
             if x == "✏️ リスト外 (手入力)": return x
             d = lot_date_map.get(x)
             return f"{x}（入荷日:{d}）" if d else x
-        sel_option = st.radio("選択してください", options, index=default_idx, key=rad_key, format_func=_lot_fmt)
+        # 【新規実装】一覧からロットをタップした瞬間にポップオーバーが自動的に
+        #   閉じるようにした(手入力モードを選んだ場合は自動クローズしない)。
+        sel_option = st.radio("選択してください", options, index=default_idx, key=rad_key, format_func=_lot_fmt,
+                               on_change=_lot_radio_on_change, args=(rad_key, ver_key))
         
         if sel_option == "✏️ リスト外 (手入力)":
             manual_in = st.text_input("ロット番号を入力 (自動確定)", value=curr_val if curr_val not in active_lots else "", key=txt_key)
@@ -707,7 +720,7 @@ if page == "🏭 製造仕込み":
                         st.markdown(f"<div style='font-size:0.85rem; color:#c2410c; font-weight:800; margin-top:2px;'>{lime_msg}</div>", unsafe_allow_html=True)
 
                     if is_water:
-                        st.markdown(f"<div style='color:#3b82f6; font-weight:900; font-size:1.6rem; text-align:center; padding:10px 0;'>必要量: {fmt_kg(calc_kg)} kg <br><span style='font-size:1rem;color:#64748b;'>(石灰水除く)</span></div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='color:#3b82f6; font-weight:900; font-size:1.6rem; text-align:center; padding:10px 0;'>必要量: {fmt_kg(calc_kg)} kg <br><span style='font-size:1rem;color:#64748b;'>(石灰水除く・配合比 {fmt_kg(base_ratio)}%)</span></div>", unsafe_allow_html=True)
                         submitted_ingredients.append({"原料名": r_name, "kg": round(calc_kg, 2), "lot": "─"})
                     
                     elif is_konjac:
@@ -730,26 +743,43 @@ if page == "🏭 製造仕込み":
                             
                             st.markdown("---")
                             mat_a = st.radio("🅰️ 原料種別", konjac_mats, key=f"kma_{selected_p}_{i}", horizontal=True)
-                            act_a = render_amount_adjuster(f"🅰️ 投入量 ({ratio_a}%)", calc_kg * ratio_a / 100.0, f"adj_a_{selected_p}_{i}")
-                            lot_a = render_lot_selector(mat_a, f"lot_a_{selected_p}_{i}_{mat_a}")
+                            c_amt_a, c_lot_a = st.columns([3, 2])
+                            with c_amt_a: act_a = render_amount_adjuster(f"🅰️ 投入量 (配合比 {ratio_a}%)", calc_kg * ratio_a / 100.0, f"adj_a_{selected_p}_{i}")
+                            with c_lot_a:
+                                st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
+                                lot_a = render_lot_selector(mat_a, f"lot_a_{selected_p}_{i}_{mat_a}")
                             
                             st.markdown("---")
                             mat_b = st.radio("🅱️ 原料種別", konjac_mats, index=1 if len(konjac_mats)>1 else 0, key=f"kmb_{selected_p}_{i}", horizontal=True)
-                            act_b = render_amount_adjuster(f"🅱️ 投入量 ({ratio_b}%)", calc_kg * ratio_b / 100.0, f"adj_b_{selected_p}_{i}")
-                            lot_b = render_lot_selector(mat_b, f"lot_b_{selected_p}_{i}_{mat_b}")
+                            c_amt_b, c_lot_b = st.columns([3, 2])
+                            with c_amt_b: act_b = render_amount_adjuster(f"🅱️ 投入量 (配合比 {ratio_b}%)", calc_kg * ratio_b / 100.0, f"adj_b_{selected_p}_{i}")
+                            with c_lot_b:
+                                st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
+                                lot_b = render_lot_selector(mat_b, f"lot_b_{selected_p}_{i}_{mat_b}")
 
                             submitted_ingredients.append({"原料名": mat_a, "kg": act_a, "lot": f"{lot_a}({ratio_a}%)"})
                             submitted_ingredients.append({"原料名": mat_b, "kg": act_b, "lot": f"{lot_b}({ratio_b}%)"})
                             
                             st.markdown(f"<div style='text-align:center; padding:12px; margin-top:20px; background:#fef3c7; border:2px solid #f59e0b; border-radius:12px;'><div style='color:#b45309; font-weight:900;'>🧪 ブレンド合計投入量</div><div style='font-size:2.4rem; font-weight:900; color:#d97706;'>{fmt_kg(act_a + act_b)} <span style='font-size:1.2rem'>kg</span></div></div>", unsafe_allow_html=True)
                         else:
-                            act_kg = render_amount_adjuster("投入量", calc_kg, f"adj_{selected_p}_{i}")
-                            final_lot = render_lot_selector(r_name, f"lot_{selected_p}_{i}")
+                            # 【新規実装】投入量の横に配合比(%)を表示。また投入量と
+                            #   ロット選択を横並びにまとめ、以前のように画面幅いっぱいに
+                            #   間延びした表示にならないよう、コンパクトな2カラム構成に変更。
+                            c_amt, c_lot = st.columns([3, 2])
+                            with c_amt:
+                                act_kg = render_amount_adjuster(f"投入量（配合比 {fmt_kg(base_ratio)}%）", calc_kg, f"adj_{selected_p}_{i}")
+                            with c_lot:
+                                st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
+                                final_lot = render_lot_selector(r_name, f"lot_{selected_p}_{i}")
                             submitted_ingredients.append({"原料名": r_name, "kg": act_kg, "lot": final_lot})
                     
                     else:
-                        act_kg = render_amount_adjuster("投入量", calc_kg, f"adj_{selected_p}_{i}")
-                        final_lot = render_lot_selector(r_name, f"lot_{selected_p}_{i}")
+                        c_amt, c_lot = st.columns([3, 2])
+                        with c_amt:
+                            act_kg = render_amount_adjuster(f"投入量（配合比 {fmt_kg(base_ratio)}%）", calc_kg, f"adj_{selected_p}_{i}")
+                        with c_lot:
+                            st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
+                            final_lot = render_lot_selector(r_name, f"lot_{selected_p}_{i}")
                         submitted_ingredients.append({"原料名": r_name, "kg": act_kg, "lot": final_lot})
 
             # ════════════════════════════════════════════════════════
@@ -776,8 +806,12 @@ if page == "🏭 製造仕込み":
                                 s_mat, s_dil = sitem["原料名"], sitem["希釈倍率"]
                                 need_kg = target_vol / s_dil if s_dil > 0 else 0.0
                                 st.markdown(f"<div style='font-size:0.9rem; color:#64748b; margin-top:6px;'>🔹 {s_mat}（希釈倍率 {fmt_kg(s_dil)}倍）</div>", unsafe_allow_html=True)
-                                s_act_kg = render_amount_adjuster(f"投入量({s_mat})", need_kg, f"adj_season_{selected_p}_{sr_idx}_{si}")
-                                s_lot = render_lot_selector(s_mat, f"lot_season_{selected_p}_{sr_idx}_{si}")
+                                sc_amt, sc_lot = st.columns([3, 2])
+                                with sc_amt:
+                                    s_act_kg = render_amount_adjuster(f"投入量（{s_mat}）", need_kg, f"adj_season_{selected_p}_{sr_idx}_{si}")
+                                with sc_lot:
+                                    st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
+                                    s_lot = render_lot_selector(s_mat, f"lot_season_{selected_p}_{sr_idx}_{si}")
                                 submitted_ingredients.append({"原料名": s_mat, "kg": s_act_kg, "lot": s_lot})
 
             st.markdown("<br>", unsafe_allow_html=True)
@@ -1577,17 +1611,25 @@ elif page == "⚙️ マスタ設定":
     
     with t1:
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
-        ed_m = st.data_editor(pd.DataFrame({"原料名": materials}), num_rows="dynamic", use_container_width=True)
+        # 【修繕】グレードマスタと同様、リストが空のときに列がfloat型と誤認識され
+        #   文字入力できなくなる不具合があったため、テキスト型を明示した。
+        ed_m = st.data_editor(
+            pd.DataFrame({"原料名": pd.array(materials, dtype="string")}), num_rows="dynamic", use_container_width=True,
+            column_config={"原料名": st.column_config.TextColumn("原料名")}
+        )
         if st.button("💾 原料マスタ保存", type="primary"):
-            sheets.save_materials([str(x).strip() for x in ed_m["原料名"].tolist() if str(x).strip()])
+            sheets.save_materials([str(x).strip() for x in ed_m["原料名"].tolist() if x is not None and str(x).strip() and str(x).strip().lower() != "nan"])
             st.success("保存しました。"); time.sleep(1); refresh()
         st.markdown('</div>', unsafe_allow_html=True)
             
     with t2:
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
-        ed_u = st.data_editor(pd.DataFrame({"担当者名": inspectors}), num_rows="dynamic", use_container_width=True)
+        ed_u = st.data_editor(
+            pd.DataFrame({"担当者名": pd.array(inspectors, dtype="string")}), num_rows="dynamic", use_container_width=True,
+            column_config={"担当者名": st.column_config.TextColumn("担当者名")}
+        )
         if st.button("💾 担当者保存", type="primary"):
-            sheets.save_inspectors([str(x).strip() for x in ed_u["担当者名"].tolist() if str(x).strip()])
+            sheets.save_inspectors([str(x).strip() for x in ed_u["担当者名"].tolist() if x is not None and str(x).strip() and str(x).strip().lower() != "nan"])
             st.success("保存しました。"); time.sleep(1); refresh()
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1775,12 +1817,21 @@ elif page == "⚙️ マスタ設定":
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
         st.markdown('<div class="section-title">🏷️ こんにゃく粉 グレードマスタ</div>', unsafe_allow_html=True)
         st.caption("💡 ここで登録したグレードが「📥 入荷登録」画面でこんにゃく粉を選んだ際に選択肢として表示され、ダッシュボードでメーカー×グレード別の在庫内訳に使われます。")
+        st.caption("👇 「＋」で行を追加し、セルをタップして直接グレード名を入力してください（例: 1級、2級、徳用 など）。")
         cur_grades = parse_grade_list(order_points)
-        ed_grade = st.data_editor(pd.DataFrame({"グレード名": cur_grades}), num_rows="dynamic", use_container_width=True, key="grade_editor")
+        # 【修繕】グレードが1件も無い状態(初回)だと、空リストからDataFrameを
+        #   作った際に列の型が自動的に数値(float)と判定されてしまい、
+        #   data_editor上で文字が一切入力できない不具合があった。
+        #   列を明示的にテキスト型(TextColumn)として指定することで解消した。
+        grade_df = pd.DataFrame({"グレード名": pd.array(cur_grades, dtype="string")})
+        ed_grade = st.data_editor(
+            grade_df, num_rows="dynamic", use_container_width=True, key="grade_editor",
+            column_config={"グレード名": st.column_config.TextColumn("グレード名", help="例: 1級、2級、徳用 など", required=False)}
+        )
         if st.button("💾 グレードマスタ保存", type="primary"):
-            new_grades = [str(x).strip() for x in ed_grade["グレード名"].tolist() if str(x).strip()]
+            new_grades = [str(x).strip() for x in ed_grade["グレード名"].tolist() if x is not None and str(x).strip() and str(x).strip().lower() != "nan"]
             new_dict = dict(order_points)
             new_dict["__GRADE_LIST__"] = json.dumps(new_grades, ensure_ascii=False)
             sheets.save_order_points(new_dict)
-            st.success("グレードマスタを保存しました。"); time.sleep(1); refresh()
+            st.success(f"グレードマスタを保存しました（{len(new_grades)}件）。"); time.sleep(1); refresh()
         st.markdown('</div>', unsafe_allow_html=True)
