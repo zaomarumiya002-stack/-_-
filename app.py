@@ -40,18 +40,27 @@ st.set_page_config(
 st.markdown("""
 <style>
 :root {
-    --c-bg: #f0f4f8; 
+    /* 落ち着いたティール系1色構成（工場管理システム向け） */
+    --c-bg: #f4f6f7;
     --c-surface: #ffffff;
-    --c-primary: #ea580c; 
-    --c-primary-hover: #c2410c;
-    --c-secondary: #0f172a;
-    --c-muted: #475569;
-    --c-border: #cbd5e1;
-    --c-input-border: #94a3b8;
+    --c-primary: #0f766e;
+    --c-primary-hover: #0b5c56;
+    --c-primary-soft: #e6f2f1;
+    --c-secondary: #1e293b;
+    --c-muted: #64748b;
+    --c-border: #dbe2e6;
+    --c-input-border: #a8b3ba;
+    --c-danger: #b91c1c;
+    --c-danger-bg: #fdf1f1;
+    --c-warning: #b45309;
+    --c-warning-bg: #fdf6e9;
+    --c-success: #15803d;
+    --c-success-bg: #eef8f0;
+    --c-water: #94a3b8;
     --radius-lg: 16px;
     --radius-md: 10px;
     --radius-sm: 8px;
-    --shadow-card: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+    --shadow-card: 0 2px 6px -1px rgba(15,23,42,0.08), 0 1px 3px -1px rgba(15,23,42,0.05);
 }
 html, body, .stApp {
     background-color: var(--c-bg) !important;
@@ -83,11 +92,11 @@ div[data-testid="stRadio"] label {
 div[data-testid="stRadio"] label p {
     font-size: 1.1rem !important; font-weight: 800 !important; color: var(--c-secondary) !important;
 }
-/* ★選択中：背景を「落ち着いたブルー」に設定し、視認性を最大化 */
+/* ★選択中：主色（ティール）に統一して視認性を確保 */
 div[data-testid="stRadio"] label:has(input:checked) {
-    background-color: #0284c7 !important;
-    border-color: #0369a1 !important;
-    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4) !important;
+    background-color: var(--c-primary) !important;
+    border-color: var(--c-primary-hover) !important;
+    box-shadow: 0 3px 10px rgba(15, 118, 110, 0.3) !important;
     transform: translateY(-2px);
 }
 div[data-testid="stRadio"] label:has(input:checked) * {
@@ -100,7 +109,7 @@ div[data-baseweb="input"] {
     border-radius: var(--radius-md) !important; 
 }
 div[data-baseweb="input"]:focus-within {
-    border-color: #0284c7 !important; box-shadow: 0 0 0 5px rgba(2, 132, 199, 0.2) !important;
+    border-color: var(--c-primary) !important; box-shadow: 0 0 0 5px rgba(15, 118, 110, 0.18) !important;
 }
 div[data-testid="stNumberInputContainer"] { min-height: 70px !important; background-color: #f8fafc !important; }
 div[data-testid="stNumberInputContainer"] input {
@@ -122,7 +131,7 @@ button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStep
 }
 .stButton button[kind="primary"] {
     background: var(--c-primary) !important; color: #ffffff !important; border: none !important; 
-    box-shadow: 0 4px 12px rgba(234, 88, 12, 0.35) !important; font-size: 1.15rem !important;
+    box-shadow: 0 4px 12px rgba(15, 118, 110, 0.3) !important; font-size: 1.15rem !important;
 }
 .stButton button[kind="primary"]:hover { background: var(--c-primary-hover) !important; transform: translateY(-2px); }
 
@@ -136,8 +145,8 @@ button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStep
 }
 [data-testid="stSidebar"] div[role="radiogroup"] label p { font-size: 1.05rem !important; font-weight: 800 !important; color: var(--c-muted) !important; }
 [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
-    background: #0284c7 !important; border-color: #0369a1 !important;
-    box-shadow: 0 4px 10px rgba(2, 132, 199, 0.3) !important; transform: translateX(4px);
+    background: var(--c-primary) !important; border-color: var(--c-primary-hover) !important;
+    box-shadow: 0 3px 8px rgba(15, 118, 110, 0.25) !important; transform: translateX(4px);
 }
 [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p { color: #ffffff !important; font-weight: 900 !important; }
 
@@ -354,7 +363,7 @@ def get_supply_inventory():
 # ════════════════════════════════════════════════════════════════
 def render_amount_adjuster(title, calc_val, p_key):
     """仕込量が変わると瞬時に計算値が反映される特大入力欄"""
-    st.markdown(f"<div style='font-size:1.1rem; font-weight:900; color:#0369a1; margin-bottom:6px;'>{title}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size:1.1rem; font-weight:900; color:#0f766e; margin-bottom:6px;'>{title}</div>", unsafe_allow_html=True)
     
     lst_key = f"last_calc_{p_key}"
     last_calc = st.session_state.get(lst_key, None)
@@ -417,6 +426,108 @@ def render_operator_selector(operator_key):
                 st.session_state[ver_key] = ver + 1
                 st.rerun()
     return st.session_state[operator_key]
+
+
+def render_excel_history_editor(full_records, filtered_df, id_col, editable_cols, numeric_cols, save_func, key_prefix, label_col=None):
+    """
+    Excel感覚で一括編集できる履歴編集グリッド。
+    - セルを直接タップ/クリックして編集（st.data_editor）
+    - 行削除・変更内容は「確認 → 確定」の2段階operationで実行し、誤操作によるデータ消失を防止
+    - フィルタ範囲外の既存レコードは一切変更しない（保存時に温存）
+    - id_colが空欄の新規行はこの画面では登録せず、無視して警告表示（登録は各専用フォームから）
+    """
+    if filtered_df.empty:
+        st.info("対象期間のデータがありません。")
+        return
+
+    display_cols = [id_col] + [c for c in editable_cols if c != id_col]
+    edit_df = filtered_df[display_cols].copy().reset_index(drop=True)
+    for c in numeric_cols:
+        if c in edit_df.columns:
+            edit_df[c] = pd.to_numeric(edit_df[c], errors="coerce").fillna(0.0)
+    edit_df[id_col] = edit_df[id_col].astype(str)
+
+    st.caption("💡 セルをタップ／クリックして直接編集できます（Excelのように）。行左端のチェックで選択し🗑️で削除できます。新規行の追加はここではできません（各登録画面をご利用ください）。")
+
+    column_config = {id_col: st.column_config.TextColumn(id_col, disabled=True, help="一意な管理番号（編集不可）")}
+    for c in numeric_cols:
+        if c in edit_df.columns:
+            column_config[c] = st.column_config.NumberColumn(c, format="%.2f")
+
+    edited_df = st.data_editor(
+        edit_df, num_rows="dynamic", use_container_width=True, hide_index=True,
+        key=f"{key_prefix}_editor", column_config=column_config
+    )
+
+    diff_key = f"{key_prefix}_diff_pending"
+
+    c_check, c_cancel = st.columns([2, 1])
+    if c_check.button("🔍 変更内容を確認する", key=f"{key_prefix}_check_btn", use_container_width=True):
+        orig_ids = set(edit_df[id_col])
+        edited_clean = edited_df.copy()
+        edited_clean[id_col] = edited_clean[id_col].astype(str).str.strip()
+        valid_edited = edited_clean[edited_clean[id_col] != ""]
+        blank_new_rows = len(edited_clean) - len(valid_edited)
+        new_ids = set(valid_edited[id_col])
+        deleted_ids = orig_ids - new_ids
+
+        changed_rows = []
+        for _, row in valid_edited.iterrows():
+            rid = row[id_col]
+            if rid not in orig_ids: continue  # 未知のIDは変更対象外（新規追加はしない）
+            orig_row = edit_df[edit_df[id_col] == rid].iloc[0]
+            changed = any(str(row[c]) != str(orig_row[c]) for c in editable_cols if c != id_col)
+            if changed: changed_rows.append(rid)
+
+        st.session_state[diff_key] = {
+            "changed": changed_rows, "deleted": sorted(deleted_ids),
+            "blank_new_rows": blank_new_rows, "edited_df": edited_clean
+        }
+        st.rerun()
+
+    if c_cancel.button("❌ 取消", key=f"{key_prefix}_cancel_btn", use_container_width=True):
+        st.session_state.pop(diff_key, None)
+        st.rerun()
+
+    diff = st.session_state.get(diff_key)
+    if diff:
+        n_c, n_d, n_b = len(diff["changed"]), len(diff["deleted"]), diff["blank_new_rows"]
+        if n_c == 0 and n_d == 0 and n_b == 0:
+            st.info("変更はありませんでした。")
+        else:
+            msg = []
+            if n_c: msg.append(f"✏️ 更新 {n_c}件（{', '.join(diff['changed'])}）")
+            if n_d: msg.append(f"🗑️ 削除 {n_d}件（{', '.join(diff['deleted'])}）※元に戻せません")
+            if n_b: msg.append(f"⚠️ 空欄の新規行 {n_b}件は無視されます（新規登録は各登録画面から）")
+            box_color = "var(--c-danger-bg)" if n_d else "var(--c-primary-soft)"
+            border_color = "var(--c-danger)" if n_d else "var(--c-primary)"
+            st.markdown(f"""
+            <div style="background:{box_color}; border:2px solid {border_color}; border-radius:10px; padding:14px 16px; margin:10px 0;">
+                {"<br>".join(msg)}
+            </div>
+            """, unsafe_allow_html=True)
+
+            if n_c or n_d:
+                if st.button("✅ この内容で確定保存する", type="primary", key=f"{key_prefix}_confirm_btn", use_container_width=True):
+                    id_to_record = {str(r.get(id_col)): dict(r) for r in full_records}
+                    valid_edited = diff["edited_df"][diff["edited_df"][id_col] != ""]
+                    for _, row in valid_edited.iterrows():
+                        rid = row[id_col]
+                        if rid in id_to_record:
+                            for c in editable_cols:
+                                if c == id_col: continue
+                                val = row[c]
+                                if c in numeric_cols:
+                                    try: val = float(val)
+                                    except (ValueError, TypeError): val = 0.0
+                                id_to_record[rid][c] = val
+                    for rid in diff["deleted"]:
+                        id_to_record.pop(rid, None)
+                    save_func(list(id_to_record.values()))
+                    st.session_state.pop(diff_key, None)
+                    st.success(f"変更を保存しました（更新{n_c}件・削除{n_d}件）。")
+                    time.sleep(1.5)
+                    refresh()
 
 
 # ════════════════════════════════════════════════════════════════
@@ -521,7 +632,8 @@ if page == "🏭 製造仕込み":
             st.markdown('<div class="section-title" style="margin-top:32px;">📦 準備する原料・ロット</div>', unsafe_allow_html=True)
             st.caption("推奨量がセットされています。変更がある場合は直接タップして修正（手入力）してください。")
             submitted_ingredients = []
-            
+            water_items = []  # 水は重要度が低いため、下部にまとめて控えめに表示する
+
             lime_cfg = parse_lime_config(order_points)
             lime_boost_active = is_lime_boost_active(lime_cfg, brew_date)
 
@@ -529,7 +641,7 @@ if page == "🏭 製造仕込み":
                 r_name = str(item.get("原料名", "")).strip()
                 base_ratio = float(item.get("比率", 0.0))
                 is_water, is_lime, is_konjac = ("水" in r_name or "お湯" in r_name), ("石灰" in r_name or "カルシウム" in r_name), ("こんにゃく" in r_name)
-                icon = "💧" if is_water else ("🧂" if is_lime else ("📦" if is_konjac else "🔹"))
+                icon = "🧂" if is_lime else ("📦" if is_konjac else "🔹")
 
                 lime_msg = ""
                 if is_water: 
@@ -545,17 +657,20 @@ if page == "🏭 製造仕込み":
                 else: 
                     calc_kg = target_size * (base_ratio / 100.0)
 
+                if is_water:
+                    # 水は最重要ではないため、個別カードで目立たせず下部にまとめる
+                    calc_kg = round(calc_kg, 2)
+                    water_items.append({"原料名": r_name, "kg": calc_kg, "配合比": base_ratio})
+                    submitted_ingredients.append({"原料名": r_name, "kg": calc_kg, "lot": "─"})
+                    continue
+
                 with st.container(border=True):
                     st.markdown(f"<div style='font-size:1.3rem; font-weight:900;'>{icon} {r_name}</div>", unsafe_allow_html=True)
                     
                     if is_lime and lime_msg:
-                        st.markdown(f"<div style='font-size:0.9rem; color:#c2410c; font-weight:800; margin-top:4px;'>{lime_msg}</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='font-size:0.9rem; color:#b45309; font-weight:800; margin-top:4px;'>{lime_msg}</div>", unsafe_allow_html=True)
 
-                    if is_water:
-                        st.markdown(f"<div style='color:#0284c7; font-weight:900; font-size:2.4rem; text-align:center; padding:12px 0;'>必要量: {fmt_kg(calc_kg)} kg <br><span style='font-size:1.1rem;color:#64748b;'>(石灰水除く・配合比 {fmt_kg(base_ratio)}%)</span></div>", unsafe_allow_html=True)
-                        submitted_ingredients.append({"原料名": r_name, "kg": round(calc_kg, 2), "lot": "─"})
-                    
-                    elif is_konjac:
+                    if is_konjac:
                         blend_key = f"kb_{selected_p}_{i}"
                         blend_on = st.checkbox("🧪 2種類のこんにゃく粉をブレンドする", key=blend_key)
                         konjac_mats = [m for m in materials if "こんにゃく" in m] or [r_name]
@@ -620,13 +735,24 @@ if page == "🏭 製造仕込み":
                                 with sc_lot: s_lot = render_lot_selector(s_mat, f"lot_season_{selected_p}_{sr_idx}_{si}")
                                 submitted_ingredients.append({"原料名": s_mat, "kg": s_act_kg, "lot": s_lot})
 
+            # ── 水は重要度が低いため、最下部に控えめな1行でまとめて表示 ──
+            if water_items:
+                water_line = "　/　".join(
+                    f"{w['原料名']} {fmt_kg(w['kg'])}kg（配合比{fmt_kg(w['配合比'])}%）" for w in water_items
+                )
+                st.markdown(f"""
+                <div style="display:flex; align-items:center; gap:8px; padding:8px 4px; margin-top:4px; color:var(--c-water); font-size:0.85rem;">
+                    <span>💧</span><span>{water_line}（石灰水量を差し引いた自動計算値・原料として自動計上されます）</span>
+                </div>
+                """, unsafe_allow_html=True)
+
             st.markdown("<br>", unsafe_allow_html=True)
             total_in = sum(ing["kg"] for ing in submitted_ingredients)
             st.markdown(f"""
-            <div style="background-color: #f8fafc; border: 3px solid #cbd5e1; border-radius: 12px; padding: 16px; margin-bottom: 24px; text-align: center;">
-                <div style="font-weight: 800; color: #475569; font-size: 1.1rem;">💡 合計投入予定量（全原料）</div>
-                <div style="font-size: 2.2rem; font-weight: 900; color: #0f172a;">{fmt_kg(total_in)} <span style="font-size:1.2rem; color:#64748b;">kg</span></div>
-                <div style="font-weight: 700; color: #64748b;">目標仕込量: {fmt_kg(target_size)} kg</div>
+            <div style="background-color: var(--c-primary-soft); border: 2px solid var(--c-primary); border-radius: 12px; padding: 16px; margin-bottom: 24px; text-align: center;">
+                <div style="font-weight: 800; color: var(--c-muted); font-size: 1.1rem;">💡 合計投入予定量（全原料・水を含む）</div>
+                <div style="font-size: 2.2rem; font-weight: 900; color: var(--c-secondary);">{fmt_kg(total_in)} <span style="font-size:1.2rem; color:var(--c-muted);">kg</span></div>
+                <div style="font-weight: 700; color: var(--c-muted);">目標仕込量: {fmt_kg(target_size)} kg</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -713,7 +839,7 @@ elif page == "📊 ダッシュボード":
             st.markdown(f"""
             <div style="background:{bg_col}; border:2px solid {border_col}; border-radius:12px; padding:18px; margin-bottom:8px;">
                 <div style="font-weight:900; color:#0f172a; font-size:1.15rem;">{m}</div>
-                <div class="mat-card-value" style="font-size:2.2rem; font-weight:900; color:#ea580c; margin:6px 0 2px 0;">
+                <div class="mat-card-value" style="font-size:2.2rem; font-weight:900; color:#0f766e; margin:6px 0 2px 0;">
                     {fmt_kg(curr_kg)}<span style="font-size:1.1rem; color:#64748b; margin-right:8px;">kg</span> 
                     <span style="font-size:1.6rem; color:#0f172a;">({fmt_kg(curr_bag)}袋)</span>
                 </div>
@@ -799,7 +925,7 @@ elif page == "📊 ダッシュボード":
                         st.markdown(f"""
                         <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-bottom:1px solid #e2e8f0;">
                             <div style="font-weight:800;">🏢 {mk} ／ 🏷️ {gr}</div>
-                            <div class="mat-card-value" style="font-weight:900; color:#ea580c;">{fmt_kg(vals['kg'])} kg（{fmt_kg(vals['bag'])}袋）</div>
+                            <div class="mat-card-value" style="font-weight:900; color:#0f766e;">{fmt_kg(vals['kg'])} kg（{fmt_kg(vals['bag'])}袋）</div>
                         </div>
                         """, unsafe_allow_html=True)
                     if not any_row:
@@ -1002,44 +1128,28 @@ elif page == "📥 入荷登録":
             # 降順にソートして再インデックス
             df_arr_sorted = df_arr.sort_values("入荷日", ascending=False).reset_index(drop=True)
             st.dataframe(fmt_df_numeric(df_arr_sorted[hist_cols].head(50), ["総量(kg)", "袋数", "1袋重量(kg)"]), use_container_width=True, hide_index=True)
-            
-            # 【新規追加】インライン編集・削除機能
-            st.markdown('<div class="form-card"><div class="section-title">✏️ インライン編集・削除</div>', unsafe_allow_html=True)
-            arr_opts = {f"No.{r.get('入荷No','')} - {r.get('原料種別','')} (ロット:{r.get('ロットNo','')} / {r.get('入荷日','')})": r for _, r in df_arr_sorted.iterrows()}
-            if arr_opts:
-                sel_rec_label = st.selectbox("操作する記録を選択", list(arr_opts.keys()), key="edit_arr_sel")
-                sel_rec = arr_opts[sel_rec_label]
-                with st.form("edit_arr_form"):
-                    e_date = st.text_input("入荷日", value=str(sel_rec.get("入荷日", "")))
-                    c_e1, c_e2 = st.columns(2)
-                    e_qty = c_e1.number_input("入荷袋数", value=int(float(sel_rec.get("袋数", 0) or 0)), step=1)
-                    e_wt = c_e2.number_input("1袋重量(kg)", value=int(float(sel_rec.get("1袋重量(kg)", 20) or 20)), step=1)
-                    e_note = st.text_area("備考", value=str(sel_rec.get("備考", "")))
-                    
-                    c_s, c_d = st.columns(2)
-                    do_save = c_s.form_submit_button("💾 上書き保存", type="primary", use_container_width=True)
-                    do_del = c_d.form_submit_button("🗑️ 削除", use_container_width=True)
-                    
-                    if do_save or do_del:
-                        updated_arrivals = [a for a in arrivals if a.get("入荷No") != sel_rec.get("入荷No")]
-                        if do_save:
-                            new_rec = dict(sel_rec)
-                            new_rec.update({
-                                "入荷日": e_date, 
-                                "袋数": e_qty, 
-                                "1袋重量(kg)": e_wt,
-                                "総量(kg)": e_qty * e_wt, 
-                                "備考": e_note + f" 【修正:{date.today()}】"
-                            })
-                            updated_arrivals.append(new_rec)
-                        
-                        if hasattr(sheets, "save_arrivals"):
-                            sheets.save_arrivals(updated_arrivals)
-                            if do_save: st.success("更新しました。")
-                            else: st.success("削除しました。")
-                        else:
-                            st.error("🚨 `sheets.py` に `save_arrivals` 関数が実装されていません。システム管理者に連絡してください。")
-                        time.sleep(1.5); refresh()
+
+            st.markdown('<div class="form-card"><div class="section-title">✏️ 入荷履歴の一括編集（Excel風）</div>', unsafe_allow_html=True)
+            if not hasattr(sheets, "save_arrivals"):
+                st.error("🚨 `sheets.py` に `save_arrivals` 関数が実装されていません。システム管理者に連絡してください。")
+            else:
+                if "入荷No" not in df_arr_sorted.columns:
+                    st.warning("入荷Noが記録されていないため編集できません。")
+                else:
+                    def _save_arrivals_recalc(records):
+                        for r in records:
+                            try: r["総量(kg)"] = float(r.get("袋数", 0) or 0) * float(r.get("1袋重量(kg)", 0) or 0)
+                            except (ValueError, TypeError): pass
+                        sheets.save_arrivals(records)
+
+                    arr_editable_cols = ["入荷日", "原料種別", "メーカー", "ロットNo", "袋数", "1袋重量(kg)", "備考"]
+                    if "グレード" in df_arr_sorted.columns: arr_editable_cols.insert(2, "グレード")
+                    render_excel_history_editor(
+                        full_records=arrivals, filtered_df=df_arr_sorted.head(200),
+                        id_col="入荷No", editable_cols=arr_editable_cols,
+                        numeric_cols=["袋数", "1袋重量(kg)"], save_func=_save_arrivals_recalc,
+                        key_prefix="arr_hist"
+                    )
             st.markdown('</div>', unsafe_allow_html=True)
         else: st.info("入荷履歴はありません。")
 
@@ -1280,9 +1390,9 @@ elif page == "📋 履歴・帳票":
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         s_date = c1.date_input("開始日", value=date.today().replace(day=1))
-        e_date = c2.date_input("終了日", value=date.today())
+        filter_end_date = c2.date_input("終了日", value=date.today())
         
-        mask = (df_brw["仕込日_dt"].dt.date >= s_date) & (df_brw["仕込日_dt"].dt.date <= e_date)
+        mask = (df_brw["仕込日_dt"].dt.date >= s_date) & (df_brw["仕込日_dt"].dt.date <= filter_end_date)
         filtered_df = df_brw[mask].copy().sort_values("仕込日", ascending=False)
         
         if HAS_OPENPYXL and not filtered_df.empty:
@@ -1302,41 +1412,26 @@ elif page == "📋 履歴・帳票":
                     ws.cell(row=r_idx, column=7, value=str(row.get("備考", "")))
                 return wb
                 
-            wb = generate_excel_report(filtered_df, s_date.strftime("%Y/%m/%d"), e_date.strftime("%Y/%m/%d"))
+            wb = generate_excel_report(filtered_df, s_date.strftime("%Y/%m/%d"), filter_end_date.strftime("%Y/%m/%d"))
             excel_buffer = BytesIO()
             wb.save(excel_buffer)
-            st.download_button("🖨️ Excel帳票をダウンロード", data=excel_buffer.getvalue(), file_name=f"製造記録_{s_date}_{e_date}.xlsx", type="primary")
+            st.download_button("🖨️ Excel帳票をダウンロード", data=excel_buffer.getvalue(), file_name=f"製造記録_{s_date}_{filter_end_date}.xlsx", type="primary")
         
         st.dataframe(fmt_df_numeric(filtered_df[["仕込日", "仕込No", "品名", "仕込量(kg)", "主原料ロット", "備考"]], ["仕込量(kg)"]), use_container_width=True, hide_index=True)
         st.markdown('</div>', unsafe_allow_html=True)
         
-        st.markdown('<div class="form-card"><div class="section-title">✏️ インライン編集・削除</div>', unsafe_allow_html=True)
-        brw_opts = {f"No.{r.get('仕込No','')} - {r.get('品名','')} ({r.get('仕込日','')})": r for _, r in filtered_df.iterrows()}
-        if brw_opts:
-            sel_rec_label = st.selectbox("操作する記録を選択", list(brw_opts.keys()))
-            sel_rec = brw_opts[sel_rec_label]
-            with st.form("edit_form"):
-                e_date = st.text_input("製造日", value=str(sel_rec.get("仕込日", "")))
-                e_name = st.text_input("品名", value=str(sel_rec.get("品名", "")))
-                e_size = st.number_input("製造量(kg)", value=int(float(sel_rec.get("仕込量(kg)", 100) or 100)), step=1)
-                e_note = st.text_area("備考", value=str(sel_rec.get("備考", "")))
-                
-                c_s, c_d = st.columns(2)
-                do_save = c_s.form_submit_button("💾 上書き保存", type="primary", use_container_width=True)
-                do_del = c_d.form_submit_button("🗑️ 削除", use_container_width=True)
-                
-                if do_save or do_del:
-                    updated_brewing = [b for b in brewing if b.get("仕込No") != sel_rec.get("仕込No")]
-                    if do_save:
-                        new_rec = dict(sel_rec)
-                        new_rec.update({"仕込日": e_date, "品名": e_name, "仕込量(kg)": e_size, "備考": e_note + f" 【修正:{date.today()}】"})
-                        updated_brewing.append(new_rec)
-                        sheets.save_brewing(updated_brewing)
-                        st.success("更新しました。")
-                    else:
-                        sheets.save_brewing(updated_brewing)
-                        st.success("削除しました。")
-                    time.sleep(1.5); refresh()
+        st.markdown('<div class="form-card"><div class="section-title">✏️ 製造履歴の一括編集（Excel風）</div>', unsafe_allow_html=True)
+        if "仕込No" not in filtered_df.columns:
+            st.warning("仕込Noが記録されていないため編集できません。")
+        else:
+            brw_editable_cols = ["仕込日", "品名", "メーカー", "仕込量(kg)", "主原料ロット", "備考"]
+            brw_editable_cols = [c for c in brw_editable_cols if c in filtered_df.columns]
+            render_excel_history_editor(
+                full_records=brewing, filtered_df=filtered_df.reset_index(drop=True),
+                id_col="仕込No", editable_cols=brw_editable_cols,
+                numeric_cols=["仕込量(kg)"], save_func=sheets.save_brewing,
+                key_prefix="brw_hist"
+            )
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════
@@ -1354,7 +1449,7 @@ elif page == "📈 分析":
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
         monthly_trend = df_brw_global.groupby("month")["仕込量(kg)"].sum().reset_index().sort_values("month")
         fig = go.Figure()
-        fig.add_trace(go.Bar(x=monthly_trend["month"], y=monthly_trend["仕込量(kg)"], name="製造量", marker_color="#ea580c"))
+        fig.add_trace(go.Bar(x=monthly_trend["month"], y=monthly_trend["仕込量(kg)"], name="製造量", marker_color="#0f766e"))
         fig.update_layout(title="月間生産推移 (kg)", xaxis_title="年月", yaxis_title="総製造量", plot_bgcolor="#ffffff")
         st.plotly_chart(fig, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -1366,7 +1461,7 @@ elif page == "📈 分析":
             pie_data = pie_data[pie_data["仕込量(kg)"] > 0]
             fig_tree = px.treemap(
                 pie_data, path=["品名"], values="仕込量(kg)",
-                color="仕込量(kg)", color_continuous_scale=["#fde4d0", "#ea580c"],
+                color="仕込量(kg)", color_continuous_scale=["#fde4d0", "#0f766e"],
                 title="製品構成比（面積・色の濃さ＝製造量）"
             )
             fig_tree.update_traces(
@@ -1381,7 +1476,7 @@ elif page == "📈 分析":
             st.markdown('<div class="form-card">', unsafe_allow_html=True)
             topN = pie_data.sort_values("仕込量(kg)", ascending=True).tail(15)
             fig_bar = px.bar(topN, x="仕込量(kg)", y="品名", orientation='h', title="製造量 上位15品目", text="仕込量(kg)")
-            fig_bar.update_traces(texttemplate="%{text:,.0f} kg", textposition="outside", marker_color="#ea580c", cliponaxis=False)
+            fig_bar.update_traces(texttemplate="%{text:,.0f} kg", textposition="outside", marker_color="#0f766e", cliponaxis=False)
             fig_bar.update_layout(height=max(380, 34 * len(topN)), plot_bgcolor="#ffffff", margin=dict(l=6, r=70, t=50, b=6), yaxis_title="", xaxis_title="仕込量(kg)")
             st.plotly_chart(fig_bar, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
