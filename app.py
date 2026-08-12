@@ -35,143 +35,131 @@ st.set_page_config(
 )
 
 # ════════════════════════════════════════════════════════════════
-#  【視認性・高コントラスト特化版】 UI/UX CSS
+#  【視認性・モバイル操作・人間工学 特化版】 UI/UX CSS
 # ════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
 :root {
-    /* 眩しさを抑えるための落ち着いた背景色と、くっきりした枠線 */
-    --c-bg: #f0f4f8; 
+    /* 眩しさを抑え、図と地の分離を明確にする背景色 */
+    --c-bg: #f1f5f9; 
     --c-surface: #ffffff;
-    --c-surface-alt: #f8fafc;
-    --c-primary: #ea580c; /* 現場で最も注意を引きやすいオレンジ */
-    --c-primary-soft: #fff1e8;
+    --c-primary: #ea580c; /* 注意を引きやすいオレンジ */
     --c-primary-hover: #c2410c;
     --c-secondary: #0f172a;
-    --c-muted: #475569; /* コントラストを上げるため少し濃いグレーに */
-    --c-border: #cbd5e1; /* 境界線をハッキリ認識できる濃さ */
-    --c-input-border: #94a3b8; 
-    --c-success: #16a34a;
-    --c-danger: #dc2626;
-    --radius-lg: 12px;
-    --radius-md: 8px;
-    --radius-sm: 6px;
+    --c-muted: #475569;
+    --c-border: #cbd5e1; /* 境界線がハッキリわかる濃さ */
+    --c-input-border: #94a3b8;
+    --radius-lg: 16px;
+    --radius-md: 12px;
+    --radius-sm: 8px;
     --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 html, body, .stApp {
     background-color: var(--c-bg) !important;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
 }
-h1, h2, h3, h4, h5, h6, p, span, div, label { color: var(--c-secondary); letter-spacing: 0.01em; }
-.block-container { padding-top: 1.6rem !important; max-width: 1280px; }
+h1, h2, h3, h4, h5, p, span, div, label { color: var(--c-secondary); letter-spacing: 0.02em; }
+.block-container { padding-top: 1.5rem !important; max-width: 1280px; }
 
 /* ════════ ヘッダー・カード ════════ */
 .main-header {
     background: var(--c-surface); padding: 20px 24px; border-radius: var(--radius-lg); margin-bottom: 24px;
     box-shadow: var(--shadow-card); border: 1px solid var(--c-border);
-    border-left: 6px solid var(--c-primary);
+    border-left: 8px solid var(--c-primary);
 }
 .main-header h1 { font-size: 1.6rem !important; margin: 0 0 6px 0 !important; font-weight: 900 !important; }
 .main-header p { color: var(--c-muted) !important; font-size: 0.95rem !important; margin: 0 !important; font-weight: 700; }
 .form-card {
-    background: var(--c-surface); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 20px;
+    background: var(--c-surface); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 24px;
     box-shadow: var(--shadow-card); border: 1px solid var(--c-border);
 }
-.section-title { font-size: 1.2rem; font-weight: 900; margin-bottom: 18px; border-bottom: 2px solid var(--c-border); padding-bottom: 8px; color: var(--c-secondary); }
+.section-title { font-size: 1.25rem; font-weight: 900; margin-bottom: 20px; border-bottom: 3px solid var(--c-border); padding-bottom: 8px; color: var(--c-secondary); display: flex; align-items: center; gap: 8px; }
 
-/* コンテナ(border=True)の視認性アップ */
-div[data-testid="stVerticalBlockBorderWrapper"] > div {
-    border-radius: var(--radius-md) !important; border-color: var(--c-border) !important;
-    background-color: #fafaf9 !important;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+/* ════════ ラジオボタン (選択中が確実に分かる色反転タイル) ════════ */
+div[data-testid="stRadio"] > div { display: flex; flex-wrap: wrap; gap: 10px !important; }
+div[data-testid="stRadio"] label {
+    background-color: #ffffff; padding: 14px 20px !important; border-radius: var(--radius-md);
+    border: 2px solid var(--c-border) !important; cursor: pointer;
+    text-align: center; flex: 1 1 auto; justify-content: center; min-width: 120px;
+    transition: all 0.2s ease;
 }
-
-/* ════════ 入力フィールド ════════ */
-div[data-baseweb="input"], div[data-baseweb="select"] > div, div[data-testid="stDateInput"] > div {
-    background-color: #ffffff !important; border: 2px solid var(--c-input-border) !important;
-    border-radius: var(--radius-sm) !important; min-height: 52px !important;
-}
-div[data-baseweb="input"]:focus-within, div[data-baseweb="select"] > div:focus-within, div[data-testid="stDateInput"] > div:focus-within {
-    border-color: var(--c-primary) !important; box-shadow: 0 0 0 3px var(--c-primary-soft) !important;
-}
-div[data-baseweb="input"] input, div[data-baseweb="select"], div[data-testid="stDateInput"] input { 
+div[data-testid="stRadio"] label p {
     font-size: 1.1rem !important; font-weight: 800 !important; color: var(--c-secondary) !important;
 }
-
-/* ════════ ラジオボタン (独立したタイルのように見せる) ════════ */
-div[data-testid="stRadio"] > div { display: flex; flex-wrap: wrap; gap: 8px !important; }
-div[data-testid="stRadio"] label {
-    background-color: #ffffff; padding: 12px 16px !important; border-radius: var(--radius-sm);
-    border: 2px solid var(--c-border) !important; font-weight: 800 !important; cursor: pointer;
-    text-align: center; flex: 1 1 auto; justify-content: center; min-width: 110px;
+/* ★ 選択中の反転処理 (ここがポイント) */
+div[data-testid="stRadio"] div[role="radiogroup"] label:has(input:checked) {
+    background-color: var(--c-primary) !important;
+    border-color: var(--c-primary) !important;
+    box-shadow: 0 4px 12px rgba(234, 88, 12, 0.4) !important;
+    transform: translateY(-2px);
 }
-div[data-testid="stRadio"] label:hover { border-color: var(--c-input-border) !important; background-color: #f8fafc; }
-div[data-testid="stRadio"] label[data-baseweb="radio"] input:checked + div {
-    background-color: var(--c-primary) !important; border-color: var(--c-primary) !important; 
-    box-shadow: 0 4px 8px rgba(234, 88, 12, 0.3);
+div[data-testid="stRadio"] div[role="radiogroup"] label:has(input:checked) p {
+    color: #ffffff !important; font-weight: 900 !important;
 }
-div[data-testid="stRadio"] label[data-baseweb="radio"] input:checked + div p { color: #ffffff !important; }
 
-/* ════════ ボタン ════════ */
-.stButton button {
-    border-radius: var(--radius-sm) !important; font-weight: 800 !important; font-size: 1rem !important; padding: 12px 18px !important;
-    min-height: 52px !important; border: 2px solid var(--c-input-border) !important; 
+/* ════════ 巨大デジタルメーター風 入力欄 (製造仕込みの投入量などに適用) ════════ */
+div[data-baseweb="input"] {
+    background-color: #ffffff !important; border: 2px solid var(--c-input-border) !important;
+    border-radius: var(--radius-md) !important; 
+}
+div[data-baseweb="input"]:focus-within {
+    border-color: var(--c-primary) !important; box-shadow: 0 0 0 4px rgba(234,88,12,0.15) !important;
+}
+/* number_input専用の極大化 */
+div[data-testid="stNumberInputContainer"] {
+    min-height: 64px !important; background-color: #fffaf5 !important; border-color: var(--c-primary) !important;
+}
+div[data-testid="stNumberInputContainer"] input {
+    font-size: 1.8rem !important; font-weight: 900 !important; color: var(--c-primary) !important; text-align: center !important;
+}
+/* +- スピンボタンを押しやすく巨大化 */
+button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStepDown"] {
+    width: 60px !important; background-color: #ffffff !important; 
+    border-left: 2px solid var(--c-primary) !important; border-right: 2px solid var(--c-primary) !important;
+    color: var(--c-primary) !important;
+}
+
+/* ════════ ボタン・ポップオーバー ════════ */
+.stButton button, button[data-baseweb="button"] {
+    border-radius: var(--radius-md) !important; font-weight: 800 !important; font-size: 1.05rem !important; padding: 14px 20px !important;
+    min-height: 56px !important; border: 2px solid var(--c-input-border) !important; 
     background: #ffffff !important; color: var(--c-secondary) !important;
 }
-.stButton button:hover { border-color: var(--c-primary) !important; color: var(--c-primary) !important; }
 .stButton button[kind="primary"] {
     background: var(--c-primary) !important; color: #ffffff !important; border: none !important; 
-    box-shadow: 0 4px 10px rgba(234, 88, 12, 0.3) !important;
+    box-shadow: 0 4px 12px rgba(234, 88, 12, 0.35) !important; font-size: 1.15rem !important;
 }
-.stButton button[kind="primary"]:hover { background: var(--c-primary-hover) !important; }
+.stButton button[kind="primary"]:hover { background: var(--c-primary-hover) !important; transform: translateY(-2px); }
 
-/* ════════ サイドバー：クリーン＆コントラストMAX（迷わないUI） ════════ */
-[data-testid="stSidebar"] { 
-    background-color: #f8fafc !important; /* 真っ白ではなく落ち着いたライトグレー */
-    border-right: 2px solid var(--c-border); 
-}
-[data-testid="stSidebar"], [data-testid="stSidebar"] div, [data-testid="stSidebar"] span { color: var(--c-secondary) !important; }
-[data-testid="stSidebar"] div[role="radiogroup"] { display: flex; flex-direction: column; gap: 8px; padding: 0 10px; }
-
-/* メニューを「ボタン風」のタイルにする */
+/* ════════ サイドバー (迷わない明瞭なハイライト) ════════ */
+[data-testid="stSidebar"] { background-color: #f8fafc !important; border-right: 2px solid var(--c-border); padding-top: 1rem; }
+[data-testid="stSidebar"] div[role="radiogroup"] { gap: 8px; padding: 0 12px; }
 [data-testid="stSidebar"] div[role="radiogroup"] label {
-    background: #ffffff !important; 
-    border: 1px solid var(--c-border) !important;
-    padding: 14px 16px !important; 
-    border-radius: 8px !important; 
-    margin-bottom: 0 !important; 
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    background: #ffffff !important; border: 2px solid var(--c-border) !important;
+    padding: 14px 16px !important; border-radius: var(--radius-md) !important; 
+    margin-bottom: 0 !important; transition: all 0.2s ease;
 }
-[data-testid="stSidebar"] div[role="radiogroup"] label:hover { border-color: var(--c-input-border) !important; }
-[data-testid="stSidebar"] div[role="radiogroup"] label p { font-size: 1.05rem !important; font-weight: 700 !important; color: var(--c-secondary) !important; }
-
-/* 選択されているメニューは「オレンジ背景＋白文字」で強烈にハイライト */
+[data-testid="stSidebar"] div[role="radiogroup"] label p { font-size: 1.05rem !important; font-weight: 800 !important; color: var(--c-muted) !important; }
 [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
-    background: var(--c-primary) !important;
-    border-color: var(--c-primary) !important;
-    box-shadow: 0 4px 8px rgba(234, 88, 12, 0.35) !important;
+    background: var(--c-primary) !important; border-color: var(--c-primary) !important;
+    box-shadow: 0 4px 10px rgba(234, 88, 12, 0.3) !important; transform: translateX(4px);
 }
 [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p { color: #ffffff !important; font-weight: 900 !important; }
 
-[data-testid="stSidebar"] .stButton button { margin-top: 24px; width: 90%; margin-left: 5%; }
-
-/* ════════ 数値の視認性 ════════ */
-.stMetric, div[data-testid="stMetric"] {
-    background: var(--c-surface); border-radius: var(--radius-md); padding: 14px 16px; border: 2px solid var(--c-border);
+/* ════════ レスポンシブ最適化 (タブレット＆スマホ) ════════ */
+@media (max-width: 1024px) {
+    .main-header h1 { font-size: 1.4rem !important; }
+    .form-card { padding: 20px !important; }
 }
-div[data-testid="stMetricValue"] { font-size: 2rem !important; font-weight: 900 !important; color: var(--c-primary); }
-div[data-testid="stMetricLabel"] { font-weight: 800 !important; color: var(--c-secondary) !important; }
-div[data-testid="stDataFrame"] { border-radius: var(--radius-md); border: 1px solid var(--c-border); }
-div[data-testid="stDataFrame"] * { font-size: 1rem !important; font-weight: 600 !important; }
-button[data-baseweb="tab"] { font-weight: 800 !important; font-size: 1.05rem !important; padding: 12px 8px !important; color: var(--c-muted) !important; }
-div[data-baseweb="tab-highlight"] { background-color: var(--c-primary) !important; height: 4px !important; }
-
-/* レスポンシブ */
 @media (max-width: 640px) {
-    .block-container { padding-left: 0.8rem !important; padding-right: 0.8rem !important; padding-top: 1rem !important; }
-    .main-header { padding: 14px 16px; }
-    .main-header h1 { font-size: 1.2rem !important; }
-    .stButton button { font-size: 1rem !important; min-height: 54px !important; width: 100%; }
+    .block-container { padding-left: 0.6rem !important; padding-right: 0.6rem !important; padding-top: 1rem !important; }
+    .main-header { padding: 16px; margin-bottom: 16px; }
+    .main-header h1 { font-size: 1.25rem !important; }
+    .form-card { padding: 16px !important; margin-bottom: 16px; }
+    /* スマホ時はボタンと入力欄を画面幅いっぱいに */
+    .stButton button, div[data-testid="stRadio"] label { width: 100% !important; min-width: 100%; }
+    /* スマホ時はst.columnsが自動的に縦になるが、余白を調整 */
+    div[data-testid="column"] { margin-bottom: 12px; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -224,17 +212,11 @@ def parse_op_data(raw_val):
     return pt, wt
 
 def parse_lime_config(order_points_dict):
-    default_cfg = {
-        "start_month": 6,
-        "end_month": 9,
-        "add_ratio": 0.01,
-        "reason": "夏場の高温対策（品質保持・腐敗防止）"
-    }
+    default_cfg = {"start_month": 6, "end_month": 9, "add_ratio": 0.01, "reason": "夏場の高温対策（品質保持・腐敗防止）"}
     raw_val = order_points_dict.get("__LIME_CONFIG__", "")
     try:
         if raw_val and isinstance(raw_val, str) and raw_val.startswith("{"):
-            data = json.loads(raw_val)
-            default_cfg.update(data)
+            default_cfg.update(json.loads(raw_val))
     except: pass
     return default_cfg
 
@@ -243,29 +225,21 @@ def is_lime_boost_active(cfg, target_date=None):
     m = target_date.month
     s = int(cfg.get("start_month", 6))
     e = int(cfg.get("end_month", 9))
-    if s <= e:
-        return s <= m <= e
-    else:
-        return m >= s or m <= e
+    if s <= e: return s <= m <= e
+    else: return m >= s or m <= e
 
-# ════════════════════════════════════════════════════════════════
-#  グレードマスタ & 発注データ
-# ════════════════════════════════════════════════════════════════
 def parse_grade_list(order_points_dict):
-    if grades_data is not None:
-        return grades_data
+    if grades_data is not None: return grades_data
     raw_val = order_points_dict.get("__GRADE_LIST__", "")
     try:
         if raw_val and isinstance(raw_val, str) and raw_val.startswith("["):
             data = json.loads(raw_val)
-            if isinstance(data, list):
-                return [str(x).strip() for x in data if str(x).strip()]
+            if isinstance(data, list): return [str(x).strip() for x in data if str(x).strip()]
     except: pass
     return []
 
 def save_grade_list(order_points_dict, grades_list):
-    if hasattr(sheets, "save_grades"):
-        sheets.save_grades(grades_list)
+    if hasattr(sheets, "save_grades"): sheets.save_grades(grades_list)
     else:
         new_dict = dict(order_points_dict)
         new_dict["__GRADE_LIST__"] = json.dumps(grades_list, ensure_ascii=False)
@@ -276,12 +250,10 @@ def _katakana_to_hiragana(s):
 
 def is_konjac_material(name):
     s = str(name)
-    s_hira = _katakana_to_hiragana(s)
-    return ("こんにゃく" in s_hira) or ("蒟蒻" in s) or ("konnyaku" in s.lower())
+    return ("こんにゃく" in _katakana_to_hiragana(s)) or ("蒟蒻" in s) or ("konnyaku" in s.lower())
 
 def parse_purchase_orders(order_points_dict):
-    if purchase_orders_data is not None:
-        return purchase_orders_data
+    if purchase_orders_data is not None: return purchase_orders_data
     raw_val = order_points_dict.get("__PURCHASE_ORDERS__", "")
     try:
         if raw_val and isinstance(raw_val, str) and raw_val.startswith("["):
@@ -291,8 +263,7 @@ def parse_purchase_orders(order_points_dict):
     return []
 
 def save_purchase_orders(order_points_dict, orders_list):
-    if hasattr(sheets, "save_purchase_orders"):
-        sheets.save_purchase_orders(orders_list)
+    if hasattr(sheets, "save_purchase_orders"): sheets.save_purchase_orders(orders_list)
     else:
         new_dict = dict(order_points_dict)
         new_dict["__PURCHASE_ORDERS__"] = json.dumps(orders_list, ensure_ascii=False)
@@ -425,32 +396,28 @@ def get_supply_inventory():
     return inv
 
 # ════════════════════════════════════════════════════════════════
-#  カスタムUIコンポーネント
+#  カスタムUIコンポーネント (最新モバイル最適化版)
 # ════════════════════════════════════════════════════════════════
-def _change_adj(key, val):
-    st.session_state[key] = st.session_state.get(key, 0.0) + val
+def render_amount_adjuster(title, base_val, adj_key):
+    # ★以前のポチポチボタンを廃止し、テンキーで直接入力できる「巨大なデジタルメーター」に変更
+    st.markdown(f"<div style='font-size:0.95rem; font-weight:800; color:#c2410c; margin-bottom:4px;'>{title}</div>", unsafe_allow_html=True)
+    
+    if adj_key not in st.session_state:
+        st.session_state[adj_key] = float(base_val)
+        
+    val = st.number_input(
+        title, 
+        min_value=0.0, 
+        step=0.1, 
+        key=adj_key,
+        label_visibility="collapsed"
+    )
+    return val
 
 def _lot_radio_on_change(rad_key, ver_key):
     sel = st.session_state.get(rad_key)
     if sel != "✏️ リスト外 (手入力)":
         st.session_state[ver_key] = st.session_state.get(ver_key, 0) + 1
-
-def render_amount_adjuster(title, base_val, adj_key):
-    if adj_key not in st.session_state: st.session_state[adj_key] = 0.0
-    act_val = round(base_val + st.session_state[adj_key], 2)
-    if act_val < 0: act_val = 0.0
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col1: st.button("➖", key=f"dec_{adj_key}", on_click=_change_adj, args=(adj_key, -0.1), use_container_width=True, help="0.1kg減らす")
-    with col2:
-        st.markdown(f"""
-        <div style='text-align:center; padding:8px 4px; background-color:#fff7ed; border-radius:8px; border:2px solid #fdba74;'>
-            <div style='color:#c2410c; font-weight:900; font-size:0.9rem; margin-bottom:2px; line-height:1.3;'>{title}</div>
-            <div style='font-size:2.1rem; font-weight:900; color:#ea580c; line-height:1;'>{fmt_kg(act_val)} <span style='font-size:1.05rem; color:#f97316;'>kg</span></div>
-        </div>
-        """, unsafe_allow_html=True)
-    with col3: st.button("➕", key=f"inc_{adj_key}", on_click=_change_adj, args=(adj_key, 0.1), use_container_width=True, help="0.1kg増やす")
-    return act_val
 
 def render_lot_selector(mat_name, lot_key):
     active_lots = _get_active_lots(mat_name)
@@ -471,14 +438,13 @@ def render_lot_selector(mat_name, lot_key):
     else:
         curr_val = st.session_state.get(lot_key, active_lots[0] if has_active else "─")
 
-    if curr_val in active_lots:
-        default_idx = active_lots.index(curr_val)
-    elif curr_val not in ["─", "未選択", ""]:
-        default_idx = len(options) - 1
-    else:
-        default_idx = 0
+    default_idx = active_lots.index(curr_val) if curr_val in active_lots else (len(options) - 1 if curr_val not in ["─", "未選択", ""] else 0)
 
-    with lot_popover(f"📦 ロット: {curr_val} (タップで選択)", key=f"potlot_{lot_key}_{ver}"):
+    # ★未選択時は警告色、選択時は成功色でポップオーバーボタンを表示
+    pop_label = f"✅ 選択済: {curr_val}" if curr_val != "─" else "⚠️ ロット未選択 (タップして選択)"
+    
+    st.markdown(f"<div style='font-size:0.95rem; font-weight:800; color:#475569; margin-bottom:4px;'>📦 ロット選択</div>", unsafe_allow_html=True)
+    with lot_popover(pop_label, key=f"potlot_{lot_key}_{ver}"):
         st.markdown(f"#### 📦 {mat_name} のロット選択")
         lot_date_map = {}
         for v in inventory_data.values():
@@ -500,11 +466,6 @@ def render_lot_selector(mat_name, lot_key):
             
         st.session_state[lot_key] = final_lot
 
-    if st.session_state[lot_key] != "─":
-        st.markdown(f"<div style='margin-top:6px; font-weight:900; color:#c2410c;'>🔵 選択中のロット: {st.session_state[lot_key]}</div>", unsafe_allow_html=True)
-    else:
-        st.markdown("<div style='margin-top:6px; font-weight:900; color:#15803d;'>🟢 ロット未選択</div>", unsafe_allow_html=True)
-
     return st.session_state[lot_key]
 
 def render_operator_selector(operator_key):
@@ -524,7 +485,7 @@ def render_operator_selector(operator_key):
 #  サイドバー
 # ════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown('<div style="font-size:1.5rem; font-weight:900; margin-bottom:1.5rem; color:#0f172a; display:flex; align-items:center; gap:8px;">🏭 <span>製造ERP</span></div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:1.6rem; font-weight:900; margin-bottom:1.5rem; color:#0f172a; display:flex; align-items:center; gap:8px;">🏭 <span>製造ERP</span></div>', unsafe_allow_html=True)
     page = st.radio("メニュー", [
         "🏭 製造仕込み", "📊 ダッシュボード", "📝 発注管理", "📥 入荷登録", "📦 在庫・棚卸", 
         "🧹 資材管理", "🔍 トレース", "📋 履歴・帳票", "📈 分析", "⚙️ マスタ設定"
@@ -546,7 +507,9 @@ if page == "🏭 製造仕込み":
     p_recipes = {r.get("品名", "未定義"): {"大カテゴリ": r.get("大カテゴリ", "その他"), "中カテゴリ": r.get("中カテゴリ", "その他"), "成分": safe_parse_recipe(r.get("配合JSON"))} for r in recipes_raw if r.get("大カテゴリ") != "調味料"}
     seasoning_recipes_all = [r for r in recipes_raw if r.get("大カテゴリ") == "調味料"]
 
-    st.markdown('<div style="font-weight:900; margin-bottom:8px;">① ラインを選択</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">🏭 ライン・製品選択</div>', unsafe_allow_html=True)
+    
+    st.markdown('<div style="font-weight:800; color:#64748b; margin-bottom:8px;">① ラインを選択</div>', unsafe_allow_html=True)
     BASE_BIG_CAT_ORDER = ["プラント", "OKM", "手詰め"]
     dynamic_cats = {v["大カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ")}
     big_cats = list(BASE_BIG_CAT_ORDER) + sorted(dynamic_cats - set(BASE_BIG_CAT_ORDER))
@@ -559,14 +522,14 @@ if page == "🏭 製造仕込み":
     sub_cats = sorted(sub_cats_set, key=lambda c: (SUB_CAT_ORDER.index(c) if c in SUB_CAT_ORDER else len(SUB_CAT_ORDER), c))
     sub_str = None
     if big_cat and len(sub_cats) > 1:
-        st.markdown('<div style="font-weight:900; margin:20px 0 8px 0;">② 種別を選択</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-weight:800; color:#64748b; margin:24px 0 8px 0;">② 種別を選択</div>', unsafe_allow_html=True)
         sub_cat_labels = [f"{sub_cat_icon(c)} {c}" for c in sub_cats]
         sel_sub_label = st.radio("種別", sub_cat_labels, horizontal=True, label_visibility="collapsed")
         sub_str = sub_cats[sub_cat_labels.index(sel_sub_label)]
     elif sub_cats:
         sub_str = sub_cats[0]
 
-    st.markdown('<div style="font-weight:900; margin:20px 0 8px 0;">③ 製品品番を選択</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-weight:800; color:#64748b; margin:24px 0 8px 0;">③ 製品品番を選択</div>', unsafe_allow_html=True)
     filtered_opts = [k for k, v in p_recipes.items() if v.get("大カテゴリ") == big_cat and v.get("中カテゴリ") == sub_str] if big_cat and sub_str else []
     selected_p = None
     active_recipe = []
@@ -582,27 +545,14 @@ if page == "🏭 製造仕込み":
         st.info("👆 製品を選択してください。")
     else:
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">④ 希望仕込量と石灰水量の入力</div>', unsafe_allow_html=True)
-
-        def _add_to_field(key, amt): st.session_state[key] = float(st.session_state.get(key) or 0.0) + float(amt)
-        def _clear_field(key): st.session_state[key] = None
+        st.markdown('<div class="section-title">⚖️ 希望仕込量と石灰水量</div>', unsafe_allow_html=True)
+        st.caption("ここで入力した値を元に、各原料の推奨投入量が自動計算されます。")
 
         col_in1, col_in2 = st.columns(2)
         with col_in1:
-            st.caption("👆 タップで加算（押し間違えたら✖0）")
-            btns1 = st.columns(5)
-            for pi, pv in enumerate([1, 10, 100, 1000]):
-                btns1[pi].button(f"+{pv}", key=f"ts_{pv}", use_container_width=True, on_click=_add_to_field, args=("t_size", pv))
-            btns1[4].button("✖0", key="tc", use_container_width=True, on_click=_clear_field, args=("t_size",))
-            target_size = st.number_input("🏭 希望仕込製品量 (kg)", min_value=1.0, step=1.0, value=None, format="%.0f", key="t_size")
-
+            target_size = st.number_input("🏭 希望仕込製品量 (kg)", min_value=1.0, step=10.0, value=100.0, format="%.0f", key="t_size")
         with col_in2:
-            st.caption("👆 タップで加算（押し間違えたら✖0）")
-            btns2 = st.columns(5)
-            for pi, pv in enumerate([1, 10, 100, 1000]):
-                btns2[pi].button(f"+{pv}", key=f"lw_{pv}", use_container_width=True, on_click=_add_to_field, args=("l_size", pv))
-            btns2[4].button("✖0", key="lc", use_container_width=True, on_click=_clear_field, args=("l_size",))
-            lime_water_size = st.number_input("💧 石灰水作成量 (kg)", min_value=0.0, step=1.0, value=None, format="%.0f", key="l_size")
+            lime_water_size = st.number_input("💧 石灰水作成量 (kg)", min_value=0.0, step=10.0, value=0.0, format="%.0f", key="l_size")
         
         st.markdown("<br>", unsafe_allow_html=True)
         c_op1, c_op2 = st.columns(2)
@@ -610,10 +560,9 @@ if page == "🏭 製造仕込み":
         with c_op2: brew_remarks = st.text_input("📝 備考（任意）", placeholder="特記事項があれば入力")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        if target_size is None or lime_water_size is None:
-            st.info("💡 仕込量と石灰水量を入力すると、下に準備リストが表示されます。")
-        else:
+        if target_size and target_size > 0:
             st.markdown('<div class="section-title" style="margin-top:32px;">📦 準備する原料・ロット</div>', unsafe_allow_html=True)
+            st.caption("推奨量がセットされています。変更がある場合は直接タップして修正してください。")
             submitted_ingredients = []
             
             lime_cfg = parse_lime_config(order_points)
@@ -643,10 +592,10 @@ if page == "🏭 製造仕込み":
                     st.markdown(f"<div style='font-size:1.3rem; font-weight:900;'>{icon} {r_name}</div>", unsafe_allow_html=True)
                     
                     if is_lime and lime_msg:
-                        st.markdown(f"<div style='font-size:0.85rem; color:#c2410c; font-weight:800; margin-top:2px;'>{lime_msg}</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='font-size:0.9rem; color:#c2410c; font-weight:800; margin-top:4px;'>{lime_msg}</div>", unsafe_allow_html=True)
 
                     if is_water:
-                        st.markdown(f"<div style='color:#3b82f6; font-weight:900; font-size:1.6rem; text-align:center; padding:10px 0;'>必要量: {fmt_kg(calc_kg)} kg <br><span style='font-size:1rem;color:#64748b;'>(石灰水除く・配合比 {fmt_kg(base_ratio)}%)</span></div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='color:#0284c7; font-weight:900; font-size:1.8rem; text-align:center; padding:12px 0;'>必要量: {fmt_kg(calc_kg)} kg <br><span style='font-size:1rem;color:#64748b;'>(石灰水除く・配合比 {fmt_kg(base_ratio)}%)</span></div>", unsafe_allow_html=True)
                         submitted_ingredients.append({"原料名": r_name, "kg": round(calc_kg, 2), "lot": "─"})
                     
                     elif is_konjac:
@@ -669,40 +618,28 @@ if page == "🏭 製造仕込み":
                             
                             st.markdown("---")
                             mat_a = st.radio("🅰️ 原料種別", konjac_mats, key=f"kma_{selected_p}_{i}", horizontal=True)
-                            c_amt_a, c_lot_a = st.columns([3, 2])
-                            with c_amt_a: act_a = render_amount_adjuster(f"🅰️ 投入量 (配合比 {ratio_a}%)", calc_kg * ratio_a / 100.0, f"adj_a_{selected_p}_{i}")
-                            with c_lot_a:
-                                st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
-                                lot_a = render_lot_selector(mat_a, f"lot_a_{selected_p}_{i}_{mat_a}")
+                            c_amt_a, c_lot_a = st.columns([1, 1])
+                            with c_amt_a: act_a = render_amount_adjuster(f"🅰️ 投入量 (比率 {ratio_a}%)", calc_kg * ratio_a / 100.0, f"adj_a_{selected_p}_{i}")
+                            with c_lot_a: lot_a = render_lot_selector(mat_a, f"lot_a_{selected_p}_{i}_{mat_a}")
                             
                             st.markdown("---")
                             mat_b = st.radio("🅱️ 原料種別", konjac_mats, index=1 if len(konjac_mats)>1 else 0, key=f"kmb_{selected_p}_{i}", horizontal=True)
-                            c_amt_b, c_lot_b = st.columns([3, 2])
-                            with c_amt_b: act_b = render_amount_adjuster(f"🅱️ 投入量 (配合比 {ratio_b}%)", calc_kg * ratio_b / 100.0, f"adj_b_{selected_p}_{i}")
-                            with c_lot_b:
-                                st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
-                                lot_b = render_lot_selector(mat_b, f"lot_b_{selected_p}_{i}_{mat_b}")
+                            c_amt_b, c_lot_b = st.columns([1, 1])
+                            with c_amt_b: act_b = render_amount_adjuster(f"🅱️ 投入量 (比率 {ratio_b}%)", calc_kg * ratio_b / 100.0, f"adj_b_{selected_p}_{i}")
+                            with c_lot_b: lot_b = render_lot_selector(mat_b, f"lot_b_{selected_p}_{i}_{mat_b}")
 
                             submitted_ingredients.append({"原料名": mat_a, "kg": act_a, "lot": f"{lot_a}({ratio_a}%)"})
                             submitted_ingredients.append({"原料名": mat_b, "kg": act_b, "lot": f"{lot_b}({ratio_b}%)"})
-                            
-                            st.markdown(f"<div style='text-align:center; padding:12px; margin-top:20px; background:#fef3c7; border:2px solid #f59e0b; border-radius:12px;'><div style='color:#b45309; font-weight:900;'>🧪 ブレンド合計投入量</div><div style='font-size:2.4rem; font-weight:900; color:#d97706;'>{fmt_kg(act_a + act_b)} <span style='font-size:1.2rem'>kg</span></div></div>", unsafe_allow_html=True)
                         else:
-                            c_amt, c_lot = st.columns([3, 2])
-                            with c_amt:
-                                act_kg = render_amount_adjuster(f"投入量（配合比 {fmt_kg(base_ratio)}%）", calc_kg, f"adj_{selected_p}_{i}")
-                            with c_lot:
-                                st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
-                                final_lot = render_lot_selector(r_name, f"lot_{selected_p}_{i}")
+                            c_amt, c_lot = st.columns([1, 1])
+                            with c_amt: act_kg = render_amount_adjuster(f"投入量（配合比 {fmt_kg(base_ratio)}%）", calc_kg, f"adj_{selected_p}_{i}")
+                            with c_lot: final_lot = render_lot_selector(r_name, f"lot_{selected_p}_{i}")
                             submitted_ingredients.append({"原料名": r_name, "kg": act_kg, "lot": final_lot})
                     
                     else:
-                        c_amt, c_lot = st.columns([3, 2])
-                        with c_amt:
-                            act_kg = render_amount_adjuster(f"投入量（配合比 {fmt_kg(base_ratio)}%）", calc_kg, f"adj_{selected_p}_{i}")
-                        with c_lot:
-                            st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
-                            final_lot = render_lot_selector(r_name, f"lot_{selected_p}_{i}")
+                        c_amt, c_lot = st.columns([1, 1])
+                        with c_amt: act_kg = render_amount_adjuster(f"投入量（配合比 {fmt_kg(base_ratio)}%）", calc_kg, f"adj_{selected_p}_{i}")
+                        with c_lot: final_lot = render_lot_selector(r_name, f"lot_{selected_p}_{i}")
                         submitted_ingredients.append({"原料名": r_name, "kg": act_kg, "lot": final_lot})
 
             if seasoning_recipes_all:
@@ -721,12 +658,9 @@ if page == "🏭 製造仕込み":
                                 s_mat, s_dil = sitem["原料名"], sitem["希釈倍率"]
                                 need_kg = target_vol / s_dil if s_dil > 0 else 0.0
                                 st.markdown(f"<div style='font-size:0.9rem; color:#64748b; margin-top:6px;'>🔹 {s_mat}（希釈倍率 {fmt_kg(s_dil)}倍）</div>", unsafe_allow_html=True)
-                                sc_amt, sc_lot = st.columns([3, 2])
-                                with sc_amt:
-                                    s_act_kg = render_amount_adjuster(f"投入量（{s_mat}）", need_kg, f"adj_season_{selected_p}_{sr_idx}_{si}")
-                                with sc_lot:
-                                    st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
-                                    s_lot = render_lot_selector(s_mat, f"lot_season_{selected_p}_{sr_idx}_{si}")
+                                sc_amt, sc_lot = st.columns([1, 1])
+                                with sc_amt: s_act_kg = render_amount_adjuster(f"投入量（{s_mat}）", need_kg, f"adj_season_{selected_p}_{sr_idx}_{si}")
+                                with sc_lot: s_lot = render_lot_selector(s_mat, f"lot_season_{selected_p}_{sr_idx}_{si}")
                                 submitted_ingredients.append({"原料名": s_mat, "kg": s_act_kg, "lot": s_lot})
 
             st.markdown("<br>", unsafe_allow_html=True)
@@ -752,7 +686,7 @@ if page == "🏭 製造仕込み":
                 })
                 
                 for key in list(st.session_state.keys()):
-                    if any(key.startswith(p) for p in ["adj_", "ts_", "lw_", "lot_", "t_size", "l_size", "kr_", "kb_", "rad_", "txt_", "kma_", "kmb_", "rbtn_", "use_season_", "season_vol_"]):
+                    if any(key.startswith(p) for p in ["adj_", "ts_", "lw_", "lot_", "t_size", "l_size", "kr_", "kb_", "rad_", "txt_", "kma_", "kmb_", "rbtn_", "use_season_", "season_vol_", "num_"]):
                         del st.session_state[key]
                 
                 st.toast("✅ 製造記録を保存しました", icon="💾")
@@ -1097,11 +1031,9 @@ elif page == "📥 入荷登録":
             df_arr = pd.DataFrame(arrivals)
             hist_cols = ["入荷日", "原料種別", "ロットNo", "メーカー", "袋数", "1袋重量(kg)", "総量(kg)", "備考"]
             if "グレード" in df_arr.columns: hist_cols.insert(3, "グレード")
-            # 降順にソートして再インデックス
             df_arr_sorted = df_arr.sort_values("入荷日", ascending=False).reset_index(drop=True)
             st.dataframe(fmt_df_numeric(df_arr_sorted[hist_cols].head(50), ["総量(kg)", "袋数", "1袋重量(kg)"]), use_container_width=True, hide_index=True)
             
-            # 【新規追加】インライン編集・削除機能
             st.markdown('<div class="form-card"><div class="section-title">✏️ インライン編集・削除</div>', unsafe_allow_html=True)
             arr_opts = {f"No.{r.get('入荷No','')} - {r.get('原料種別','')} (ロット:{r.get('ロットNo','')} / {r.get('入荷日','')})": r for _, r in df_arr_sorted.iterrows()}
             if arr_opts:
@@ -1452,7 +1384,7 @@ elif page == "📈 分析":
         monthly_trend = df_brw_global.groupby("month")["仕込量(kg)"].sum().reset_index().sort_values("month")
         fig = go.Figure()
         fig.add_trace(go.Bar(x=monthly_trend["month"], y=monthly_trend["仕込量(kg)"], name="製造量", marker_color="#ea580c"))
-        fig.update_layout(title="月間生産推移 (kg)", xaxis_title="年月", yaxis_title="総製造量", plot_bgcolor="#f8fafc")
+        fig.update_layout(title="月間生産推移 (kg)", xaxis_title="年月", yaxis_title="総製造量", plot_bgcolor="#ffffff")
         st.plotly_chart(fig, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
         
@@ -1479,7 +1411,7 @@ elif page == "📈 分析":
             topN = pie_data.sort_values("仕込量(kg)", ascending=True).tail(15)
             fig_bar = px.bar(topN, x="仕込量(kg)", y="品名", orientation='h', title="製造量 上位15品目", text="仕込量(kg)")
             fig_bar.update_traces(texttemplate="%{text:,.0f} kg", textposition="outside", marker_color="#ea580c", cliponaxis=False)
-            fig_bar.update_layout(height=max(380, 34 * len(topN)), plot_bgcolor="#f8fafc", margin=dict(l=6, r=70, t=50, b=6), yaxis_title="", xaxis_title="仕込量(kg)")
+            fig_bar.update_layout(height=max(380, 34 * len(topN)), plot_bgcolor="#ffffff", margin=dict(l=6, r=70, t=50, b=6), yaxis_title="", xaxis_title="仕込量(kg)")
             st.plotly_chart(fig_bar, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
