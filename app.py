@@ -35,154 +35,143 @@ st.set_page_config(
 )
 
 # ════════════════════════════════════════════════════════════════
-#  【視認性・現場モバイル操作 究極特化版】 UI/UX CSS
+#  【視認性・高コントラスト特化版】 UI/UX CSS
 # ════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
 :root {
-    --c-bg: #f4f6f9;
+    /* 眩しさを抑えるための落ち着いた背景色と、くっきりした枠線 */
+    --c-bg: #f0f4f8; 
     --c-surface: #ffffff;
     --c-surface-alt: #f8fafc;
-    --c-primary: #ea580c;
+    --c-primary: #ea580c; /* 現場で最も注意を引きやすいオレンジ */
     --c-primary-soft: #fff1e8;
     --c-primary-hover: #c2410c;
-    --c-secondary: #101828;
-    --c-muted: #667085;
-    --c-border: #e4e7ec;
-    --c-input-border: #d0d5dd;
-    --c-success: #12b76a;
-    --c-danger: #ef4444;
-    --radius-lg: 16px;
-    --radius-md: 12px;
-    --radius-sm: 8px;
-    --shadow-card: 0 1px 2px rgba(16,24,40,0.04), 0 4px 16px rgba(16,24,40,0.06);
-    --shadow-card-hover: 0 2px 4px rgba(16,24,40,0.06), 0 8px 24px rgba(16,24,40,0.09);
+    --c-secondary: #0f172a;
+    --c-muted: #475569; /* コントラストを上げるため少し濃いグレーに */
+    --c-border: #cbd5e1; /* 境界線をハッキリ認識できる濃さ */
+    --c-input-border: #94a3b8; 
+    --c-success: #16a34a;
+    --c-danger: #dc2626;
+    --radius-lg: 12px;
+    --radius-md: 8px;
+    --radius-sm: 6px;
+    --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 html, body, .stApp {
     background-color: var(--c-bg) !important;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", Roboto, Arial, sans-serif !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
 }
-h1, h2, h3, h4, h5, h6, p, span, div, label { color: var(--c-secondary); letter-spacing: -0.01em; }
+h1, h2, h3, h4, h5, h6, p, span, div, label { color: var(--c-secondary); letter-spacing: 0.01em; }
 .block-container { padding-top: 1.6rem !important; max-width: 1280px; }
 
 /* ════════ ヘッダー・カード ════════ */
 .main-header {
-    background: var(--c-surface); padding: 20px 26px 20px 30px; border-radius: var(--radius-lg); margin-bottom: 22px;
+    background: var(--c-surface); padding: 20px 24px; border-radius: var(--radius-lg); margin-bottom: 24px;
     box-shadow: var(--shadow-card); border: 1px solid var(--c-border);
-    position: relative; overflow: hidden;
+    border-left: 6px solid var(--c-primary);
 }
-.main-header::before {
-    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c-primary);
-}
-.main-header h1 { font-size: 1.55rem !important; margin: 0 0 4px 0 !important; font-weight: 800 !important; letter-spacing: -0.02em; }
-.main-header p { color: var(--c-muted) !important; font-size: 0.92rem !important; margin: 0 !important; font-weight: 600; }
+.main-header h1 { font-size: 1.6rem !important; margin: 0 0 6px 0 !important; font-weight: 900 !important; }
+.main-header p { color: var(--c-muted) !important; font-size: 0.95rem !important; margin: 0 !important; font-weight: 700; }
 .form-card {
     background: var(--c-surface); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 20px;
-    box-shadow: var(--shadow-card); border: 1px solid var(--c-border); transition: box-shadow 0.15s ease;
+    box-shadow: var(--shadow-card); border: 1px solid var(--c-border);
 }
-.section-title { font-size: 1.15rem; font-weight: 800; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; letter-spacing: -0.01em; }
-.section-title::before { content: ''; display: block; width: 4px; height: 20px; background-color: var(--c-primary); border-radius: 4px; }
+.section-title { font-size: 1.2rem; font-weight: 900; margin-bottom: 18px; border-bottom: 2px solid var(--c-border); padding-bottom: 8px; color: var(--c-secondary); }
 
+/* コンテナ(border=True)の視認性アップ */
 div[data-testid="stVerticalBlockBorderWrapper"] > div {
     border-radius: var(--radius-md) !important; border-color: var(--c-border) !important;
-    box-shadow: var(--shadow-card);
+    background-color: #fafaf9 !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 /* ════════ 入力フィールド ════════ */
 div[data-baseweb="input"], div[data-baseweb="select"] > div, div[data-testid="stDateInput"] > div {
-    background-color: var(--c-surface-alt) !important; border: 1.5px solid var(--c-input-border) !important;
-    border-radius: var(--radius-sm) !important; min-height: 52px !important; box-shadow: none !important;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    background-color: #ffffff !important; border: 2px solid var(--c-input-border) !important;
+    border-radius: var(--radius-sm) !important; min-height: 52px !important;
 }
 div[data-baseweb="input"]:focus-within, div[data-baseweb="select"] > div:focus-within, div[data-testid="stDateInput"] > div:focus-within {
-    border-color: var(--c-primary) !important; box-shadow: 0 0 0 4px var(--c-primary-soft) !important; background-color: var(--c-surface) !important;
+    border-color: var(--c-primary) !important; box-shadow: 0 0 0 3px var(--c-primary-soft) !important;
 }
 div[data-baseweb="input"] input, div[data-baseweb="select"], div[data-testid="stDateInput"] input { 
-    font-size: 1.1rem !important; font-weight: 700 !important; color: var(--c-secondary) !important; padding: 0 14px !important; text-align: center !important;
+    font-size: 1.1rem !important; font-weight: 800 !important; color: var(--c-secondary) !important;
 }
-button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStepDown"] {
-    min-width: 60px !important; min-height: 52px !important; border-radius: var(--radius-sm) !important; 
-    background-color: var(--c-surface) !important; color: var(--c-secondary) !important; 
-    border-left: 1.5px solid var(--c-input-border) !important; border-right: 1.5px solid var(--c-input-border) !important;
-}
-::placeholder { color: #98a2b3 !important; opacity: 1 !important; font-weight: 500 !important; }
-label p { font-weight: 700 !important; color: var(--c-muted) !important; font-size: 0.88rem !important; }
 
-/* ════════ ラジオボタン ════════ */
+/* ════════ ラジオボタン (独立したタイルのように見せる) ════════ */
 div[data-testid="stRadio"] > div { display: flex; flex-wrap: wrap; gap: 8px !important; }
 div[data-testid="stRadio"] label {
-    background-color: var(--c-surface-alt); padding: 12px 16px !important; border-radius: var(--radius-sm);
-    border: 1.5px solid var(--c-border) !important; font-weight: 700 !important; cursor: pointer;
-    text-align: center; flex: 1 1 auto; justify-content: center; min-width: 110px; transition: all 0.15s ease;
+    background-color: #ffffff; padding: 12px 16px !important; border-radius: var(--radius-sm);
+    border: 2px solid var(--c-border) !important; font-weight: 800 !important; cursor: pointer;
+    text-align: center; flex: 1 1 auto; justify-content: center; min-width: 110px;
 }
-div[data-testid="stRadio"] label:hover { border-color: var(--c-primary) !important; }
-div[data-testid="stRadio"] label p { font-size: 1rem !important; font-weight: 700 !important; color: var(--c-secondary) !important; }
+div[data-testid="stRadio"] label:hover { border-color: var(--c-input-border) !important; background-color: #f8fafc; }
 div[data-testid="stRadio"] label[data-baseweb="radio"] input:checked + div {
     background-color: var(--c-primary) !important; border-color: var(--c-primary) !important; 
-    box-shadow: 0 4px 10px rgba(234, 88, 12, 0.25);
+    box-shadow: 0 4px 8px rgba(234, 88, 12, 0.3);
 }
 div[data-testid="stRadio"] label[data-baseweb="radio"] input:checked + div p { color: #ffffff !important; }
 
 /* ════════ ボタン ════════ */
 .stButton button {
-    border-radius: var(--radius-sm) !important; font-weight: 700 !important; font-size: 1rem !important; padding: 12px 18px !important;
-    min-height: 52px !important; transition: all 0.12s ease; border: 1.5px solid var(--c-border) !important; 
-    background: var(--c-surface) !important; color: var(--c-secondary) !important;
+    border-radius: var(--radius-sm) !important; font-weight: 800 !important; font-size: 1rem !important; padding: 12px 18px !important;
+    min-height: 52px !important; border: 2px solid var(--c-input-border) !important; 
+    background: #ffffff !important; color: var(--c-secondary) !important;
 }
 .stButton button:hover { border-color: var(--c-primary) !important; color: var(--c-primary) !important; }
 .stButton button[kind="primary"] {
-    background: var(--c-primary) !important; 
-    color: #ffffff !important; border: none !important; box-shadow: 0 2px 8px rgba(234, 88, 12, 0.3) !important;
+    background: var(--c-primary) !important; color: #ffffff !important; border: none !important; 
+    box-shadow: 0 4px 10px rgba(234, 88, 12, 0.3) !important;
 }
-.stButton button[kind="primary"]:hover { background: var(--c-primary-hover) !important; color: #ffffff !important; }
-.stButton button:active { transform: scale(0.97) !important; }
+.stButton button[kind="primary"]:hover { background: var(--c-primary-hover) !important; }
 
-/* ════════ サイドバー：クリーンなナビゲーションパネル（ご要望に合わせて修正） ════════ */
-[data-testid="stSidebar"] { background-color: #ffffff !important; padding-top: 1rem; border-right: 1px solid var(--c-border); }
+/* ════════ サイドバー：クリーン＆コントラストMAX（迷わないUI） ════════ */
+[data-testid="stSidebar"] { 
+    background-color: #f8fafc !important; /* 真っ白ではなく落ち着いたライトグレー */
+    border-right: 2px solid var(--c-border); 
+}
 [data-testid="stSidebar"], [data-testid="stSidebar"] div, [data-testid="stSidebar"] span { color: var(--c-secondary) !important; }
-[data-testid="stSidebar"] div[role="radiogroup"] { display: flex; flex-direction: column; gap: 4px; }
+[data-testid="stSidebar"] div[role="radiogroup"] { display: flex; flex-direction: column; gap: 8px; padding: 0 10px; }
+
+/* メニューを「ボタン風」のタイルにする */
 [data-testid="stSidebar"] div[role="radiogroup"] label {
-    background: transparent !important; border: none !important;
-    padding: 11px 14px !important; border-radius: var(--radius-sm) !important; margin-bottom: 0 !important; transition: all 0.15s ease;
+    background: #ffffff !important; 
+    border: 1px solid var(--c-border) !important;
+    padding: 14px 16px !important; 
+    border-radius: 8px !important; 
+    margin-bottom: 0 !important; 
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
-[data-testid="stSidebar"] div[role="radiogroup"] label:hover { background: var(--c-surface-alt) !important; }
-[data-testid="stSidebar"] div[role="radiogroup"] label p { font-size: 1rem !important; font-weight: 600 !important; color: var(--c-muted) !important; }
+[data-testid="stSidebar"] div[role="radiogroup"] label:hover { border-color: var(--c-input-border) !important; }
+[data-testid="stSidebar"] div[role="radiogroup"] label p { font-size: 1.05rem !important; font-weight: 700 !important; color: var(--c-secondary) !important; }
+
+/* 選択されているメニューは「オレンジ背景＋白文字」で強烈にハイライト */
 [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
-    background: #e0f2fe !important; /* 爽やかなライトブルー */
-    border-left: 4px solid #0284c7 !important;
-    border-radius: 0 var(--radius-sm) var(--radius-sm) 0 !important;
+    background: var(--c-primary) !important;
+    border-color: var(--c-primary) !important;
+    box-shadow: 0 4px 8px rgba(234, 88, 12, 0.35) !important;
 }
-[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p { color: #0284c7 !important; font-weight: 800 !important; }
-[data-testid="stSidebar"] .stButton button {
-    background: var(--c-surface) !important; border: 1px solid var(--c-input-border) !important; margin-top: 20px; box-shadow: none !important;
-}
-[data-testid="stSidebar"] .stButton button p { color: var(--c-secondary) !important; font-weight: 700 !important; }
-[data-testid="stSidebar"] .stButton button:hover { background: var(--c-surface-alt) !important; border-color: var(--c-primary) !important; }
+[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p { color: #ffffff !important; font-weight: 900 !important; }
+
+[data-testid="stSidebar"] .stButton button { margin-top: 24px; width: 90%; margin-left: 5%; }
 
 /* ════════ 数値の視認性 ════════ */
 .stMetric, div[data-testid="stMetric"] {
-    background: var(--c-surface); border-radius: var(--radius-md); padding: 14px 16px; border: 1.5px solid var(--c-border);
+    background: var(--c-surface); border-radius: var(--radius-md); padding: 14px 16px; border: 2px solid var(--c-border);
 }
-div[data-testid="stMetricValue"] { font-size: 1.8rem !important; font-weight: 800 !important; font-variant-numeric: tabular-nums; }
-div[data-testid="stMetricLabel"] { font-weight: 700 !important; color: var(--c-muted) !important; }
-div[data-testid="stDataFrame"] { font-variant-numeric: tabular-nums; border-radius: var(--radius-md); overflow: hidden; }
-div[data-testid="stDataFrame"] * { font-size: 0.95rem !important; }
-button[data-baseweb="tab"] { font-weight: 700 !important; font-size: 1rem !important; padding: 10px 4px !important; }
-div[data-baseweb="tab-highlight"] { background-color: var(--c-primary) !important; height: 3px !important; }
-div[data-baseweb="tab-border"] { background-color: var(--c-border) !important; }
-.cat-chip-wrap { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
-.mat-card-value { font-variant-numeric: tabular-nums; }
+div[data-testid="stMetricValue"] { font-size: 2rem !important; font-weight: 900 !important; color: var(--c-primary); }
+div[data-testid="stMetricLabel"] { font-weight: 800 !important; color: var(--c-secondary) !important; }
+div[data-testid="stDataFrame"] { border-radius: var(--radius-md); border: 1px solid var(--c-border); }
+div[data-testid="stDataFrame"] * { font-size: 1rem !important; font-weight: 600 !important; }
+button[data-baseweb="tab"] { font-weight: 800 !important; font-size: 1.05rem !important; padding: 12px 8px !important; color: var(--c-muted) !important; }
+div[data-baseweb="tab-highlight"] { background-color: var(--c-primary) !important; height: 4px !important; }
 
 /* レスポンシブ */
-@media (max-width: 1024px) {
-    .main-header h1 { font-size: 1.35rem !important; }
-    .form-card { padding: 18px !important; }
-}
 @media (max-width: 640px) {
     .block-container { padding-left: 0.8rem !important; padding-right: 0.8rem !important; padding-top: 1rem !important; }
     .main-header { padding: 14px 16px; }
-    .main-header h1 { font-size: 1.1rem !important; }
-    .stButton button { font-size: 0.98rem !important; min-height: 50px !important; width: 100%; }
+    .main-header h1 { font-size: 1.2rem !important; }
+    .stButton button { font-size: 1rem !important; min-height: 54px !important; width: 100%; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -224,7 +213,6 @@ except Exception as e:
     st.stop()
 
 def parse_op_data(raw_val):
-    # 小数点以下廃止(int化)
     pt, wt = 0, 20
     try:
         if isinstance(raw_val, str) and raw_val.startswith("{"):
@@ -261,7 +249,7 @@ def is_lime_boost_active(cfg, target_date=None):
         return m >= s or m <= e
 
 # ════════════════════════════════════════════════════════════════
-#  【新方式】グレードマスタ & 発注データ （シートAPIと連携）
+#  グレードマスタ & 発注データ
 # ════════════════════════════════════════════════════════════════
 def parse_grade_list(order_points_dict):
     if grades_data is not None:
@@ -456,7 +444,7 @@ def render_amount_adjuster(title, base_val, adj_key):
     with col1: st.button("➖", key=f"dec_{adj_key}", on_click=_change_adj, args=(adj_key, -0.1), use_container_width=True, help="0.1kg減らす")
     with col2:
         st.markdown(f"""
-        <div style='text-align:center; padding:8px 4px; background-color:#fff7ed; border-radius:12px; border:2px solid #fdba74;'>
+        <div style='text-align:center; padding:8px 4px; background-color:#fff7ed; border-radius:8px; border:2px solid #fdba74;'>
             <div style='color:#c2410c; font-weight:900; font-size:0.9rem; margin-bottom:2px; line-height:1.3;'>{title}</div>
             <div style='font-size:2.1rem; font-weight:900; color:#ea580c; line-height:1;'>{fmt_kg(act_val)} <span style='font-size:1.05rem; color:#f97316;'>kg</span></div>
         </div>
@@ -513,7 +501,7 @@ def render_lot_selector(mat_name, lot_key):
         st.session_state[lot_key] = final_lot
 
     if st.session_state[lot_key] != "─":
-        st.markdown(f"<div style='margin-top:6px; font-weight:900; color:#1d4ed8;'>🔵 選択中のロット: {st.session_state[lot_key]}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='margin-top:6px; font-weight:900; color:#c2410c;'>🔵 選択中のロット: {st.session_state[lot_key]}</div>", unsafe_allow_html=True)
     else:
         st.markdown("<div style='margin-top:6px; font-weight:900; color:#15803d;'>🟢 ロット未選択</div>", unsafe_allow_html=True)
 
@@ -536,7 +524,7 @@ def render_operator_selector(operator_key):
 #  サイドバー
 # ════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown('<div style="font-size:1.5rem; font-weight:900; margin-bottom:1rem; color:#0f172a; display:flex; align-items:center; gap:8px;">🏭 <span>製造ERP</span></div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:1.5rem; font-weight:900; margin-bottom:1.5rem; color:#0f172a; display:flex; align-items:center; gap:8px;">🏭 <span>製造ERP</span></div>', unsafe_allow_html=True)
     page = st.radio("メニュー", [
         "🏭 製造仕込み", "📊 ダッシュボード", "📝 発注管理", "📥 入荷登録", "📦 在庫・棚卸", 
         "🧹 資材管理", "🔍 トレース", "📋 履歴・帳票", "📈 分析", "⚙️ マスタ設定"
@@ -871,6 +859,7 @@ elif page == "📊 ダッシュボード":
                         if qc4.button("➕10", key=f"dq_p10_{m}", use_container_width=True):
                             _dash_quick_adj(target_ano, 10, op_q); st.toast(f"✅ {m} を +10袋 しました"); time.sleep(1.0); refresh()
                     else:
+                        st.caption("💡 実際に数えた「この原料全体の在庫数量(袋)」をそのまま入力してください。理論在庫との差分は自動計算され、選択中ロットに反映されます。")
                         actual_total_bag = st.number_input("📋 実地棚卸で数えた実在庫数量（袋・原料全体）", min_value=0, value=int(float(curr_bag)), step=1, key=f"dash_actual_{m}")
                         diff_total = round(actual_total_bag - curr_bag, 2)
                         if diff_total > 0:
@@ -984,7 +973,7 @@ elif page == "📝 発注管理":
                                 if grade_list:
                                     po_grade = st.selectbox("🏷️ グレード", grade_list, key=f"po_grade_{oid}")
                                 else:
-                                    st.warning("⚠️ グレード未登録")
+                                    st.warning("⚠️ グレード未登録（マスタ設定で登録可）")
                             _, po_default_wt = parse_op_data(order_points.get(o.get("原料名"), 0))
                             pc1, pc2 = st.columns(2)
                             po_bags = pc1.number_input("入荷袋数", min_value=1, value=int(float(o.get("個数", 1))), step=1, key=f"po_bags_{oid}")
@@ -1539,7 +1528,7 @@ elif page == "⚙️ マスタ設定":
             for _, r in edited_op.iterrows():
                 m_name = str(r["原料名"]).strip()
                 if m_name and not m_name.startswith("__"):
-                    new_dict[m_name] = json.dumps({"pt": int(r["発注点(袋)"]), "wt": int(r["1袋重量(kg)"])})
+                    new_dict[m_name] = json.dumps({"pt": int(float(r["発注点(袋)"])), "wt": int(float(r["1袋重量(kg)"]))})
             for k, v in order_points.items():
                 if k.startswith("__"):
                     new_dict[k] = v
