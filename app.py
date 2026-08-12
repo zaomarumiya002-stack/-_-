@@ -11,11 +11,9 @@ import traceback
 import plotly.graph_objects as go
 import plotly.express as px
 
-# Excel出力用 (HACCP/ISO監査対応)
+# Excel出力用
 try:
     from openpyxl import Workbook
-    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
-    from openpyxl.utils import get_column_letter
     HAS_OPENPYXL = True
 except ImportError:
     HAS_OPENPYXL = False
@@ -42,7 +40,7 @@ st.markdown("""
 :root {
     --c-bg: #f0f4f8; 
     --c-surface: #ffffff;
-    --c-primary: #ea580c; /* 注意を引くオレンジ */
+    --c-primary: #ea580c; 
     --c-primary-hover: #c2410c;
     --c-secondary: #0f172a;
     --c-muted: #475569;
@@ -72,7 +70,7 @@ h1, h2, h3, h4, h5, p, span, div, label { color: var(--c-secondary); letter-spac
 }
 .section-title { font-size: 1.25rem; font-weight: 900; margin-bottom: 20px; border-bottom: 3px solid var(--c-border); padding-bottom: 8px; }
 
-/* ════════ ラジオボタンの完全色反転（選択中が明瞭） ════════ */
+/* ════════ ラジオボタンの完全色反転（アイコンも文字も白に！） ════════ */
 div[data-testid="stRadio"] > div { display: flex; flex-wrap: wrap; gap: 10px !important; }
 div[data-testid="stRadio"] label {
     background-color: #ffffff; padding: 14px 20px !important; border-radius: var(--radius-md);
@@ -83,16 +81,15 @@ div[data-testid="stRadio"] label {
 div[data-testid="stRadio"] label p {
     font-size: 1.1rem !important; font-weight: 800 !important; color: var(--c-secondary) !important;
 }
-/* 選択中：背景オレンジ、文字は真っ白 */
+/* 選択中：背景オレンジ、文字とアイコンは真っ白 */
 div[data-testid="stRadio"] label:has(input:checked) {
     background-color: var(--c-primary) !important;
     border-color: var(--c-primary) !important;
     box-shadow: 0 4px 12px rgba(234, 88, 12, 0.4) !important;
     transform: translateY(-2px);
 }
-div[data-testid="stRadio"] label:has(input:checked) p,
-div[data-testid="stRadio"] label:has(input:checked) div {
-    color: #ffffff !important; font-weight: 900 !important;
+div[data-testid="stRadio"] label:has(input:checked) * {
+    color: #ffffff !important; font-weight: 900 !important; fill: #ffffff !important;
 }
 
 /* ════════ デジタルメーター風 入力欄 ════════ */
@@ -112,22 +109,39 @@ button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStep
     border-left: 2px solid var(--c-input-border) !important; border-right: 2px solid var(--c-input-border) !important;
 }
 
-/* クイック加算ボタン用（仕込量入力） */
-.stButton button {
-    border-radius: var(--radius-sm) !important; font-weight: 800 !important; font-size: 1.05rem !important;
-    min-height: 48px !important; border: 2px solid var(--c-input-border) !important; background: #ffffff !important;
+/* ════════ ボタンの視認性向上 ════════ */
+.stButton button, button[data-baseweb="button"] {
+    border-radius: var(--radius-sm) !important; font-weight: 800 !important; font-size: 1.05rem !important; padding: 14px 20px !important;
+    min-height: 52px !important; border: 2px solid var(--c-input-border) !important; 
+    background: #ffffff !important; color: var(--c-secondary) !important;
 }
 .stButton button[kind="primary"] {
     background: var(--c-primary) !important; color: #ffffff !important; border: none !important; 
-    box-shadow: 0 4px 12px rgba(234,88,12,0.3) !important; font-size: 1.15rem !important; padding: 14px 20px !important;
+    box-shadow: 0 4px 12px rgba(234, 88, 12, 0.35) !important; font-size: 1.15rem !important;
 }
+.stButton button[kind="primary"]:hover { background: var(--c-primary-hover) !important; transform: translateY(-2px); }
+
+/* サイドバー */
+[data-testid="stSidebar"] { background-color: #f8fafc !important; border-right: 2px solid var(--c-border); padding-top: 1rem; }
+[data-testid="stSidebar"] div[role="radiogroup"] { gap: 8px; padding: 0 12px; }
+[data-testid="stSidebar"] div[role="radiogroup"] label {
+    background: #ffffff !important; border: 2px solid var(--c-border) !important;
+    padding: 14px 16px !important; border-radius: var(--radius-md) !important; 
+    margin-bottom: 0 !important; transition: all 0.2s ease;
+}
+[data-testid="stSidebar"] div[role="radiogroup"] label p { font-size: 1.05rem !important; font-weight: 800 !important; color: var(--c-muted) !important; }
+[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
+    background: var(--c-primary) !important; border-color: var(--c-primary) !important;
+    box-shadow: 0 4px 10px rgba(234, 88, 12, 0.3) !important; transform: translateX(4px);
+}
+[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p { color: #ffffff !important; font-weight: 900 !important; }
 
 /* レスポンシブ */
 @media (max-width: 640px) {
     .block-container { padding-left: 0.6rem !important; padding-right: 0.6rem !important; padding-top: 1rem !important; }
     .main-header { padding: 16px; margin-bottom: 16px; }
     .form-card { padding: 16px !important; margin-bottom: 16px; }
-    .stButton button { width: 100% !important; }
+    .stButton button, div[data-testid="stRadio"] label { width: 100% !important; min-width: 100%; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -220,6 +234,7 @@ BIG_CAT_ICONS = {"プラント": "🏭", "OKM": "🟦", "手詰め": "✋"}
 SUB_CAT_ICONS = {"白": "⚪", "黒": "⚫", "耐冷": "❄️", "ショクカイ": "🍽️", "めん": "🍜", "おでん": "🍢", "その他": "📦"}
 def big_cat_icon(n): return BIG_CAT_ICONS.get(n, "🏭")
 def sub_cat_icon(n): return SUB_CAT_ICONS.get(n, "📦")
+def product_icon(n): return "🏷️"
 
 def fmt_kg(val):
     if val is None or val == "": return "0"
@@ -328,23 +343,21 @@ def render_amount_adjuster(title, calc_val, p_key):
     """仕込量が変わると瞬時に計算値(calc_val)が反映される魔法の入力欄"""
     st.markdown(f"<div style='font-size:0.95rem; font-weight:800; color:#0284c7; margin-bottom:4px;'>{title}</div>", unsafe_allow_html=True)
     
-    man_key = f"manual_{p_key}"
     lst_key = f"last_calc_{p_key}"
-    ui_key = f"ui_{p_key}"
-    
-    calc_val = round(calc_val, 2)
     last_calc = st.session_state.get(lst_key, None)
+    calc_val = round(calc_val, 2)
     
-    # 計算値が前回と変わった（＝仕込み量が変更された）場合、強制的に最新の計算値をUIに上書き
+    # 計算値が前回と変わった（＝上の希望仕込量が変更された）場合、強制的に最新の計算値をUIにセット
     if last_calc != calc_val:
-        st.session_state[man_key] = calc_val
+        st.session_state[p_key] = calc_val
         st.session_state[lst_key] = calc_val
-        st.session_state[ui_key] = calc_val
+        
+    if p_key not in st.session_state:
+        st.session_state[p_key] = calc_val
 
-    # 手動入力も可能（手入力した場合は man_key が更新される）
+    # 値はセッションステート(key=p_key)で管理されるため、手動入力も可能
     val = st.number_input(
-        title, min_value=0.0, step=0.1, key=ui_key, label_visibility="collapsed",
-        on_change=lambda: st.session_state.update({man_key: st.session_state[ui_key]})
+        title, min_value=0.0, step=0.1, key=p_key, label_visibility="collapsed"
     )
     return val
 
@@ -425,24 +438,30 @@ if page == "🏭 製造仕込み":
     BASE_BIG_CAT_ORDER = ["プラント", "OKM", "手詰め"]
     dynamic_cats = {v["大カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ")}
     big_cats = list(BASE_BIG_CAT_ORDER) + sorted(dynamic_cats - set(BASE_BIG_CAT_ORDER))
-    sel_big_label = st.radio("ライン", big_cats, horizontal=True, label_visibility="collapsed") if big_cats else None
+    big_cat_labels = [f"{big_cat_icon(c)} {c}" for c in big_cats]
+    sel_big_label = st.radio("ライン", big_cat_labels, horizontal=True, label_visibility="collapsed") if big_cats else None
+    big_cat = big_cats[big_cat_labels.index(sel_big_label)] if sel_big_label else None
 
     SUB_CAT_ORDER = ["黒", "白", "耐冷", "ショクカイ", "めん", "その他"]
-    sub_cats_set = {v["中カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ") == sel_big_label and v.get("中カテゴリ")} if sel_big_label else set()
+    sub_cats_set = {v["中カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ") == big_cat and v.get("中カテゴリ")} if big_cat else set()
     sub_cats = sorted(sub_cats_set, key=lambda c: (SUB_CAT_ORDER.index(c) if c in SUB_CAT_ORDER else len(SUB_CAT_ORDER), c))
     sub_str = None
-    if sel_big_label and len(sub_cats) > 1:
+    if big_cat and len(sub_cats) > 1:
         st.markdown('<div style="font-weight:800; color:#64748b; margin:24px 0 8px 0;">② 種別を選択</div>', unsafe_allow_html=True)
-        sub_str = st.radio("種別", sub_cats, horizontal=True, label_visibility="collapsed")
+        sub_cat_labels = [f"{sub_cat_icon(c)} {c}" for c in sub_cats]
+        sel_sub_label = st.radio("種別", sub_cat_labels, horizontal=True, label_visibility="collapsed")
+        sub_str = sub_cats[sub_cat_labels.index(sel_sub_label)]
     elif sub_cats:
         sub_str = sub_cats[0]
 
     st.markdown('<div style="font-weight:800; color:#64748b; margin:24px 0 8px 0;">③ 製品品番を選択</div>', unsafe_allow_html=True)
-    filtered_opts = [k for k, v in p_recipes.items() if v.get("大カテゴリ") == sel_big_label and v.get("中カテゴリ") == sub_str] if sel_big_label and sub_str else []
+    filtered_opts = [k for k, v in p_recipes.items() if v.get("大カテゴリ") == big_cat and v.get("中カテゴリ") == sub_str] if big_cat and sub_str else []
     selected_p = None
     active_recipe = []
     if filtered_opts:
-        selected_p = st.radio("製品", filtered_opts, horizontal=True, label_visibility="collapsed")
+        opt_labels = [f"{product_icon(k)} {k}" for k in filtered_opts]
+        sel_label = st.radio("製品", opt_labels, horizontal=True, label_visibility="collapsed")
+        selected_p = filtered_opts[opt_labels.index(sel_label)]
         active_recipe = p_recipes.get(selected_p, {}).get("成分", [])
 
     st.markdown('</div>', unsafe_allow_html=True)
@@ -454,7 +473,7 @@ if page == "🏭 製造仕込み":
         st.markdown('<div class="section-title">⚖️ 希望仕込量と石灰水量</div>', unsafe_allow_html=True)
         st.caption("ここで入力した値を元に、各原料の推奨投入量が瞬時に自動計算されます。")
 
-        # ★ 1000/100/10 加減算ボタンとステートの連携
+        # セッションステートの初期化
         if "t_size" not in st.session_state: st.session_state["t_size"] = 100.0
         if "l_size" not in st.session_state: st.session_state["l_size"] = 0.0
 
@@ -464,21 +483,24 @@ if page == "🏭 製造仕込み":
         col_in1, col_in2 = st.columns(2)
         with col_in1:
             st.markdown("<div style='font-weight:800; color:#475569; margin-bottom:6px;'>🏭 希望仕込製品量 (kg)</div>", unsafe_allow_html=True)
+            # ★ エラー回避: key をユニークに指定
             c1, c2, c3, c4 = st.columns(4)
-            c1.button("+1000", on_click=add_t_size, args=(1000,), use_container_width=True)
-            c2.button("+100", on_click=add_t_size, args=(100,), use_container_width=True)
-            c3.button("+10", on_click=add_t_size, args=(10,), use_container_width=True)
-            c4.button("✖0", on_click=lambda: st.session_state.update({"t_size": 0.0}), use_container_width=True)
-            # number_inputからの直接入力も可能
+            c1.button("+1000", key="btn_t_1000", on_click=add_t_size, args=(1000,), use_container_width=True)
+            c2.button("+100",  key="btn_t_100",  on_click=add_t_size, args=(100,),  use_container_width=True)
+            c3.button("+10",   key="btn_t_10",   on_click=add_t_size, args=(10,),   use_container_width=True)
+            c4.button("✖0",    key="btn_t_0",    on_click=lambda: st.session_state.update({"t_size": 0.0}), use_container_width=True)
+            
             target_size = st.number_input("仕込量", min_value=0.0, step=10.0, key="t_size", label_visibility="collapsed")
 
         with col_in2:
             st.markdown("<div style='font-weight:800; color:#475569; margin-bottom:6px;'>💧 石灰水作成量 (kg)</div>", unsafe_allow_html=True)
+            # ★ エラー回避: key をユニークに指定
             c1, c2, c3, c4 = st.columns(4)
-            c1.button("+100", on_click=add_l_size, args=(100,), use_container_width=True)
-            c2.button("+10", on_click=add_l_size, args=(10,), use_container_width=True)
-            c3.button("+1", on_click=add_l_size, args=(1,), use_container_width=True)
-            c4.button("✖0", on_click=lambda: st.session_state.update({"l_size": 0.0}), use_container_width=True)
+            c1.button("+100", key="btn_l_100", on_click=add_l_size, args=(100,), use_container_width=True)
+            c2.button("+10",  key="btn_l_10",  on_click=add_l_size, args=(10,),  use_container_width=True)
+            c3.button("+1",   key="btn_l_1",   on_click=add_l_size, args=(1,),   use_container_width=True)
+            c4.button("✖0",   key="btn_l_0",   on_click=lambda: st.session_state.update({"l_size": 0.0}), use_container_width=True)
+            
             lime_water_size = st.number_input("石灰水量", min_value=0.0, step=1.0, key="l_size", label_visibility="collapsed")
         
         st.markdown("<br>", unsafe_allow_html=True)
@@ -590,7 +612,7 @@ if page == "🏭 製造仕込み":
                                 with sc_lot: s_lot = render_lot_selector(s_mat, f"lot_season_{selected_p}_{sr_idx}_{si}")
                                 submitted_ingredients.append({"原料名": s_mat, "kg": s_act_kg, "lot": s_lot})
 
-            # ★【追加】合計投入量の安全チェック表示
+            # ★【便利機能】合計投入量のリアルタイム合算チェック
             st.markdown("<br>", unsafe_allow_html=True)
             total_in = sum(ing["kg"] for ing in submitted_ingredients)
             st.markdown(f"""
@@ -624,7 +646,7 @@ if page == "🏭 製造仕込み":
                 
                 # 入力状態を完全クリア
                 for key in list(st.session_state.keys()):
-                    if any(key.startswith(p) for p in ["ui_", "manual_", "last_calc_", "lot_", "rad_", "txt_", "kb_", "kr_", "kma_", "kmb_", "use_season_", "season_vol_"]):
+                    if any(key.startswith(p) for p in ["adj_", "last_calc_", "lot_", "rad_", "txt_", "kb_", "kr_", "kma_", "kmb_", "use_season_", "season_vol_"]):
                         del st.session_state[key]
                 st.session_state["t_size"] = 100.0
                 st.session_state["l_size"] = 0.0
@@ -797,7 +819,7 @@ elif page == "📝 発注管理":
     c3.metric("✅ 入荷済み(累計)", f"{len(done_orders)} 件")
     st.markdown("<br>", unsafe_allow_html=True)
 
-    t_new, t_list = st.tabs(["➕ 新規発注登録", "📋 発注一覧・入荷処理"])
+    t_new, t_list = st.tabs(["➕ 新発注の登録", "📋 発注一覧・入荷処理"])
 
     with t_new:
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
@@ -823,7 +845,7 @@ elif page == "📝 発注管理":
 
     with t_list:
         if not pending_orders and not done_orders:
-            st.info("登録されている発注はありません。「➕ 新規発注登録」タブから登録してください。")
+            st.info("登録されている発注はありません。「➕ 新発注の登録」タブから登録してください。")
 
         if pending_orders:
             st.markdown('<div class="section-title">🕐 未入荷の発注</div>', unsafe_allow_html=True)
