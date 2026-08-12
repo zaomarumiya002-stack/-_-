@@ -35,69 +35,67 @@ st.set_page_config(
 )
 
 # ════════════════════════════════════════════════════════════════
-#  【視認性・モバイル操作・人間工学 特化版】 UI/UX CSS
+#  【モバイル特化・人間工学・完全色反転】 UI/UX CSS
 # ════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
 :root {
-    /* 眩しさを抑え、図と地の分離を明確にする背景色 */
-    --c-bg: #f1f5f9; 
+    --c-bg: #f0f4f8; 
     --c-surface: #ffffff;
-    --c-primary: #ea580c; /* 注意を引きやすいオレンジ */
+    --c-primary: #ea580c; /* 注意を引くオレンジ */
     --c-primary-hover: #c2410c;
     --c-secondary: #0f172a;
     --c-muted: #475569;
-    --c-border: #cbd5e1; /* 境界線がハッキリわかる濃さ */
+    --c-border: #cbd5e1;
     --c-input-border: #94a3b8;
     --radius-lg: 16px;
-    --radius-md: 12px;
+    --radius-md: 10px;
     --radius-sm: 8px;
-    --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-card: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
 }
 html, body, .stApp {
     background-color: var(--c-bg) !important;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
 }
-h1, h2, h3, h4, h5, p, span, div, label { color: var(--c-secondary); letter-spacing: 0.02em; }
+h1, h2, h3, h4, h5, p, span, div, label { color: var(--c-secondary); letter-spacing: 0.01em; }
 .block-container { padding-top: 1.5rem !important; max-width: 1280px; }
 
-/* ════════ ヘッダー・カード ════════ */
+/* ヘッダー・カード */
 .main-header {
-    background: var(--c-surface); padding: 20px 24px; border-radius: var(--radius-lg); margin-bottom: 24px;
-    box-shadow: var(--shadow-card); border: 1px solid var(--c-border);
-    border-left: 8px solid var(--c-primary);
+    background: var(--c-surface); padding: 18px 24px; border-radius: var(--radius-lg); margin-bottom: 24px;
+    box-shadow: var(--shadow-card); border-left: 8px solid var(--c-primary);
 }
 .main-header h1 { font-size: 1.6rem !important; margin: 0 0 6px 0 !important; font-weight: 900 !important; }
-.main-header p { color: var(--c-muted) !important; font-size: 0.95rem !important; margin: 0 !important; font-weight: 700; }
 .form-card {
     background: var(--c-surface); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 24px;
-    box-shadow: var(--shadow-card); border: 1px solid var(--c-border);
+    box-shadow: var(--shadow-card); border: 1px solid #e2e8f0;
 }
-.section-title { font-size: 1.25rem; font-weight: 900; margin-bottom: 20px; border-bottom: 3px solid var(--c-border); padding-bottom: 8px; color: var(--c-secondary); display: flex; align-items: center; gap: 8px; }
+.section-title { font-size: 1.25rem; font-weight: 900; margin-bottom: 20px; border-bottom: 3px solid var(--c-border); padding-bottom: 8px; }
 
-/* ════════ ラジオボタン (選択中が確実に分かる色反転タイル) ════════ */
+/* ════════ ラジオボタンの完全色反転（選択中が明瞭） ════════ */
 div[data-testid="stRadio"] > div { display: flex; flex-wrap: wrap; gap: 10px !important; }
 div[data-testid="stRadio"] label {
     background-color: #ffffff; padding: 14px 20px !important; border-radius: var(--radius-md);
     border: 2px solid var(--c-border) !important; cursor: pointer;
     text-align: center; flex: 1 1 auto; justify-content: center; min-width: 120px;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
 }
 div[data-testid="stRadio"] label p {
     font-size: 1.1rem !important; font-weight: 800 !important; color: var(--c-secondary) !important;
 }
-/* ★ 選択中の反転処理 (ここがポイント) */
-div[data-testid="stRadio"] div[role="radiogroup"] label:has(input:checked) {
+/* 選択中：背景オレンジ、文字は真っ白 */
+div[data-testid="stRadio"] label:has(input:checked) {
     background-color: var(--c-primary) !important;
     border-color: var(--c-primary) !important;
     box-shadow: 0 4px 12px rgba(234, 88, 12, 0.4) !important;
     transform: translateY(-2px);
 }
-div[data-testid="stRadio"] div[role="radiogroup"] label:has(input:checked) p {
+div[data-testid="stRadio"] label:has(input:checked) p,
+div[data-testid="stRadio"] label:has(input:checked) div {
     color: #ffffff !important; font-weight: 900 !important;
 }
 
-/* ════════ 巨大デジタルメーター風 入力欄 (製造仕込みの投入量などに適用) ════════ */
+/* ════════ デジタルメーター風 入力欄 ════════ */
 div[data-baseweb="input"] {
     background-color: #ffffff !important; border: 2px solid var(--c-input-border) !important;
     border-radius: var(--radius-md) !important; 
@@ -105,61 +103,31 @@ div[data-baseweb="input"] {
 div[data-baseweb="input"]:focus-within {
     border-color: var(--c-primary) !important; box-shadow: 0 0 0 4px rgba(234,88,12,0.15) !important;
 }
-/* number_input専用の極大化 */
-div[data-testid="stNumberInputContainer"] {
-    min-height: 64px !important; background-color: #fffaf5 !important; border-color: var(--c-primary) !important;
-}
+div[data-testid="stNumberInputContainer"] { min-height: 60px !important; background-color: #f8fafc !important; }
 div[data-testid="stNumberInputContainer"] input {
-    font-size: 1.8rem !important; font-weight: 900 !important; color: var(--c-primary) !important; text-align: center !important;
+    font-size: 1.6rem !important; font-weight: 900 !important; color: var(--c-primary) !important; text-align: center !important;
 }
-/* +- スピンボタンを押しやすく巨大化 */
 button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStepDown"] {
     width: 60px !important; background-color: #ffffff !important; 
-    border-left: 2px solid var(--c-primary) !important; border-right: 2px solid var(--c-primary) !important;
-    color: var(--c-primary) !important;
+    border-left: 2px solid var(--c-input-border) !important; border-right: 2px solid var(--c-input-border) !important;
 }
 
-/* ════════ ボタン・ポップオーバー ════════ */
-.stButton button, button[data-baseweb="button"] {
-    border-radius: var(--radius-md) !important; font-weight: 800 !important; font-size: 1.05rem !important; padding: 14px 20px !important;
-    min-height: 56px !important; border: 2px solid var(--c-input-border) !important; 
-    background: #ffffff !important; color: var(--c-secondary) !important;
+/* クイック加算ボタン用（仕込量入力） */
+.stButton button {
+    border-radius: var(--radius-sm) !important; font-weight: 800 !important; font-size: 1.05rem !important;
+    min-height: 48px !important; border: 2px solid var(--c-input-border) !important; background: #ffffff !important;
 }
 .stButton button[kind="primary"] {
     background: var(--c-primary) !important; color: #ffffff !important; border: none !important; 
-    box-shadow: 0 4px 12px rgba(234, 88, 12, 0.35) !important; font-size: 1.15rem !important;
+    box-shadow: 0 4px 12px rgba(234,88,12,0.3) !important; font-size: 1.15rem !important; padding: 14px 20px !important;
 }
-.stButton button[kind="primary"]:hover { background: var(--c-primary-hover) !important; transform: translateY(-2px); }
 
-/* ════════ サイドバー (迷わない明瞭なハイライト) ════════ */
-[data-testid="stSidebar"] { background-color: #f8fafc !important; border-right: 2px solid var(--c-border); padding-top: 1rem; }
-[data-testid="stSidebar"] div[role="radiogroup"] { gap: 8px; padding: 0 12px; }
-[data-testid="stSidebar"] div[role="radiogroup"] label {
-    background: #ffffff !important; border: 2px solid var(--c-border) !important;
-    padding: 14px 16px !important; border-radius: var(--radius-md) !important; 
-    margin-bottom: 0 !important; transition: all 0.2s ease;
-}
-[data-testid="stSidebar"] div[role="radiogroup"] label p { font-size: 1.05rem !important; font-weight: 800 !important; color: var(--c-muted) !important; }
-[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
-    background: var(--c-primary) !important; border-color: var(--c-primary) !important;
-    box-shadow: 0 4px 10px rgba(234, 88, 12, 0.3) !important; transform: translateX(4px);
-}
-[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p { color: #ffffff !important; font-weight: 900 !important; }
-
-/* ════════ レスポンシブ最適化 (タブレット＆スマホ) ════════ */
-@media (max-width: 1024px) {
-    .main-header h1 { font-size: 1.4rem !important; }
-    .form-card { padding: 20px !important; }
-}
+/* レスポンシブ */
 @media (max-width: 640px) {
     .block-container { padding-left: 0.6rem !important; padding-right: 0.6rem !important; padding-top: 1rem !important; }
     .main-header { padding: 16px; margin-bottom: 16px; }
-    .main-header h1 { font-size: 1.25rem !important; }
     .form-card { padding: 16px !important; margin-bottom: 16px; }
-    /* スマホ時はボタンと入力欄を画面幅いっぱいに */
-    .stButton button, div[data-testid="stRadio"] label { width: 100% !important; min-width: 100%; }
-    /* スマホ時はst.columnsが自動的に縦になるが、余白を調整 */
-    div[data-testid="column"] { margin-bottom: 12px; }
+    .stButton button { width: 100% !important; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -168,12 +136,8 @@ button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStep
 # ════════════════════════════════════════════════════════════════
 #  ユーティリティ & データロード
 # ════════════════════════════════════════════════════════════════
-def lot_popover(label, key=None):
-    return st.popover(label, use_container_width=True, key=key) if hasattr(st, "popover") else st.expander(label)
-
-def refresh():
-    st.cache_data.clear()
-    st.rerun()
+def lot_popover(label, key=None): return st.popover(label, use_container_width=True, key=key) if hasattr(st, "popover") else st.expander(label)
+def refresh(): st.cache_data.clear(); st.rerun()
 
 @st.cache_data(ttl=60)
 def load_all_datasets():
@@ -196,132 +160,100 @@ try:
     order_points, recipes_raw, recipe_logs = dataset.get("order_points", {}), dataset.get("recipes", []), dataset.get("recipe_logs", [])
     grades_data = dataset.get("grades")
     purchase_orders_data = dataset.get("purchase_orders")
-except Exception as e:
-    st.error("🚨 データの読み込みに失敗しました。Google Sheetsの接続設定を確認してください。")
+except Exception:
+    st.error("🚨 データの読み込みに失敗しました。")
     st.stop()
 
 def parse_op_data(raw_val):
     pt, wt = 0, 20
     try:
         if isinstance(raw_val, str) and raw_val.startswith("{"):
-            data = json.loads(raw_val)
-            pt, wt = int(float(data.get("pt", 0))), int(float(data.get("wt", 20)))
-        else:
-            pt = int(float(raw_val))
+            d = json.loads(raw_val); pt, wt = int(float(d.get("pt", 0))), int(float(d.get("wt", 20)))
+        else: pt = int(float(raw_val))
     except: pass
     return pt, wt
 
-def parse_lime_config(order_points_dict):
-    default_cfg = {"start_month": 6, "end_month": 9, "add_ratio": 0.01, "reason": "夏場の高温対策（品質保持・腐敗防止）"}
-    raw_val = order_points_dict.get("__LIME_CONFIG__", "")
+def parse_lime_config(op_dict):
+    c = {"start_month": 6, "end_month": 9, "add_ratio": 0.01, "reason": "夏場の高温対策（品質保持・腐敗防止）"}
     try:
-        if raw_val and isinstance(raw_val, str) and raw_val.startswith("{"):
-            default_cfg.update(json.loads(raw_val))
+        v = op_dict.get("__LIME_CONFIG__", "")
+        if v and v.startswith("{"): c.update(json.loads(v))
     except: pass
-    return default_cfg
+    return c
 
-def is_lime_boost_active(cfg, target_date=None):
-    if target_date is None: target_date = date.today()
-    m = target_date.month
-    s = int(cfg.get("start_month", 6))
-    e = int(cfg.get("end_month", 9))
-    if s <= e: return s <= m <= e
-    else: return m >= s or m <= e
+def is_lime_boost_active(cfg, t_date=None):
+    if t_date is None: t_date = date.today()
+    m, s, e = t_date.month, int(cfg.get("start_month", 6)), int(cfg.get("end_month", 9))
+    return s <= m <= e if s <= e else (m >= s or m <= e)
 
-def parse_grade_list(order_points_dict):
+def parse_grade_list(op_dict):
     if grades_data is not None: return grades_data
-    raw_val = order_points_dict.get("__GRADE_LIST__", "")
     try:
-        if raw_val and isinstance(raw_val, str) and raw_val.startswith("["):
-            data = json.loads(raw_val)
-            if isinstance(data, list): return [str(x).strip() for x in data if str(x).strip()]
+        v = op_dict.get("__GRADE_LIST__", "")
+        if v and v.startswith("["): return [str(x).strip() for x in json.loads(v) if str(x).strip()]
     except: pass
     return []
 
-def save_grade_list(order_points_dict, grades_list):
-    if hasattr(sheets, "save_grades"): sheets.save_grades(grades_list)
+def save_grade_list(op_dict, g_list):
+    if hasattr(sheets, "save_grades"): sheets.save_grades(g_list)
     else:
-        new_dict = dict(order_points_dict)
-        new_dict["__GRADE_LIST__"] = json.dumps(grades_list, ensure_ascii=False)
-        sheets.save_order_points(new_dict)
-
-def _katakana_to_hiragana(s):
-    return "".join(chr(ord(c) - 0x60) if "ァ" <= c <= "ヶ" else c for c in s)
+        d = dict(op_dict); d["__GRADE_LIST__"] = json.dumps(g_list, ensure_ascii=False); sheets.save_order_points(d)
 
 def is_konjac_material(name):
-    s = str(name)
-    return ("こんにゃく" in _katakana_to_hiragana(s)) or ("蒟蒻" in s) or ("konnyaku" in s.lower())
+    s = str(name); s_hira = "".join(chr(ord(c)-0x60) if "ァ"<=c<="ヶ" else c for c in s)
+    return ("こんにゃく" in s_hira) or ("蒟蒻" in s) or ("konnyaku" in s.lower())
 
-def parse_purchase_orders(order_points_dict):
+def parse_purchase_orders(op_dict):
     if purchase_orders_data is not None: return purchase_orders_data
-    raw_val = order_points_dict.get("__PURCHASE_ORDERS__", "")
     try:
-        if raw_val and isinstance(raw_val, str) and raw_val.startswith("["):
-            data = json.loads(raw_val)
-            if isinstance(data, list): return data
+        v = op_dict.get("__PURCHASE_ORDERS__", "")
+        if v and v.startswith("["): return json.loads(v)
     except: pass
     return []
 
-def save_purchase_orders(order_points_dict, orders_list):
-    if hasattr(sheets, "save_purchase_orders"): sheets.save_purchase_orders(orders_list)
+def save_purchase_orders(op_dict, o_list):
+    if hasattr(sheets, "save_purchase_orders"): sheets.save_purchase_orders(o_list)
     else:
-        new_dict = dict(order_points_dict)
-        new_dict["__PURCHASE_ORDERS__"] = json.dumps(orders_list, ensure_ascii=False)
-        sheets.save_order_points(new_dict)
+        d = dict(op_dict); d["__PURCHASE_ORDERS__"] = json.dumps(o_list, ensure_ascii=False); sheets.save_order_points(d)
 
 BIG_CAT_ICONS = {"プラント": "🏭", "OKM": "🟦", "手詰め": "✋"}
 SUB_CAT_ICONS = {"白": "⚪", "黒": "⚫", "耐冷": "❄️", "ショクカイ": "🍽️", "めん": "🍜", "おでん": "🍢", "その他": "📦"}
-_ICON_POOL = ["🔵", "🟢", "🟡", "🟣", "🟠", "🔴", "🟤", "🔷", "🔶", "🔹", "🔸", "⬛", "⬜", "🟥", "🟩", "🟦"]
-_PRODUCT_ICON_POOL = ["🍥", "🥢", "🌿", "🎍", "🧊", "🍡", "🧵", "🏷️", "📌", "🧺", "🔖", "🧫"]
-
-def _deterministic_icon(name, pool): return pool[sum(ord(ch) for ch in str(name)) % len(pool)]
-def big_cat_icon(name): return BIG_CAT_ICONS.get(name, _deterministic_icon(name, _ICON_POOL))
-def sub_cat_icon(name): return SUB_CAT_ICONS.get(name, _deterministic_icon(name, _ICON_POOL))
-def product_icon(name): return _deterministic_icon(name, _PRODUCT_ICON_POOL)
+def big_cat_icon(n): return BIG_CAT_ICONS.get(n, "🏭")
+def sub_cat_icon(n): return SUB_CAT_ICONS.get(n, "📦")
 
 def fmt_kg(val):
     if val is None or val == "": return "0"
     try:
-        val = float(val)
-        if val.is_integer(): return f"{int(val)}"
-        return f"{val:.3f}".rstrip('0').rstrip('.')
+        v = float(val)
+        return f"{int(v)}" if v.is_integer() else f"{v:.3f}".rstrip('0').rstrip('.')
     except: return str(val)
 
 def fmt_df_numeric(df, cols):
-    df = df.copy()
+    d = df.copy()
     for c in cols:
-        if c in df.columns:
-            df[c] = df[c].apply(fmt_kg)
-    return df
+        if c in d.columns: d[c] = d[c].apply(fmt_kg)
+    return d
 
-def safe_parse_recipe(recipe_val):
-    if not recipe_val: return []
-    data = recipe_val
-    if not isinstance(data, (dict, list)):
-        try:
-            for _ in range(3):
-                if isinstance(data, str): data = json.loads(data)
-                else: break
-        except: data = []
-    if isinstance(data, dict): data = [data]
-    if not isinstance(data, list): data = []
-    return [{"原料名": str(i.get("原料名", "")).strip(), "比率": float(i.get("比率", 0.0))} for i in data if isinstance(i, dict) and str(i.get("原料名", "")).strip()]
+def safe_parse_recipe(r_val):
+    if not r_val: return []
+    d = r_val
+    if not isinstance(d, (dict, list)):
+        try: d = json.loads(d)
+        except: d = []
+    if isinstance(d, dict): d = [d]
+    return [{"原料名": str(i.get("原料名", "")).strip(), "比率": float(i.get("比率", 0.0))} for i in d if isinstance(i, dict) and str(i.get("原料名", "")).strip()]
 
-def safe_parse_seasoning_recipe(recipe_val):
-    if not recipe_val: return []
-    data = recipe_val
-    if not isinstance(data, (dict, list)):
-        try:
-            for _ in range(3):
-                if isinstance(data, str): data = json.loads(data)
-                else: break
-        except: data = []
-    if isinstance(data, dict): data = [data]
-    if not isinstance(data, list): data = []
-    return [{"原料名": str(i.get("原料名", "")).strip(), "希釈倍率": max(float(i.get("希釈倍率", 1.0)), 0.01)} for i in data if isinstance(i, dict) and str(i.get("原料名", "")).strip()]
+def safe_parse_seasoning_recipe(r_val):
+    if not r_val: return []
+    d = r_val
+    if not isinstance(d, (dict, list)):
+        try: d = json.loads(d)
+        except: d = []
+    if isinstance(d, dict): d = [d]
+    return [{"原料名": str(i.get("原料名", "")).strip(), "希釈倍率": max(float(i.get("希釈倍率", 1.0)), 0.01)} for i in d if isinstance(i, dict) and str(i.get("原料名", "")).strip()]
 
 # ════════════════════════════════════════════════════════════════
-#  在庫・ロット計算
+#  在庫計算
 # ════════════════════════════════════════════════════════════════
 def get_inventory():
     inv = {}
@@ -330,23 +262,21 @@ def get_inventory():
         if not ano: continue
         inv[ano] = {
             "入荷No": ano, "入荷日": str(a.get("入荷日", "")).strip() or "-", "ロットNo": str(a.get("ロットNo", "")).strip(), "原料種別": str(a.get("原料種別", "")).strip(), 
-            "メーカー": str(a.get("メーカー", "")).strip() or "未指定", "グレード": str(a.get("グレード", "")).strip() or "-",
+            "メーカー": str(a.get("メーカー", "")).strip(), "グレード": str(a.get("グレード", "")).strip(),
             "1袋重量": float(a.get("1袋重量(kg)") or 20.0), "入荷袋数": float(a.get("袋数") or 0.0), "使用量(kg)": 0.0, "調整袋数": 0.0
         }
     for b in brewing:
         oa = b.get("その他添加物", "")
         if oa:
             try:
-                items = json.loads(oa)
-                for item in items:
-                    t_lot = str(item.get("lot", "")).strip()
-                    t_kg = float(item.get("kg", 0.0))
-                    valid_lots = [l for l in [re.sub(r'\(\d+%\)', '', l_raw).strip() for l_raw in t_lot.split(",")] if l and l != "─"]
-                    if valid_lots:
-                        kg_per_lot = t_kg / len(valid_lots)
-                        for l in valid_lots:
+                for item in json.loads(oa):
+                    t_lot, t_kg = str(item.get("lot", "")).strip(), float(item.get("kg", 0.0))
+                    v_lots = [l for l in [re.sub(r'\(\d+%\)', '', x).strip() for x in t_lot.split(",")] if l and l != "─"]
+                    if v_lots:
+                        kl = t_kg / len(v_lots)
+                        for l in v_lots:
                             for v in inv.values():
-                                if v["ロットNo"] == l: v["使用量(kg)"] += kg_per_lot
+                                if v["ロットNo"] == l: v["使用量(kg)"] += kl
             except: pass
     for adj in adjustments:
         ano = str(adj.get("入荷No", "")).strip()
@@ -359,113 +289,95 @@ def get_inventory():
     return inv
 
 inventory_data = get_inventory()
-type_totals_kg = {}
-type_totals_bag = {}
+type_totals_kg, type_totals_bag = {}, {}
 for v in inventory_data.values():
-    m_type = v["原料種別"]
-    type_totals_kg[m_type] = type_totals_kg.get(m_type, 0.0) + v["現在庫(kg)"]
-    type_totals_bag[m_type] = type_totals_bag.get(m_type, 0.0) + v["現在庫(袋)"]
+    m = v["原料種別"]
+    type_totals_kg[m] = type_totals_kg.get(m, 0.0) + v["現在庫(kg)"]
+    type_totals_bag[m] = type_totals_bag.get(m, 0.0) + v["現在庫(袋)"]
 
-def _get_active_lots(mat_name):
-    opts = []
+def _get_active_lots(mat):
+    o = []
     for v in inventory_data.values():
-        if v["原料種別"] == mat_name and v["現在庫(kg)"] > 0.01:
-            if v["ロットNo"] not in opts: opts.append(v["ロットNo"])
-    if not opts:
-        recent = sorted(arrivals, key=lambda x: x.get("入荷日", ""), reverse=True)
-        for a in recent:
-            if str(a.get("原料種別", "")).strip() == mat_name:
+        if v["原料種別"] == mat and v["現在庫(kg)"] > 0.01 and v["ロットNo"] not in o: o.append(v["ロットNo"])
+    if not o:
+        for a in sorted(arrivals, key=lambda x: x.get("入荷日", ""), reverse=True):
+            if str(a.get("原料種別", "")).strip() == mat:
                 l = str(a.get("ロットNo", "")).strip()
-                if l and l not in opts: opts.append(l)
-                if len(opts) >= 5: break
-    return opts
+                if l and l not in o: o.append(l)
+                if len(o) >= 5: break
+    return o
 
-def get_lots_for_material(mat_name):
-    lots = [v for v in inventory_data.values() if v["原料種別"] == mat_name]
-    lots.sort(key=lambda v: v["現在庫(袋)"], reverse=True)
-    return lots
+def get_lots_for_material(mat):
+    l = [v for v in inventory_data.values() if v["原料種別"] == mat]
+    l.sort(key=lambda v: v["現在庫(袋)"], reverse=True)
+    return l
 
 def get_supply_inventory():
     inv = {s.get("資材ID"): float(s.get("初期在庫") or 0.0) for s in supplies}
     for log in supply_logs:
-        sid = log.get("資材ID")
+        sid, qty, act = log.get("資材ID"), float(log.get("数量") or 0.0), log.get("処理")
         if sid in inv:
-            qty = float(log.get("数量") or 0.0)
-            if log.get("処理") == "入荷": inv[sid] += qty
-            elif log.get("処理") == "使用": inv[sid] -= qty
+            if act == "入荷": inv[sid] += qty
+            elif act == "使用": inv[sid] -= qty
     return inv
 
 # ════════════════════════════════════════════════════════════════
-#  カスタムUIコンポーネント (最新モバイル最適化版)
+#  ★革命的UI: 完全即時追従型 投入量アジャスター
 # ════════════════════════════════════════════════════════════════
-def render_amount_adjuster(title, base_val, adj_key):
-    # ★以前のポチポチボタンを廃止し、テンキーで直接入力できる「巨大なデジタルメーター」に変更
-    st.markdown(f"<div style='font-size:0.95rem; font-weight:800; color:#c2410c; margin-bottom:4px;'>{title}</div>", unsafe_allow_html=True)
+def render_amount_adjuster(title, calc_val, p_key):
+    """仕込量が変わると瞬時に計算値(calc_val)が反映される魔法の入力欄"""
+    st.markdown(f"<div style='font-size:0.95rem; font-weight:800; color:#0284c7; margin-bottom:4px;'>{title}</div>", unsafe_allow_html=True)
     
-    if adj_key not in st.session_state:
-        st.session_state[adj_key] = float(base_val)
-        
+    man_key = f"manual_{p_key}"
+    lst_key = f"last_calc_{p_key}"
+    ui_key = f"ui_{p_key}"
+    
+    calc_val = round(calc_val, 2)
+    last_calc = st.session_state.get(lst_key, None)
+    
+    # 計算値が前回と変わった（＝仕込み量が変更された）場合、強制的に最新の計算値をUIに上書き
+    if last_calc != calc_val:
+        st.session_state[man_key] = calc_val
+        st.session_state[lst_key] = calc_val
+        st.session_state[ui_key] = calc_val
+
+    # 手動入力も可能（手入力した場合は man_key が更新される）
     val = st.number_input(
-        title, 
-        min_value=0.0, 
-        step=0.1, 
-        key=adj_key,
-        label_visibility="collapsed"
+        title, min_value=0.0, step=0.1, key=ui_key, label_visibility="collapsed",
+        on_change=lambda: st.session_state.update({man_key: st.session_state[ui_key]})
     )
     return val
 
 def _lot_radio_on_change(rad_key, ver_key):
-    sel = st.session_state.get(rad_key)
-    if sel != "✏️ リスト外 (手入力)":
+    if st.session_state.get(rad_key) != "✏️ リスト外 (手入力)":
         st.session_state[ver_key] = st.session_state.get(ver_key, 0) + 1
 
 def render_lot_selector(mat_name, lot_key):
-    active_lots = _get_active_lots(mat_name)
-    has_active = len(active_lots) > 0
-    options = (active_lots + ["✏️ リスト外 (手入力)"]) if has_active else ["✏️ リスト外 (手入力)"]
+    opts = _get_active_lots(mat_name)
+    opts = (opts + ["✏️ リスト外 (手入力)"]) if opts else ["✏️ リスト外 (手入力)"]
 
-    rad_key = f"rad_{lot_key}"
-    txt_key = f"txt_{lot_key}"
-    ver_key = f"_popver_{lot_key}"
+    rad_key, txt_key, ver_key = f"rad_{lot_key}", f"txt_{lot_key}", f"_popver_{lot_key}"
     ver = st.session_state.get(ver_key, 0)
 
-    if rad_key in st.session_state and st.session_state[rad_key] in options:
-        sel_now = st.session_state[rad_key]
-        if sel_now == "✏️ リスト外 (手入力)":
-            curr_val = (st.session_state.get(txt_key, "") or "").strip() or "─"
-        else:
-            curr_val = sel_now
-    else:
-        curr_val = st.session_state.get(lot_key, active_lots[0] if has_active else "─")
+    curr_val = st.session_state.get(rad_key) if rad_key in st.session_state else st.session_state.get(lot_key, opts[0] if len(opts)>1 else "─")
+    if curr_val == "✏️ リスト外 (手入力)": curr_val = (st.session_state.get(txt_key, "")).strip() or "─"
 
-    default_idx = active_lots.index(curr_val) if curr_val in active_lots else (len(options) - 1 if curr_val not in ["─", "未選択", ""] else 0)
-
-    # ★未選択時は警告色、選択時は成功色でポップオーバーボタンを表示
-    pop_label = f"✅ 選択済: {curr_val}" if curr_val != "─" else "⚠️ ロット未選択 (タップして選択)"
+    pop_label = f"✅ 選択済: {curr_val}" if curr_val not in ["─", "", "✏️ リスト外 (手入力)"] else "⚠️ ロット未選択 (タップ)"
     
     st.markdown(f"<div style='font-size:0.95rem; font-weight:800; color:#475569; margin-bottom:4px;'>📦 ロット選択</div>", unsafe_allow_html=True)
     with lot_popover(pop_label, key=f"potlot_{lot_key}_{ver}"):
         st.markdown(f"#### 📦 {mat_name} のロット選択")
-        lot_date_map = {}
-        for v in inventory_data.values():
-            if v["原料種別"] == mat_name and v["ロットNo"] not in lot_date_map:
-                lot_date_map[v["ロットNo"]] = v["入荷日"]
-        def _lot_fmt(x):
-            if x == "✏️ リスト外 (手入力)": return x
-            d = lot_date_map.get(x)
-            return f"{x}（入荷日:{d}）" if d else x
-            
-        sel_option = st.radio("選択してください", options, index=default_idx, key=rad_key, format_func=_lot_fmt,
-                               on_change=_lot_radio_on_change, args=(rad_key, ver_key))
+        d_map = {v["ロットNo"]: v["入荷日"] for v in inventory_data.values() if v["原料種別"] == mat_name}
+        sel_opt = st.radio("選択してください", opts, index=opts.index(curr_val) if curr_val in opts else (len(opts)-1 if curr_val!="─" else 0),
+                           key=rad_key, format_func=lambda x: f"{x}（入荷:{d_map.get(x)}）" if d_map.get(x) and x!="✏️ リスト外 (手入力)" else x,
+                           on_change=_lot_radio_on_change, args=(rad_key, ver_key))
         
-        if sel_option == "✏️ リスト外 (手入力)":
-            manual_in = st.text_input("ロット番号を入力 (自動確定)", value=curr_val if curr_val not in active_lots else "", key=txt_key)
-            final_lot = manual_in.strip() if manual_in.strip() else "─"
-        else:
-            final_lot = sel_option
+        if sel_opt == "✏️ リスト外 (手入力)":
+            m_in = st.text_input("ロット手入力", value=curr_val if curr_val not in opts else "", key=txt_key)
+            final_lot = m_in.strip() if m_in.strip() else "─"
+        else: final_lot = sel_opt
             
         st.session_state[lot_key] = final_lot
-
     return st.session_state[lot_key]
 
 def render_operator_selector(operator_key):
@@ -473,7 +385,6 @@ def render_operator_selector(operator_key):
     ver_key = f"_popver_{operator_key}"
     ver = st.session_state.get(ver_key, 0)
     with lot_popover(f"👨‍🏭 担当者: {st.session_state[operator_key]} (タップで変更)", key=f"pop_{operator_key}_{ver}"):
-        st.write("担当者をタップしてください")
         for insp in inspectors:
             if st.button(insp, key=f"btn_insp_{operator_key}_{insp}_{ver}", use_container_width=True):
                 st.session_state[operator_key] = insp
@@ -481,11 +392,12 @@ def render_operator_selector(operator_key):
                 st.rerun()
     return st.session_state[operator_key]
 
+
 # ════════════════════════════════════════════════════════════════
 #  サイドバー
 # ════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown('<div style="font-size:1.6rem; font-weight:900; margin-bottom:1.5rem; color:#0f172a; display:flex; align-items:center; gap:8px;">🏭 <span>製造ERP</span></div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:1.6rem; font-weight:900; margin-bottom:1.5rem; color:#0f172a;">🏭 製造ERP</div>', unsafe_allow_html=True)
     page = st.radio("メニュー", [
         "🏭 製造仕込み", "📊 ダッシュボード", "📝 発注管理", "📥 入荷登録", "📦 在庫・棚卸", 
         "🧹 資材管理", "🔍 トレース", "📋 履歴・帳票", "📈 分析", "⚙️ マスタ設定"
@@ -493,15 +405,15 @@ with st.sidebar:
     st.markdown("---")
     if st.button("🔄 最新データに更新", use_container_width=True): refresh()
 
+
 # ═══════════════════════════════════════════════════════════════
 #  🏭 製造仕込み
 # ═══════════════════════════════════════════════════════════════
 if page == "🏭 製造仕込み":
-    st.markdown('<div class="main-header"><h1>🏭 製造仕込み記録</h1><p>投入量は特大文字で表示されます。指示通りに計量してください。</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><h1>🏭 製造仕込み記録</h1><p>投入量は完全自動計算されます。微調整も可能です。</p></div>', unsafe_allow_html=True)
 
     st.markdown('<div class="form-card">', unsafe_allow_html=True)
-    col_d, _ = st.columns([1, 2])
-    with col_d: brew_date = st.date_input("📅 仕込日", value=date.today())
+    brew_date = st.date_input("📅 仕込日", value=date.today())
     st.markdown("<br>", unsafe_allow_html=True)
 
     p_recipes = {r.get("品名", "未定義"): {"大カテゴリ": r.get("大カテゴリ", "その他"), "中カテゴリ": r.get("中カテゴリ", "その他"), "成分": safe_parse_recipe(r.get("配合JSON"))} for r in recipes_raw if r.get("大カテゴリ") != "調味料"}
@@ -513,30 +425,24 @@ if page == "🏭 製造仕込み":
     BASE_BIG_CAT_ORDER = ["プラント", "OKM", "手詰め"]
     dynamic_cats = {v["大カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ")}
     big_cats = list(BASE_BIG_CAT_ORDER) + sorted(dynamic_cats - set(BASE_BIG_CAT_ORDER))
-    big_cat_labels = [f"{big_cat_icon(c)} {c}" for c in big_cats]
-    sel_big_label = st.radio("ライン", big_cat_labels, horizontal=True, label_visibility="collapsed") if big_cats else None
-    big_cat = big_cats[big_cat_labels.index(sel_big_label)] if sel_big_label else None
+    sel_big_label = st.radio("ライン", big_cats, horizontal=True, label_visibility="collapsed") if big_cats else None
 
     SUB_CAT_ORDER = ["黒", "白", "耐冷", "ショクカイ", "めん", "その他"]
-    sub_cats_set = {v["中カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ") == big_cat and v.get("中カテゴリ")} if big_cat else set()
+    sub_cats_set = {v["中カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ") == sel_big_label and v.get("中カテゴリ")} if sel_big_label else set()
     sub_cats = sorted(sub_cats_set, key=lambda c: (SUB_CAT_ORDER.index(c) if c in SUB_CAT_ORDER else len(SUB_CAT_ORDER), c))
     sub_str = None
-    if big_cat and len(sub_cats) > 1:
+    if sel_big_label and len(sub_cats) > 1:
         st.markdown('<div style="font-weight:800; color:#64748b; margin:24px 0 8px 0;">② 種別を選択</div>', unsafe_allow_html=True)
-        sub_cat_labels = [f"{sub_cat_icon(c)} {c}" for c in sub_cats]
-        sel_sub_label = st.radio("種別", sub_cat_labels, horizontal=True, label_visibility="collapsed")
-        sub_str = sub_cats[sub_cat_labels.index(sel_sub_label)]
+        sub_str = st.radio("種別", sub_cats, horizontal=True, label_visibility="collapsed")
     elif sub_cats:
         sub_str = sub_cats[0]
 
     st.markdown('<div style="font-weight:800; color:#64748b; margin:24px 0 8px 0;">③ 製品品番を選択</div>', unsafe_allow_html=True)
-    filtered_opts = [k for k, v in p_recipes.items() if v.get("大カテゴリ") == big_cat and v.get("中カテゴリ") == sub_str] if big_cat and sub_str else []
+    filtered_opts = [k for k, v in p_recipes.items() if v.get("大カテゴリ") == sel_big_label and v.get("中カテゴリ") == sub_str] if sel_big_label and sub_str else []
     selected_p = None
     active_recipe = []
     if filtered_opts:
-        opt_labels = [f"{product_icon(k)} {k}" for k in filtered_opts]
-        sel_label = st.radio("製品", opt_labels, horizontal=True, label_visibility="collapsed")
-        selected_p = filtered_opts[opt_labels.index(sel_label)]
+        selected_p = st.radio("製品", filtered_opts, horizontal=True, label_visibility="collapsed")
         active_recipe = p_recipes.get(selected_p, {}).get("成分", [])
 
     st.markdown('</div>', unsafe_allow_html=True)
@@ -546,13 +452,34 @@ if page == "🏭 製造仕込み":
     else:
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
         st.markdown('<div class="section-title">⚖️ 希望仕込量と石灰水量</div>', unsafe_allow_html=True)
-        st.caption("ここで入力した値を元に、各原料の推奨投入量が自動計算されます。")
+        st.caption("ここで入力した値を元に、各原料の推奨投入量が瞬時に自動計算されます。")
+
+        # ★ 1000/100/10 加減算ボタンとステートの連携
+        if "t_size" not in st.session_state: st.session_state["t_size"] = 100.0
+        if "l_size" not in st.session_state: st.session_state["l_size"] = 0.0
+
+        def add_t_size(v): st.session_state["t_size"] = max(0.0, st.session_state["t_size"] + v)
+        def add_l_size(v): st.session_state["l_size"] = max(0.0, st.session_state["l_size"] + v)
 
         col_in1, col_in2 = st.columns(2)
         with col_in1:
-            target_size = st.number_input("🏭 希望仕込製品量 (kg)", min_value=1.0, step=10.0, value=100.0, format="%.0f", key="t_size")
+            st.markdown("<div style='font-weight:800; color:#475569; margin-bottom:6px;'>🏭 希望仕込製品量 (kg)</div>", unsafe_allow_html=True)
+            c1, c2, c3, c4 = st.columns(4)
+            c1.button("+1000", on_click=add_t_size, args=(1000,), use_container_width=True)
+            c2.button("+100", on_click=add_t_size, args=(100,), use_container_width=True)
+            c3.button("+10", on_click=add_t_size, args=(10,), use_container_width=True)
+            c4.button("✖0", on_click=lambda: st.session_state.update({"t_size": 0.0}), use_container_width=True)
+            # number_inputからの直接入力も可能
+            target_size = st.number_input("仕込量", min_value=0.0, step=10.0, key="t_size", label_visibility="collapsed")
+
         with col_in2:
-            lime_water_size = st.number_input("💧 石灰水作成量 (kg)", min_value=0.0, step=10.0, value=0.0, format="%.0f", key="l_size")
+            st.markdown("<div style='font-weight:800; color:#475569; margin-bottom:6px;'>💧 石灰水作成量 (kg)</div>", unsafe_allow_html=True)
+            c1, c2, c3, c4 = st.columns(4)
+            c1.button("+100", on_click=add_l_size, args=(100,), use_container_width=True)
+            c2.button("+10", on_click=add_l_size, args=(10,), use_container_width=True)
+            c3.button("+1", on_click=add_l_size, args=(1,), use_container_width=True)
+            c4.button("✖0", on_click=lambda: st.session_state.update({"l_size": 0.0}), use_container_width=True)
+            lime_water_size = st.number_input("石灰水量", min_value=0.0, step=1.0, key="l_size", label_visibility="collapsed")
         
         st.markdown("<br>", unsafe_allow_html=True)
         c_op1, c_op2 = st.columns(2)
@@ -560,15 +487,15 @@ if page == "🏭 製造仕込み":
         with c_op2: brew_remarks = st.text_input("📝 備考（任意）", placeholder="特記事項があれば入力")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        if target_size and target_size > 0:
+        if target_size > 0:
             st.markdown('<div class="section-title" style="margin-top:32px;">📦 準備する原料・ロット</div>', unsafe_allow_html=True)
-            st.caption("推奨量がセットされています。変更がある場合は直接タップして修正してください。")
+            st.caption("推奨量がセットされています。変更がある場合は直接タップして修正（手入力）してください。")
             submitted_ingredients = []
             
             lime_cfg = parse_lime_config(order_points)
             lime_boost_active = is_lime_boost_active(lime_cfg, brew_date)
 
-            for i, item in enumerate(active_recipe[:10]):
+            for i, item in enumerate(active_recipe[:15]):
                 r_name = str(item.get("原料名", "")).strip()
                 base_ratio = float(item.get("比率", 0.0))
                 is_water, is_lime, is_konjac = ("水" in r_name or "お湯" in r_name), ("石灰" in r_name or "カルシウム" in r_name), ("こんにゃく" in r_name)
@@ -583,7 +510,7 @@ if page == "🏭 製造仕込み":
                         add_r = float(lime_cfg.get("add_ratio", 0.01))
                         eff_ratio += add_r
                         s_m, e_m, r_txt = lime_cfg.get("start_month", 6), lime_cfg.get("end_month", 9), lime_cfg.get("reason", "季節増量")
-                        lime_msg = f"🌡️ 期間増量適用中 ({s_m}月〜{e_m}月: +{add_r}% / 理由: {r_txt})"
+                        lime_msg = f"🌡️ 期間増量中 ({s_m}月〜{e_m}月: +{add_r}% / 理由: {r_txt})"
                     calc_kg = lime_water_size * (eff_ratio / 10.0)
                 else: 
                     calc_kg = target_size * (base_ratio / 100.0)
@@ -663,7 +590,17 @@ if page == "🏭 製造仕込み":
                                 with sc_lot: s_lot = render_lot_selector(s_mat, f"lot_season_{selected_p}_{sr_idx}_{si}")
                                 submitted_ingredients.append({"原料名": s_mat, "kg": s_act_kg, "lot": s_lot})
 
+            # ★【追加】合計投入量の安全チェック表示
             st.markdown("<br>", unsafe_allow_html=True)
+            total_in = sum(ing["kg"] for ing in submitted_ingredients)
+            st.markdown(f"""
+            <div style="background-color: #f8fafc; border: 2px solid #cbd5e1; border-radius: 12px; padding: 16px; margin-bottom: 24px; text-align: center;">
+                <div style="font-weight: 800; color: #475569; font-size: 1.1rem;">💡 合計投入予定量（全原料）</div>
+                <div style="font-size: 2.2rem; font-weight: 900; color: #0f172a;">{fmt_kg(total_in)} <span style="font-size:1.2rem; color:#64748b;">kg</span></div>
+                <div style="font-weight: 700; color: #64748b;">目標仕込量: {fmt_kg(target_size)} kg</div>
+            </div>
+            """, unsafe_allow_html=True)
+
             if st.button("💾 この内容で製造記録を保存する", type="primary", use_container_width=True):
                 k_kg = s_kg = st_kg = lime_kg = 0.0
                 k_lot = s_lot = st_lot = "─"
@@ -685,9 +622,12 @@ if page == "🏭 製造仕込み":
                     "備考": f"{brew_remarks}", "登録日時": datetime.now().isoformat()
                 })
                 
+                # 入力状態を完全クリア
                 for key in list(st.session_state.keys()):
-                    if any(key.startswith(p) for p in ["adj_", "ts_", "lw_", "lot_", "t_size", "l_size", "kr_", "kb_", "rad_", "txt_", "kma_", "kmb_", "rbtn_", "use_season_", "season_vol_", "num_"]):
+                    if any(key.startswith(p) for p in ["ui_", "manual_", "last_calc_", "lot_", "rad_", "txt_", "kb_", "kr_", "kma_", "kmb_", "use_season_", "season_vol_"]):
                         del st.session_state[key]
+                st.session_state["t_size"] = 100.0
+                st.session_state["l_size"] = 0.0
                 
                 st.toast("✅ 製造記録を保存しました", icon="💾")
                 st.markdown(f"""
@@ -1031,9 +971,11 @@ elif page == "📥 入荷登録":
             df_arr = pd.DataFrame(arrivals)
             hist_cols = ["入荷日", "原料種別", "ロットNo", "メーカー", "袋数", "1袋重量(kg)", "総量(kg)", "備考"]
             if "グレード" in df_arr.columns: hist_cols.insert(3, "グレード")
+            # 降順にソートして再インデックス
             df_arr_sorted = df_arr.sort_values("入荷日", ascending=False).reset_index(drop=True)
             st.dataframe(fmt_df_numeric(df_arr_sorted[hist_cols].head(50), ["総量(kg)", "袋数", "1袋重量(kg)"]), use_container_width=True, hide_index=True)
             
+            # 【新規追加】インライン編集・削除機能
             st.markdown('<div class="form-card"><div class="section-title">✏️ インライン編集・削除</div>', unsafe_allow_html=True)
             arr_opts = {f"No.{r.get('入荷No','')} - {r.get('原料種別','')} (ロット:{r.get('ロットNo','')} / {r.get('入荷日','')})": r for _, r in df_arr_sorted.iterrows()}
             if arr_opts:
