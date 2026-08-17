@@ -247,7 +247,6 @@ def save_purchase_orders(op_dict, o_list):
     else:
         d = dict(op_dict); d["__PURCHASE_ORDERS__"] = json.dumps(o_list, ensure_ascii=False); sheets.save_order_points(d)
 
-# ★アイコンプールの完全復元（分かりやすい製品アイコン）
 BIG_CAT_ICONS = {"プラント": "🏭", "OKM": "🟦", "手詰め": "✋"}
 SUB_CAT_ICONS = {"白": "⚪", "黒": "⚫", "耐冷": "❄️", "ショクカイ": "🍽️", "めん": "🍜", "おでん": "🍢", "その他": "📦"}
 _ICON_POOL = ["🔵", "🟢", "🟡", "🟣", "🟠", "🔴", "🟤", "🔷", "🔶", "🔹", "🔸", "⬛", "⬜", "🟥", "🟩", "🟦"]
@@ -429,13 +428,6 @@ def render_operator_selector(operator_key):
 
 
 def render_excel_history_editor(full_records, filtered_df, id_col, editable_cols, numeric_cols, save_func, key_prefix, label_col=None):
-    """
-    Excel感覚で一括編集できる履歴編集グリッド。
-    - セルを直接タップ/クリックして編集（st.data_editor）
-    - 行削除・変更内容は「確認 → 確定」の2段階operationで実行し、誤操作によるデータ消失を防止
-    - フィルタ範囲外の既存レコードは一切変更しない（保存時に温存）
-    - id_colが空欄の新規行はこの画面では登録せず、無視して警告表示（登録は各専用フォームから）
-    """
     if filtered_df.empty:
         st.info("対象期間のデータがありません。")
         return
@@ -474,7 +466,7 @@ def render_excel_history_editor(full_records, filtered_df, id_col, editable_cols
         changed_rows = []
         for _, row in valid_edited.iterrows():
             rid = row[id_col]
-            if rid not in orig_ids: continue  # 未知のIDは変更対象外（新規追加はしない）
+            if rid not in orig_ids: continue
             orig_row = edit_df[edit_df[id_col] == rid].iloc[0]
             changed = any(str(row[c]) != str(orig_row[c]) for c in editable_cols if c != id_col)
             if changed: changed_rows.append(rid)
@@ -632,7 +624,7 @@ if page == "🏭 製造仕込み":
             st.markdown('<div class="section-title" style="margin-top:32px;">📦 準備する原料・ロット</div>', unsafe_allow_html=True)
             st.caption("推奨量がセットされています。変更がある場合は直接タップして修正（手入力）してください。")
             submitted_ingredients = []
-            water_items = []  # 水は重要度が低いため、下部にまとめて控えめに表示する
+            water_items = []
 
             lime_cfg = parse_lime_config(order_points)
             lime_boost_active = is_lime_boost_active(lime_cfg, brew_date)
@@ -658,7 +650,6 @@ if page == "🏭 製造仕込み":
                     calc_kg = target_size * (base_ratio / 100.0)
 
                 if is_water:
-                    # 水は最重要ではないため、個別カードで目立たせず下部にまとめる
                     calc_kg = round(calc_kg, 2)
                     water_items.append({"原料名": r_name, "kg": calc_kg, "配合比": base_ratio})
                     submitted_ingredients.append({"原料名": r_name, "kg": calc_kg, "lot": "─"})
@@ -735,7 +726,7 @@ if page == "🏭 製造仕込み":
                                 with sc_lot: s_lot = render_lot_selector(s_mat, f"lot_season_{selected_p}_{sr_idx}_{si}")
                                 submitted_ingredients.append({"原料名": s_mat, "kg": s_act_kg, "lot": s_lot})
 
-            # ── 水は重要度が低いため、最下部に控えめな1行でまとめて表示 ──
+            # ── 水は最下部に控えめな1行でまとめて表示 ──
             if water_items:
                 water_line = "　/　".join(
                     f"{w['原料名']} {fmt_kg(w['kg'])}kg（配合比{fmt_kg(w['配合比'])}%）" for w in water_items
@@ -777,11 +768,10 @@ if page == "🏭 製造仕込み":
                     "備考": f"{brew_remarks}", "登録日時": datetime.now().isoformat()
                 })
                 
+                # ★修正: エラーを引き起こしていた直接代入を削除し、安全なキーのみ削除
                 for key in list(st.session_state.keys()):
                     if any(key.startswith(p) for p in ["adj_", "last_calc_", "lot_", "rad_", "txt_", "kb_", "kr_", "kma_", "kmb_", "use_season_", "season_vol_"]):
                         del st.session_state[key]
-                st.session_state["t_size"] = 100.0
-                st.session_state["l_size"] = 0.0
                 
                 st.toast("✅ 製造記録を保存しました", icon="💾")
                 st.markdown(f"""
@@ -1125,7 +1115,6 @@ elif page == "📥 入荷登録":
             df_arr = pd.DataFrame(arrivals)
             hist_cols = ["入荷日", "原料種別", "ロットNo", "メーカー", "袋数", "1袋重量(kg)", "総量(kg)", "備考"]
             if "グレード" in df_arr.columns: hist_cols.insert(3, "グレード")
-            # 降順にソートして再インデックス
             df_arr_sorted = df_arr.sort_values("入荷日", ascending=False).reset_index(drop=True)
             st.dataframe(fmt_df_numeric(df_arr_sorted[hist_cols].head(50), ["総量(kg)", "袋数", "1袋重量(kg)"]), use_container_width=True, hide_index=True)
 
