@@ -1,4 +1,3 @@
-
 # app.py
 import streamlit as st
 import pandas as pd
@@ -93,7 +92,6 @@ div[data-testid="stRadio"] label {
 div[data-testid="stRadio"] label p {
     font-size: 1.1rem !important; font-weight: 800 !important; color: var(--c-secondary) !important;
 }
-/* ★選択中：主色（ティール）に統一して視認性を確保 */
 div[data-testid="stRadio"] label:has(input:checked) {
     background-color: var(--c-primary) !important;
     border-color: var(--c-primary-hover) !important;
@@ -104,7 +102,7 @@ div[data-testid="stRadio"] label:has(input:checked) * {
     color: #ffffff !important; font-weight: 900 !important; fill: #ffffff !important;
 }
 
-/* ════════ デジタルメーター風 極大入力欄（投入量の視認性強化） ════════ */
+/* ════════ デジタルメーター風 極大入力欄 ════════ */
 div[data-baseweb="input"] {
     background-color: #ffffff !important; border: 3px solid var(--c-input-border) !important;
     border-radius: var(--radius-md) !important; 
@@ -114,10 +112,8 @@ div[data-baseweb="input"]:focus-within {
 }
 div[data-testid="stNumberInputContainer"] { min-height: 70px !important; background-color: #f8fafc !important; }
 div[data-testid="stNumberInputContainer"] input {
-    font-size: 2.2rem !important; /* ★数値を特大サイズに変更 */
-    font-weight: 900 !important; 
-    color: var(--c-secondary) !important; 
-    text-align: center !important;
+    font-size: 2.2rem !important; font-weight: 900 !important; 
+    color: var(--c-secondary) !important; text-align: center !important;
 }
 button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStepDown"] {
     width: 65px !important; background-color: #f1f5f9 !important; 
@@ -136,13 +132,21 @@ button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStep
 }
 .stButton button[kind="primary"]:hover { background: var(--c-primary-hover) !important; transform: translateY(-2px); }
 
+/* ワンタッチ比率ボタン用コンパクト化 */
+.ratio-btn-container .stButton button {
+    min-height: 40px !important; padding: 6px 10px !important; font-size: 0.95rem !important;
+    background: #f8fafc !important; border: 2px solid #cbd5e1 !important; color: #334155 !important;
+}
+.ratio-btn-container .stButton button:hover {
+    background: var(--c-primary-soft) !important; border-color: var(--c-primary) !important; color: var(--c-primary) !important;
+}
+
 /* サイドバー */
 [data-testid="stSidebar"] { background-color: #f8fafc !important; border-right: 2px solid var(--c-border); padding-top: 1rem; }
 [data-testid="stSidebar"] div[role="radiogroup"] { gap: 8px; padding: 0 12px; }
 [data-testid="stSidebar"] div[role="radiogroup"] label {
     background: #ffffff !important; border: 2px solid var(--c-border) !important;
-    padding: 14px 16px !important; border-radius: var(--radius-md) !important; 
-    margin-bottom: 0 !important; transition: all 0.2s ease;
+    padding: 14px 16px !important; border-radius: var(--radius-md) !important; margin-bottom: 0 !important;
 }
 [data-testid="stSidebar"] div[role="radiogroup"] label p { font-size: 1.05rem !important; font-weight: 800 !important; color: var(--c-muted) !important; }
 [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
@@ -210,7 +214,6 @@ def parse_lime_config(op_dict, product_name=None):
             v = op_dict.get(f"__LIME_CONFIG_{product_name}__", "")
         if not v:
             v = op_dict.get("__LIME_CONFIG__", "")
-            
         if v and v.startswith("{"): c.update(json.loads(v))
     except: pass
     return c
@@ -232,9 +235,6 @@ def save_grade_list(op_dict, g_list):
     if hasattr(sheets, "save_grades"): sheets.save_grades(g_list)
     else:
         d = dict(op_dict); d["__GRADE_LIST__"] = json.dumps(g_list, ensure_ascii=False); sheets.save_order_points(d)
-
-def _katakana_to_hiragana(s):
-    return "".join(chr(ord(c) - 0x60) if "ァ" <= c <= "ヶ" else c for c in s)
 
 def is_konjac_material(name):
     s = str(name); s_hira = "".join(chr(ord(c)-0x60) if "ァ"<=c<="ヶ" else c for c in s)
@@ -374,7 +374,6 @@ def render_amount_adjuster(title, calc_val, p_key):
     last_calc = st.session_state.get(lst_key, None)
     calc_val = round(calc_val, 2)
     
-    # 計算値が前回と変わった（＝上の希望仕込量が変更された）場合、強制的に最新の計算値をUIにセット
     if last_calc != calc_val:
         st.session_state[p_key] = calc_val
         st.session_state[lst_key] = calc_val
@@ -382,7 +381,6 @@ def render_amount_adjuster(title, calc_val, p_key):
     if p_key not in st.session_state:
         st.session_state[p_key] = calc_val
 
-    # 手動入力も可能
     val = st.number_input(
         title, min_value=0.0, step=0.1, key=p_key, label_visibility="collapsed"
     )
@@ -431,7 +429,6 @@ def render_operator_selector(operator_key):
                 st.session_state[ver_key] = ver + 1
                 st.rerun()
     return st.session_state[operator_key]
-
 
 def render_excel_history_editor(full_records, filtered_df, id_col, editable_cols, numeric_cols, save_func, key_prefix, label_col=None):
     if filtered_df.empty:
@@ -674,9 +671,25 @@ if page == "🏭 製造仕込み":
                         konjac_mats = [m for m in materials if "こんにゃく" in m] or [r_name]
                         
                         if blend_mode == "2種ブレンド":
+                            # ワンタッチ比率ボタン
+                            st.markdown("<div class='ratio-btn-container' style='margin-bottom:8px; display:flex; gap:6px; align-items:center;'><span style='font-weight:800; color:#475569; font-size:0.9rem;'>👇 ワンタッチ比率:</span></div>", unsafe_allow_html=True)
+                            pc = st.columns(6)
+                            presets = [(50,50), (60,40), (70,30), (80,20), (90,10), (100,0)]
+                            k_a = f"kr_a2_{selected_p}_{i}"
+                            k_b = f"kr_b2_{selected_p}_{i}"
+                            if k_a not in st.session_state: st.session_state[k_a] = 50.0
+                            if k_b not in st.session_state: st.session_state[k_b] = 50.0
+                            
+                            for pi, (pa, pb) in enumerate(presets):
+                                pc[pi].markdown("<div class='ratio-btn-container'>", unsafe_allow_html=True)
+                                pc[pi].button(f"{pa}:{pb}", key=f"p2_{selected_p}_{i}_{pi}", 
+                                              on_click=lambda a,b,ka,kb: st.session_state.update({ka:float(a), kb:float(b)}), 
+                                              args=(pa, pb, k_a, k_b), use_container_width=True)
+                                pc[pi].markdown("</div>", unsafe_allow_html=True)
+
                             c_a, c_b = st.columns(2)
-                            ratio_a = c_a.number_input("🅰️ の比率(%)", min_value=0.0, max_value=100.0, value=50.0, step=1.0, key=f"kr_a2_{selected_p}_{i}")
-                            ratio_b = c_b.number_input("🅱️ の比率(%)", min_value=0.0, max_value=100.0, value=100.0 - ratio_a, step=1.0, key=f"kr_b2_{selected_p}_{i}")
+                            ratio_a = c_a.number_input("🅰️ の比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_a)
+                            ratio_b = c_b.number_input("🅱️ の比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_b)
                             if round(ratio_a + ratio_b, 1) != 100.0: st.warning(f"⚠️ 比率合計が {ratio_a + ratio_b}% です。100%になるよう調整してください。")
                             
                             st.markdown("---")
@@ -695,10 +708,27 @@ if page == "🏭 製造仕込み":
                             submitted_ingredients.append({"原料名": mat_b, "kg": act_b, "lot": f"{lot_b}({ratio_b}%)"})
 
                         elif blend_mode == "3種ブレンド":
+                            st.markdown("<div class='ratio-btn-container' style='margin-bottom:8px; display:flex; gap:6px; align-items:center;'><span style='font-weight:800; color:#475569; font-size:0.9rem;'>👇 ワンタッチ比率:</span></div>", unsafe_allow_html=True)
+                            pc = st.columns(5)
+                            presets = [(34,33,33), (40,30,30), (50,25,25), (40,40,20), (50,30,20)]
+                            k_a = f"kr_a3_{selected_p}_{i}"
+                            k_b = f"kr_b3_{selected_p}_{i}"
+                            k_c = f"kr_c3_{selected_p}_{i}"
+                            if k_a not in st.session_state: st.session_state[k_a] = 34.0
+                            if k_b not in st.session_state: st.session_state[k_b] = 33.0
+                            if k_c not in st.session_state: st.session_state[k_c] = 33.0
+                            
+                            for pi, (pa, pb, pc_val) in enumerate(presets):
+                                pc[pi].markdown("<div class='ratio-btn-container'>", unsafe_allow_html=True)
+                                pc[pi].button(f"{pa}:{pb}:{pc_val}", key=f"p3_{selected_p}_{i}_{pi}", 
+                                              on_click=lambda a,b,c,ka,kb,kc: st.session_state.update({ka:float(a), kb:float(b), kc:float(c)}), 
+                                              args=(pa, pb, pc_val, k_a, k_b, k_c), use_container_width=True)
+                                pc[pi].markdown("</div>", unsafe_allow_html=True)
+
                             c_a, c_b, c_c = st.columns(3)
-                            ratio_a = c_a.number_input("🅰️ の比率(%)", min_value=0.0, max_value=100.0, value=34.0, step=1.0, key=f"kr_a3_{selected_p}_{i}")
-                            ratio_b = c_b.number_input("🅱️ の比率(%)", min_value=0.0, max_value=100.0, value=33.0, step=1.0, key=f"kr_b3_{selected_p}_{i}")
-                            ratio_c = c_c.number_input("🅲 の比率(%)", min_value=0.0, max_value=100.0, value=33.0, step=1.0, key=f"kr_c3_{selected_p}_{i}")
+                            ratio_a = c_a.number_input("🅰️ の比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_a)
+                            ratio_b = c_b.number_input("🅱️ の比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_b)
+                            ratio_c = c_c.number_input("🅲 の比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_c)
                             if round(ratio_a + ratio_b + ratio_c, 1) != 100.0: st.warning(f"⚠️ 比率合計が {ratio_a + ratio_b + ratio_c}% です。100%になるよう調整してください。")
                             
                             st.markdown("---")
@@ -957,7 +987,7 @@ elif page == "📊 ダッシュボード":
 #  📝 発注管理
 # ═══════════════════════════════════════════════════════════════
 elif page == "📝 発注管理":
-    st.markdown('<div class="main-header"><h1>📝 原料 発注管理</h1><p>発注してから入荷するまでの状況を一元管理。入荷済み処理を行うとそのまま在庫に加算されます。</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header"><h1>📝 原料・資材 発注管理</h1><p>発注状況を一元管理。入荷済み処理を行うとそのまま在庫に加算されます。</p></div>', unsafe_allow_html=True)
 
     all_orders = parse_purchase_orders(order_points)
     pending_orders = [o for o in all_orders if o.get("ステータス") != "入荷済み"]
@@ -975,17 +1005,47 @@ elif page == "📝 発注管理":
 
     with t_new:
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
+        order_category = st.radio("🏷️ 発注区分", ["🥦 原材料", "🧻 衛生資材・消耗品"], horizontal=True)
+        
+        is_raw_mat = "原材料" in order_category
+        
+        if is_raw_mat:
+            with st.expander("⚙️ 原材料マスタを直接追加・編集 (発注画面から)"):
+                ed_m = st.data_editor(
+                    pd.DataFrame({"原料名": pd.array(materials, dtype="string")}), num_rows="dynamic", use_container_width=True,
+                    column_config={"原料名": st.column_config.TextColumn("原料名")}
+                )
+                if st.button("💾 原料マスタ保存", type="primary", key="po_mat_save"):
+                    sheets.save_materials([str(x).strip() for x in ed_m["原料名"].tolist() if x is not None and str(x).strip() and str(x).strip().lower() != "nan"])
+                    st.success("保存しました。"); time.sleep(1); refresh()
+            item_opts = materials if materials else ["未登録"]
+        else:
+            with st.expander("⚙️ 衛生資材マスタを直接追加 (発注画面から)"):
+                st.caption("※新しい資材をここから簡易登録できます（画像追加などは資材管理タブから行ってください）")
+                new_s_name = st.text_input("資材名称 ＊", key="po_new_sup")
+                new_s_cat = st.text_input("カテゴリ (例: 包材、衛生用品)", key="po_new_sup_cat")
+                if st.button("💾 資材を登録", type="primary", key="po_sup_save"):
+                    if not new_s_name: st.error("名称は必須です。")
+                    else:
+                        cur_sup = supplies.copy()
+                        cur_sup.append({"資材ID": f"SUP-{datetime.now().strftime('%Y%m%d%H%M%S')}", "資材名": new_s_name, "カテゴリ": new_s_cat, "画像URL": "", "初期在庫": 0, "発注点": 10, "登録日": str(date.today())})
+                        sheets.save_supplies(cur_sup)
+                        st.success("資材を登録しました。"); time.sleep(1); refresh()
+            sup_names = [s.get("資材名") for s in supplies]
+            item_opts = sup_names if sup_names else ["未登録"]
+
         with st.form("new_order_form"):
-            o_mat = st.selectbox("原料名", materials if materials else ["未登録"])
-            o_maker = st.selectbox("メーカー", makers if makers else ["未登録"])
+            o_mat = st.selectbox("発注品目", item_opts)
+            o_maker = st.selectbox("メーカー/発注先", makers if makers else ["未登録"])
             c_a, c_b = st.columns(2)
             o_date = c_a.date_input("発注日", value=date.today())
             o_due = c_b.date_input("納品予定日", value=date.today() + timedelta(days=7))
-            o_qty = st.number_input("発注個数（袋）", min_value=1, value=10, step=1)
+            o_qty = st.number_input("発注個数 (袋/箱など)", min_value=1, value=10, step=1)
             o_note = st.text_input("備考（任意）")
             if st.form_submit_button("💾 発注を登録する", type="primary", use_container_width=True):
                 new_order = {
                     "発注ID": f"PO-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+                    "発注区分": "原材料" if is_raw_mat else "衛生資材",
                     "発注日": str(o_date), "原料名": o_mat, "メーカー": o_maker,
                     "個数": o_qty, "納品予定日": str(o_due), "ステータス": "未入荷",
                     "紐づく入荷No": "", "備考": o_note, "登録日時": datetime.now().isoformat()
@@ -1003,71 +1063,108 @@ elif page == "📝 発注管理":
             st.markdown('<div class="section-title">🕐 未入荷の発注</div>', unsafe_allow_html=True)
             for o in sorted(pending_orders, key=lambda x: x.get("納品予定日", "")):
                 is_overdue = bool(o.get("納品予定日")) and o["納品予定日"] < today_str
+                is_raw_order = (o.get("発注区分", "原材料") == "原材料")
+                icon_badge = "🥦" if is_raw_order else "🧻"
+                
                 with st.container(border=True):
                     c_i, c_b = st.columns([3, 1])
                     with c_i:
                         overdue_badge = " ⚠️ 納品予定日超過" if is_overdue else ""
-                        st.markdown(f"**📦 {o.get('原料名')}**　🏢 {o.get('メーカー')}　📦 {fmt_kg(o.get('個数'))}袋{overdue_badge}")
+                        st.markdown(f"**{icon_badge} {o.get('原料名')}**　🏢 {o.get('メーカー')}　📦 {fmt_kg(o.get('個数'))}{overdue_badge}")
                         st.caption(f"発注日: {o.get('発注日')}　／　納品予定日: {o.get('納品予定日')}　／　備考: {o.get('備考') or 'なし'}")
                     with c_b:
                         with lot_popover("✅ 入荷済み処理"):
                             oid = o.get("発注ID")
                             st.markdown(f"#### ✅ {o.get('原料名')} の入荷処理")
-                            st.caption("実際に入荷した内容を確認・修正のうえ登録すると、在庫に加算されます。")
-                            arr_lot = st.text_input("ロットNo ＊必須", key=f"po_lot_{oid}")
-                            po_grade = "-"
-                            if is_konjac_material(o.get("原料名")):
-                                grade_list = parse_grade_list(order_points)
-                                if grade_list:
-                                    po_grade = st.selectbox("🏷️ グレード", grade_list, key=f"po_grade_{oid}")
-                                else:
-                                    st.warning("⚠️ グレード未登録（マスタ設定で登録可）")
-                            _, po_default_wt = parse_op_data(order_points.get(o.get("原料名"), 0))
-                            pc1, pc2 = st.columns(2)
-                            po_bags = pc1.number_input("入荷袋数", min_value=1, value=int(float(o.get("個数", 1))), step=1, key=f"po_bags_{oid}")
-                            po_wpb = pc2.number_input("1袋重量(kg)", min_value=1, value=int(float(po_default_wt)), step=1, key=f"po_wpb_{oid}")
-                            st.caption(f"💡 合計入荷重量: **{fmt_kg(po_bags * po_wpb)} kg**")
+                            
+                            if is_raw_order:
+                                st.caption("実際に入荷した内容を確認・修正のうえ登録すると、在庫に加算されます。")
+                                arr_lot = st.text_input("ロットNo ＊必須", key=f"po_lot_{oid}")
+                                po_grade = "-"
+                                if is_konjac_material(o.get("原料名")):
+                                    grade_list = parse_grade_list(order_points)
+                                    if grade_list:
+                                        po_grade = st.selectbox("🏷️ グレード", grade_list, key=f"po_grade_{oid}")
+                                    else:
+                                        st.warning("⚠️ グレード未登録（マスタ設定で登録可）")
+                                _, po_default_wt = parse_op_data(order_points.get(o.get("原料名"), 0))
+                                pc1, pc2 = st.columns(2)
+                                po_bags = pc1.number_input("入荷袋数", min_value=1, value=int(float(o.get("個数", 1))), step=1, key=f"po_bags_{oid}")
+                                po_wpb = pc2.number_input("1袋重量(kg)", min_value=1, value=int(float(po_default_wt)), step=1, key=f"po_wpb_{oid}")
+                                st.caption(f"💡 合計入荷重量: **{fmt_kg(po_bags * po_wpb)} kg**")
 
-                            st.markdown("**🔍 受入品質検査（項目ごとに必ず確認）**")
-                            po_items = [("外観", "📦 外観"), ("品名・規格確認", "🏷️ 品名・規格"), ("賞味期限", "📅 賞味期限"), ("異物", "🔍 異物混入")]
-                            po_chk = {}
-                            for key_name, label in po_items:
-                                po_chk[key_name] = st.radio(label, ["未確認", "✅ 正常", "❌ 異常あり"], index=0, key=f"po_chk_{oid}_{key_name}", horizontal=True)
-                            po_unconfirmed = [label for key_name, label in po_items if po_chk[key_name] == "未確認"]
-                            if po_unconfirmed:
-                                st.warning(f"⚠️ 未確認: {'、'.join(po_unconfirmed)}")
+                                st.markdown("**🔍 受入品質検査（項目ごとに必ず確認）**")
+                                po_items = [("外観", "📦 外観"), ("品名・規格確認", "🏷️ 品名・規格"), ("賞味期限", "📅 賞味期限"), ("異物", "🔍 異物混入")]
+                                po_chk = {}
+                                for key_name, label in po_items:
+                                    po_chk[key_name] = st.radio(label, ["未確認", "✅ 正常", "❌ 異常あり"], index=0, key=f"po_chk_{oid}_{key_name}", horizontal=True)
+                                po_unconfirmed = [label for key_name, label in po_items if po_chk[key_name] == "未確認"]
+                                if po_unconfirmed:
+                                    st.warning(f"⚠️ 未確認: {'、'.join(po_unconfirmed)}")
 
-                            po_op = render_operator_selector(f"po_op_{oid}")
-                            if st.button("💾 入荷登録して在庫に加算する", type="primary", use_container_width=True, key=f"po_save_{oid}"):
-                                if not arr_lot:
-                                    st.error("ロットNoは必須です。")
-                                elif po_unconfirmed:
-                                    st.error("受入品質検査が未完了です。すべての項目を確認してください。")
-                                else:
-                                    new_ano = sheets.next_arrival_no(arrivals)
-                                    sheets.append_arrival({
-                                        "入荷No": new_ano, "入荷日": str(date.today()), "メーカー": o.get("メーカー"), "ロットNo": arr_lot,
-                                        "原料種別": o.get("原料名"), "グレード": po_grade, "袋数": po_bags, "1袋重量(kg)": po_wpb, "総量(kg)": po_bags * po_wpb,
-                                        "外観": po_chk["外観"], "品名・規格確認": po_chk["品名・規格確認"], "賞味期限": po_chk["賞味期限"], "異物": po_chk["異物"],
-                                        "担当者": po_op, "備考": f"【発注管理より入荷処理】{oid}", "登録日時": datetime.now().isoformat()
-                                    })
-                                    for oo in all_orders:
-                                        if oo.get("発注ID") == oid:
-                                            oo["ステータス"] = "入荷済み"
-                                            oo["紐づく入荷No"] = new_ano
-                                            oo["入荷処理日"] = str(date.today())
-                                    save_purchase_orders(order_points, all_orders)
-                                    st.success(f"入荷を登録し、在庫に加算しました（入荷No: {new_ano}）。")
-                                    time.sleep(1.5)
-                                    refresh()
+                                po_op = render_operator_selector(f"po_op_{oid}")
+                                if st.button("💾 入荷登録して在庫に加算する", type="primary", use_container_width=True, key=f"po_save_{oid}"):
+                                    if not arr_lot:
+                                        st.error("ロットNoは必須です。")
+                                    elif po_unconfirmed:
+                                        st.error("受入品質検査が未完了です。すべての項目を確認してください。")
+                                    else:
+                                        new_ano = sheets.next_arrival_no(arrivals)
+                                        sheets.append_arrival({
+                                            "入荷No": new_ano, "入荷日": str(date.today()), "メーカー": o.get("メーカー"), "ロットNo": arr_lot,
+                                            "原料種別": o.get("原料名"), "グレード": po_grade, "袋数": po_bags, "1袋重量(kg)": po_wpb, "総量(kg)": po_bags * po_wpb,
+                                            "外観": po_chk["外観"], "品名・規格確認": po_chk["品名・規格確認"], "賞味期限": po_chk["賞味期限"], "異物": po_chk["異物"],
+                                            "担当者": po_op, "備考": f"【発注管理より入荷処理】{oid}", "登録日時": datetime.now().isoformat()
+                                        })
+                                        for oo in all_orders:
+                                            if oo.get("発注ID") == oid:
+                                                oo["ステータス"] = "入荷済み"
+                                                oo["紐づく入荷No"] = new_ano
+                                                oo["入荷処理日"] = str(date.today())
+                                        save_purchase_orders(order_points, all_orders)
+                                        st.success(f"入荷を登録し、在庫に加算しました（入荷No: {new_ano}）。")
+                                        time.sleep(1.5)
+                                        refresh()
+                            else:
+                                # ---- 衛生資材の入荷処理 ----
+                                st.caption("実際に入荷した個数を確認して登録すると、資材在庫に加算されます。")
+                                po_bags = st.number_input("入荷個数", min_value=1, value=int(float(o.get("個数", 1))), step=1, key=f"po_bags_sup_{oid}")
+                                po_op = render_operator_selector(f"po_op_sup_{oid}")
+                                if st.button("💾 資材在庫に加算する", type="primary", use_container_width=True, key=f"po_save_sup_{oid}"):
+                                    # 資材IDを探す
+                                    sid = ""
+                                    for s in supplies:
+                                        if s.get("資材名") == o.get("原料名"):
+                                            sid = s.get("資材ID")
+                                            break
+                                    if not sid:
+                                        st.error("エラー：対象の資材がマスタに見つかりません。")
+                                    else:
+                                        sheets.append_supply_log({
+                                            "ログID": f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+                                            "登録日": str(date.today()), "資材ID": sid, 
+                                            "処理": "入荷", "数量": po_bags, "作業者": po_op, 
+                                            "備考": f"【発注管理より入荷処理】{oid}", "登録日時": datetime.now().isoformat()
+                                        })
+                                        for oo in all_orders:
+                                            if oo.get("発注ID") == oid:
+                                                oo["ステータス"] = "入荷済み"
+                                                oo["紐づく入荷No"] = "資材入荷"
+                                                oo["入荷処理日"] = str(date.today())
+                                        save_purchase_orders(order_points, all_orders)
+                                        st.success(f"資材の入荷を登録し、在庫に加算しました。")
+                                        time.sleep(1.5)
+                                        refresh()
+                                        
                     if is_overdue:
                         st.markdown(f"<div style='color:var(--c-danger); font-weight:800; font-size:0.85rem; margin-top:4px;'>⚠️ 納品予定日（{o.get('納品予定日')}）を過ぎています。メーカーに確認してください。</div>", unsafe_allow_html=True)
 
         if done_orders:
             st.markdown('<div class="section-title" style="margin-top:28px;">✅ 入荷済みの発注（履歴）</div>', unsafe_allow_html=True)
             df_done = pd.DataFrame(sorted(done_orders, key=lambda x: x.get("入荷処理日", ""), reverse=True))
-            show_cols = [c for c in ["発注日", "原料名", "メーカー", "個数", "納品予定日", "入荷処理日", "紐づく入荷No"] if c in df_done.columns]
+            show_cols = [c for c in ["発注区分", "発注日", "原料名", "メーカー", "個数", "入荷処理日", "紐づく入荷No"] if c in df_done.columns]
             st.dataframe(fmt_df_numeric(df_done[show_cols].head(50), ["個数"]), use_container_width=True, hide_index=True)
+
 
 # ═══════════════════════════════════════════════════════════════
 #  📥 入荷登録
