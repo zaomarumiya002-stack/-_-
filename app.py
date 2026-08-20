@@ -1,3 +1,9 @@
+ご提示いただいたご要望（こんにゃく粉ブレンドの最大3種対応、製品ごとの石灰増量ルール設定、資材管理ダッシュボード化と棚卸機能の統合）を反映しました。既存データの構造や互換性を壊さずに、UI・UXを大幅に向上させています。
+
+以下のコードをコピーして app.py に上書き保存してください。
+
+--- START OF FILE app.py ---
+
 # app.py
 import streamlit as st
 import pandas as pd
@@ -201,10 +207,15 @@ def parse_op_data(raw_val):
     except: pass
     return pt, wt
 
-def parse_lime_config(op_dict):
+def parse_lime_config(op_dict, product_name=None):
     c = {"start_month": 6, "end_month": 9, "add_ratio": 0.01, "reason": "夏場の高温対策（品質保持・腐敗防止）"}
     try:
-        v = op_dict.get("__LIME_CONFIG__", "")
+        v = None
+        if product_name:
+            v = op_dict.get(f"__LIME_CONFIG_{product_name}__", "")
+        if not v:
+            v = op_dict.get("__LIME_CONFIG__", "")
+            
         if v and v.startswith("{"): c.update(json.loads(v))
     except: pass
     return c
@@ -626,7 +637,8 @@ if page == "🏭 製造仕込み":
             submitted_ingredients = []
             water_items = []
 
-            lime_cfg = parse_lime_config(order_points)
+            # ★ 製品別の石灰増量ルールを取得
+            lime_cfg = parse_lime_config(order_points, product_name=selected_p)
             lime_boost_active = is_lime_boost_active(lime_cfg, brew_date)
 
             for i, item in enumerate(active_recipe[:15]):
@@ -663,36 +675,59 @@ if page == "🏭 製造仕込み":
 
                     if is_konjac:
                         blend_key = f"kb_{selected_p}_{i}"
-                        blend_on = st.checkbox("🧪 2種類のこんにゃく粉をブレンドする", key=blend_key)
+                        blend_mode = st.radio("🧪 こんにゃく粉の配合（ブレンド）", ["1種（単一）", "2種ブレンド", "3種ブレンド"], key=blend_key, horizontal=True)
                         konjac_mats = [m for m in materials if "こんにゃく" in m] or [r_name]
                         
-                        if blend_on:
-                            ratio_key = f"kr_{selected_p}_{i}"
-                            if ratio_key not in st.session_state: st.session_state[ratio_key] = 50
-                            
-                            st.markdown("<div style='margin-bottom:8px; font-weight:900; color:#475569;'>👇 🅰️の配合比率(%)をタップして選択</div>", unsafe_allow_html=True)
-                            btn_cols = st.columns(9)
-                            for pidx, pv in enumerate(range(10, 100, 10)):
-                                is_sel = (st.session_state[ratio_key] == pv)
-                                btn_cols[pidx].button(f"{pv}%", key=f"rbtn_{ratio_key}_{pv}", on_click=lambda k, v: st.session_state.update({k: v}), args=(ratio_key, pv), type="primary" if is_sel else "secondary", use_container_width=True)
-                            
-                            ratio_a = st.session_state[ratio_key]
-                            ratio_b = 100 - ratio_a
+                        if blend_mode == "2種ブレンド":
+                            c_a, c_b = st.columns(2)
+                            ratio_a = c_a.number_input("🅰️ の比率(%)", min_value=0.0, max_value=100.0, value=50.0, step=1.0, key=f"kr_a2_{selected_p}_{i}")
+                            ratio_b = c_b.number_input("🅱️ の比率(%)", min_value=0.0, max_value=100.0, value=100.0 - ratio_a, step=1.0, key=f"kr_b2_{selected_p}_{i}")
+                            if round(ratio_a + ratio_b, 1) != 100.0: st.warning(f"⚠️ 比率合計が {ratio_a + ratio_b}% です。100%になるよう調整してください。")
                             
                             st.markdown("---")
-                            mat_a = st.radio("🅰️ 原料種別", konjac_mats, key=f"kma_{selected_p}_{i}", horizontal=True)
-                            c_amt_a, c_lot_a = st.columns([1, 1])
-                            with c_amt_a: act_a = render_amount_adjuster(f"🅰️ 投入量 (比率 {ratio_a}%)", calc_kg * ratio_a / 100.0, f"adj_a_{selected_p}_{i}")
-                            with c_lot_a: lot_a = render_lot_selector(mat_a, f"lot_a_{selected_p}_{i}_{mat_a}")
+                            mat_a = st.radio("🅰️ 原料種別", konjac_mats, key=f"kma2_{selected_p}_{i}", horizontal=True)
+                            ca_amt, ca_lot = st.columns([1, 1])
+                            with ca_amt: act_a = render_amount_adjuster(f"🅰️ 投入量 ({ratio_a}%)", calc_kg * ratio_a / 100.0, f"adj_a2_{selected_p}_{i}")
+                            with ca_lot: lot_a = render_lot_selector(mat_a, f"lot_a2_{selected_p}_{i}_{mat_a}")
                             
                             st.markdown("---")
-                            mat_b = st.radio("🅱️ 原料種別", konjac_mats, index=1 if len(konjac_mats)>1 else 0, key=f"kmb_{selected_p}_{i}", horizontal=True)
-                            c_amt_b, c_lot_b = st.columns([1, 1])
-                            with c_amt_b: act_b = render_amount_adjuster(f"🅱️ 投入量 (比率 {ratio_b}%)", calc_kg * ratio_b / 100.0, f"adj_b_{selected_p}_{i}")
-                            with c_lot_b: lot_b = render_lot_selector(mat_b, f"lot_b_{selected_p}_{i}_{mat_b}")
+                            mat_b = st.radio("🅱️ 原料種別", konjac_mats, index=1 if len(konjac_mats)>1 else 0, key=f"kmb2_{selected_p}_{i}", horizontal=True)
+                            cb_amt, cb_lot = st.columns([1, 1])
+                            with cb_amt: act_b = render_amount_adjuster(f"🅱️ 投入量 ({ratio_b}%)", calc_kg * ratio_b / 100.0, f"adj_b2_{selected_p}_{i}")
+                            with cb_lot: lot_b = render_lot_selector(mat_b, f"lot_b2_{selected_p}_{i}_{mat_b}")
 
                             submitted_ingredients.append({"原料名": mat_a, "kg": act_a, "lot": f"{lot_a}({ratio_a}%)"})
                             submitted_ingredients.append({"原料名": mat_b, "kg": act_b, "lot": f"{lot_b}({ratio_b}%)"})
+
+                        elif blend_mode == "3種ブレンド":
+                            c_a, c_b, c_c = st.columns(3)
+                            ratio_a = c_a.number_input("🅰️ の比率(%)", min_value=0.0, max_value=100.0, value=34.0, step=1.0, key=f"kr_a3_{selected_p}_{i}")
+                            ratio_b = c_b.number_input("🅱️ の比率(%)", min_value=0.0, max_value=100.0, value=33.0, step=1.0, key=f"kr_b3_{selected_p}_{i}")
+                            ratio_c = c_c.number_input("🅲 の比率(%)", min_value=0.0, max_value=100.0, value=33.0, step=1.0, key=f"kr_c3_{selected_p}_{i}")
+                            if round(ratio_a + ratio_b + ratio_c, 1) != 100.0: st.warning(f"⚠️ 比率合計が {ratio_a + ratio_b + ratio_c}% です。100%になるよう調整してください。")
+                            
+                            st.markdown("---")
+                            mat_a = st.radio("🅰️ 原料種別", konjac_mats, key=f"kma3_{selected_p}_{i}", horizontal=True)
+                            ca_amt, ca_lot = st.columns([1, 1])
+                            with ca_amt: act_a = render_amount_adjuster(f"🅰️ 投入量 ({ratio_a}%)", calc_kg * ratio_a / 100.0, f"adj_a3_{selected_p}_{i}")
+                            with ca_lot: lot_a = render_lot_selector(mat_a, f"lot_a3_{selected_p}_{i}_{mat_a}")
+                            
+                            st.markdown("---")
+                            mat_b = st.radio("🅱️ 原料種別", konjac_mats, index=1 if len(konjac_mats)>1 else 0, key=f"kmb3_{selected_p}_{i}", horizontal=True)
+                            cb_amt, cb_lot = st.columns([1, 1])
+                            with cb_amt: act_b = render_amount_adjuster(f"🅱️ 投入量 ({ratio_b}%)", calc_kg * ratio_b / 100.0, f"adj_b3_{selected_p}_{i}")
+                            with cb_lot: lot_b = render_lot_selector(mat_b, f"lot_b3_{selected_p}_{i}_{mat_b}")
+
+                            st.markdown("---")
+                            mat_c = st.radio("🅲 原料種別", konjac_mats, index=2 if len(konjac_mats)>2 else 0, key=f"kmc3_{selected_p}_{i}", horizontal=True)
+                            cc_amt, cc_lot = st.columns([1, 1])
+                            with cc_amt: act_c = render_amount_adjuster(f"🅲 投入量 ({ratio_c}%)", calc_kg * ratio_c / 100.0, f"adj_c3_{selected_p}_{i}")
+                            with cc_lot: lot_c = render_lot_selector(mat_c, f"lot_c3_{selected_p}_{i}_{mat_c}")
+
+                            submitted_ingredients.append({"原料名": mat_a, "kg": act_a, "lot": f"{lot_a}({ratio_a}%)"})
+                            submitted_ingredients.append({"原料名": mat_b, "kg": act_b, "lot": f"{lot_b}({ratio_b}%)"})
+                            submitted_ingredients.append({"原料名": mat_c, "kg": act_c, "lot": f"{lot_c}({ratio_c}%)"})
+                            
                         else:
                             c_amt, c_lot = st.columns([1, 1])
                             with c_amt: act_kg = render_amount_adjuster(f"投入量（配合比 {fmt_kg(base_ratio)}%）", calc_kg, f"adj_{selected_p}_{i}")
@@ -768,9 +803,9 @@ if page == "🏭 製造仕込み":
                     "備考": f"{brew_remarks}", "登録日時": datetime.now().isoformat()
                 })
                 
-                # ★修正: エラーを引き起こしていた直接代入を削除し、安全なキーのみ削除
+                # ★追加されたキー（kmc等）も含めてセッションステートをクリア
                 for key in list(st.session_state.keys()):
-                    if any(key.startswith(p) for p in ["adj_", "last_calc_", "lot_", "rad_", "txt_", "kb_", "kr_", "kma_", "kmb_", "use_season_", "season_vol_"]):
+                    if any(key.startswith(p) for p in ["adj_", "last_calc_", "lot_", "rad_", "txt_", "kb_", "kr_", "km", "use_season_", "season_vol_"]):
                         del st.session_state[key]
                 
                 st.toast("✅ 製造記録を保存しました", icon="💾")
@@ -1196,7 +1231,7 @@ elif page == "📦 在庫・棚卸":
 # ═══════════════════════════════════════════════════════════════
 elif page == "🧹 資材管理":
     st.markdown('<div class="main-header"><h1>🧹 資材・消耗品管理</h1></div>', unsafe_allow_html=True)
-    t_s1, t_s2, t_s3 = st.tabs(["📋 在庫一覧・入出庫", "🕒 ログ管理", "⚖️ 棚卸調整"])
+    t_s1, t_s2 = st.tabs(["📋 在庫一覧・入出庫・棚卸", "🕒 ログ管理"])
     
     with t_s1:
         if not supplies: st.warning("資材が未登録です。マスタ設定よりご登録ください。")
@@ -1226,35 +1261,92 @@ elif page == "🧹 資材管理":
             cols_grid = st.columns(min(3, len(filtered_supplies))) if filtered_supplies else []
             for idx, s in enumerate(filtered_supplies):
                 sid = s.get("資材ID")
+                curr_qty = supply_inventory.get(sid, 0.0)
                 with cols_grid[idx % 3]:
                     with st.container(border=True):
-                        if s.get("画像URL"): st.image(s.get("画像URL"), width=60)
-                        st.markdown(f"**{s.get('資材名')}**")
-                        st.caption(f"🏷️ {s.get('カテゴリ') or '未分類'}")
-                        st.metric("現在庫", fmt_kg(supply_inventory.get(sid, 0.0)))
-                        with lot_popover("🔄 入出庫"):
-                            action = st.radio("処理", ["➖ 使用", "➕ 補充"], key=f"act_{sid}", horizontal=True)
-
-                            qkey = f"qty_{sid}"
-                            if qkey not in st.session_state: st.session_state[qkey] = 1.0
-                            st.caption("👆 よく使う数量をタップ")
-                            qbtns = st.columns(4)
-                            for qi, qv in enumerate([1, 5, 10, 50]):
-                                qbtns[qi].button(f"{qv}", key=f"qbtn_{sid}_{qv}", use_container_width=True,
-                                                  on_click=lambda k, v: st.session_state.update({k: float(v)}), args=(qkey, qv))
-                            qty = st.number_input("数量", min_value=1, step=1, key=qkey)
-
-                            op = render_operator_selector(f"op_{sid}")
-                            if st.button("💾 保存", key=f"btn_{sid}", type="primary", use_container_width=True):
-                                sheets.append_supply_log({
-                                    "ログID": f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
-                                    "登録日": str(date.today()), "資材ID": sid, "処理": "使用" if "使用" in action else "入荷", 
-                                    "数量": qty, "作業者": op, "備考": "", "登録日時": datetime.now().isoformat()
-                                })
-                                st.session_state[qkey] = 1.0
-                                st.success("記録しました")
-                                time.sleep(1.0)
-                                refresh()
+                        # 画像とテキストを並べるレイアウト
+                        img_html = f'<img src="{s.get("画像URL")}" style="width:60px; height:60px; object-fit:cover; border-radius:8px; margin-right:12px; border:1px solid #e2e8f0;">' if s.get("画像URL") else '<div style="width:60px; height:60px; background:#e2e8f0; border-radius:8px; margin-right:12px; display:flex; align-items:center; justify-content:center; font-size:24px;">📦</div>'
+                        st.markdown(f"""
+                        <div style="display:flex; align-items:center; margin-bottom:12px;">
+                            {img_html}
+                            <div>
+                                <div style="font-weight:900; font-size:1.1rem; color:#0f172a;">{s.get('資材名')}</div>
+                                <div style="font-size:0.8rem; color:#64748b;">🏷️ {s.get('カテゴリ') or '未分類'}</div>
+                            </div>
+                        </div>
+                        <div style="font-size:2.0rem; font-weight:900; color:#0f766e; margin-bottom:12px; text-align:center;">
+                            {fmt_kg(curr_qty)} <span style="font-size:1rem; color:#64748b;">個</span>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        with lot_popover("🔧 増減・棚卸調整"):
+                            st.markdown(f"#### 🔧 {s.get('資材名')} の在庫調整")
+                            adj_mode = st.radio("調整方法", ["➕➖ クイック入出庫", "📋 棚卸(実地数量で確定)"], key=f"sup_mode_{sid}")
+                            
+                            if "クイック" in adj_mode:
+                                st.caption("👆 タップした瞬間に在庫へ即時反映されます（確認なし）")
+                                op_q = render_operator_selector(f"sup_qop_{sid}")
+                                def _sup_quick_adj(s_id, delta, op_name):
+                                    sheets.append_supply_log({
+                                        "ログID": f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+                                        "登録日": str(date.today()), "資材ID": s_id, 
+                                        "処理": "入荷" if delta > 0 else "使用", 
+                                        "数量": abs(delta), "作業者": op_name, 
+                                        "備考": "【クイック入出庫】", "登録日時": datetime.now().isoformat()
+                                    })
+                                qc1, qc2, qc3, qc4 = st.columns(4)
+                                if qc1.button("➖10", key=f"sq_m10_{sid}", use_container_width=True):
+                                    _sup_quick_adj(sid, -10, op_q); st.toast(f"✅ {s.get('資材名')} を -10 しました"); time.sleep(1.0); refresh()
+                                if qc2.button("➖1", key=f"sq_m1_{sid}", use_container_width=True):
+                                    _sup_quick_adj(sid, -1, op_q); st.toast(f"✅ {s.get('資材名')} を -1 しました"); time.sleep(1.0); refresh()
+                                if qc3.button("➕1", key=f"sq_p1_{sid}", use_container_width=True):
+                                    _sup_quick_adj(sid, 1, op_q); st.toast(f"✅ {s.get('資材名')} を +1 しました"); time.sleep(1.0); refresh()
+                                if qc4.button("➕10", key=f"sq_p10_{sid}", use_container_width=True):
+                                    _sup_quick_adj(sid, 10, op_q); st.toast(f"✅ {s.get('資材名')} を +10 しました"); time.sleep(1.0); refresh()
+                                
+                                st.markdown("---")
+                                st.caption("※自由な数量での入出庫")
+                                action = st.radio("処理", ["➖ 使用", "➕ 補充"], key=f"act_{sid}", horizontal=True)
+                                qty = st.number_input("数量", min_value=1, step=1, key=f"qty_{sid}")
+                                if st.button("💾 記録する", key=f"btn_{sid}", type="primary", use_container_width=True):
+                                    sheets.append_supply_log({
+                                        "ログID": f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+                                        "登録日": str(date.today()), "資材ID": sid, 
+                                        "処理": "使用" if "使用" in action else "入荷", 
+                                        "数量": qty, "作業者": op_q, "備考": "", "登録日時": datetime.now().isoformat()
+                                    })
+                                    st.success("記録しました")
+                                    time.sleep(1.0)
+                                    refresh()
+                                    
+                            else:
+                                st.caption("💡 実際に数えた数量をそのまま入力してください。理論在庫との差分は自動計算され反映されます。")
+                                actual_qty = st.number_input("📋 実地棚卸で数えた実在庫数量", min_value=0, value=int(float(curr_qty)), step=1, key=f"sup_actual_{sid}")
+                                diff_qty = actual_qty - curr_qty
+                                
+                                if diff_qty > 0:
+                                    st.success(f"✅ 差分 +{fmt_kg(diff_qty)} を「入荷」として記録します → 保存後の在庫: **{fmt_kg(actual_qty)}**")
+                                elif diff_qty < 0:
+                                    st.warning(f"⚠️ 差分 {fmt_kg(diff_qty)} を「使用」として記録します → 保存後の在庫: **{fmt_kg(actual_qty)}**")
+                                else:
+                                    st.info("理論在庫と一致しています。差分はありません。")
+                                    
+                                reason_txt = st.text_input("調整理由（例: 棚卸差異、破損など）", key=f"sup_adj_reason_{sid}")
+                                op2 = render_operator_selector(f"sup_adj_op_{sid}")
+                                if st.button("💾 実地数量で在庫を確定する", type="primary", use_container_width=True, key=f"sup_adj_save_{sid}"):
+                                    if diff_qty != 0:
+                                        sheets.append_supply_log({
+                                            "ログID": f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+                                            "登録日": str(date.today()), "資材ID": sid,
+                                            "処理": "入荷" if diff_qty > 0 else "使用",
+                                            "数量": abs(diff_qty),
+                                            "作業者": op2,
+                                            "備考": f"【棚卸調整:実地{fmt_kg(actual_qty)}に更新】{reason_txt}",
+                                            "登録日時": datetime.now().isoformat()
+                                        })
+                                    st.success(f"✅ 現在庫を {fmt_kg(actual_qty)} に更新しました。")
+                                    time.sleep(1.5)
+                                    refresh()
                                 
     with t_s2:
         if supply_logs:
@@ -1273,49 +1365,6 @@ elif page == "🧹 資材管理":
                     st.success("削除しました。"); time.sleep(1); refresh()
         else:
             st.info("入出庫ログはまだありません。")
-
-    with t_s3:
-        st.markdown('<div class="form-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">⚖️ 資材の棚卸調整（実地数量をそのまま入力）</div>', unsafe_allow_html=True)
-        st.caption("💡 入出庫の記録漏れなどで理論在庫と実際の在庫がズレてしまった場合はこちらで調整してください。差分を計算する必要はありません。**実際に数えた数量をそのまま入力**すれば、保存した瞬間からその数量が現在庫になります。")
-        if supplies:
-            supply_inventory_adj = get_supply_inventory()
-            tgt_sup_list = {f"{s.get('資材名')} - 理論在庫:{fmt_kg(supply_inventory_adj.get(s.get('資材ID'), 0.0))}": s.get("資材ID") for s in supplies}
-            sel_sup_label = st.selectbox("調整対象資材", list(tgt_sup_list.keys()))
-            sel_sid = tgt_sup_list[sel_sup_label]
-            theoretical_qty = supply_inventory_adj.get(sel_sid, 0.0)
-
-            st.metric("📐 現在の理論在庫", fmt_kg(theoretical_qty))
-            actual_qty = st.number_input("📋 実地棚卸で数えた実在庫数量", min_value=0, value=int(float(theoretical_qty)), step=1)
-            diff_qty = actual_qty - theoretical_qty
-
-            if diff_qty > 0:
-                st.success(f"✅ 差分 +{fmt_kg(diff_qty)} を「入荷」として自動記録します → 保存後の在庫: **{fmt_kg(actual_qty)}**")
-            elif diff_qty < 0:
-                st.warning(f"⚠️ 差分 {fmt_kg(diff_qty)} を「使用」として自動記録します → 保存後の在庫: **{fmt_kg(actual_qty)}**")
-            else:
-                st.info("理論在庫と一致しています。差分はありません。")
-
-            reason_txt2 = st.text_input("調整理由（例: 棚卸差異、破損など）", key="sup_adj_reason")
-            op2 = render_operator_selector("sup_adj_op")
-
-            if st.button("💾 実地数量で在庫を確定する", type="primary", use_container_width=True, key="sup_adj_save"):
-                if diff_qty != 0:
-                    sheets.append_supply_log({
-                        "ログID": f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
-                        "登録日": str(date.today()), "資材ID": sel_sid,
-                        "処理": "入荷" if diff_qty > 0 else "使用",
-                        "数量": abs(diff_qty),
-                        "作業者": op2,
-                        "備考": f"【棚卸調整:実地{fmt_kg(actual_qty)}に更新】{reason_txt2}",
-                        "登録日時": datetime.now().isoformat()
-                    })
-                st.success(f"✅ 現在庫を {fmt_kg(actual_qty)} に更新しました。")
-                time.sleep(1.5)
-                refresh()
-        else:
-            st.warning("資材が未登録です。マスタ設定よりご登録ください。")
-        st.markdown('</div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════
 #  🔍 トレース
@@ -1525,10 +1574,24 @@ elif page == "⚙️ マスタ設定":
 
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
         st.markdown('<div class="section-title">🌡️ 石灰の季節増量・調整ルール設定</div>', unsafe_allow_html=True)
-        st.caption("指定した期間(月)の間、製造仕込みでの石灰計算に自動で増量値(%)が加算されます。")
+        st.caption("指定した期間(月)の間、製造仕込みでの石灰計算に自動で増量値(%)が加算されます。製品ごとに個別の設定を行うことも可能です。")
         
-        cur_lime_cfg = parse_lime_config(order_points)
+        # 製品リストの取得
+        p_names = [r.get("品名") for r in recipes_raw if r.get("大カテゴリ") != "調味料" and r.get("品名")]
+        lime_tgt_opts = ["(全体デフォルト)"] + sorted(p_names)
+        sel_lime_tgt = st.selectbox("設定対象の製品", lime_tgt_opts)
         
+        tgt_key = "__LIME_CONFIG__" if sel_lime_tgt == "(全体デフォルト)" else f"__LIME_CONFIG_{sel_lime_tgt}__"
+        
+        # 現在の設定を取得
+        cur_lime_cfg = {}
+        v_raw = order_points.get(tgt_key, "")
+        if v_raw and v_raw.startswith("{"):
+            try: cur_lime_cfg = json.loads(v_raw)
+            except: pass
+        if not cur_lime_cfg:
+            cur_lime_cfg = {"start_month": 6, "end_month": 9, "add_ratio": 0.01, "reason": "夏場の高温対策（腐敗・品質保持）"}
+
         c_l1, c_l2, c_l3 = st.columns(3)
         l_start = c_l1.selectbox("開始月", list(range(1, 13)), index=int(cur_lime_cfg.get("start_month", 6)) - 1)
         l_end = c_l2.selectbox("終了月", list(range(1, 13)), index=int(cur_lime_cfg.get("end_month", 9)) - 1)
@@ -1544,9 +1607,9 @@ elif page == "⚙️ マスタ設定":
                 "add_ratio": float(l_ratio),
                 "reason": str(l_reason)
             }
-            new_dict["__LIME_CONFIG__"] = json.dumps(lime_data, ensure_ascii=False)
+            new_dict[tgt_key] = json.dumps(lime_data, ensure_ascii=False)
             sheets.save_order_points(new_dict)
-            st.success("石灰の増量ルールを更新しました。"); time.sleep(1); refresh()
+            st.success(f"{sel_lime_tgt} の石灰増量ルールを更新しました。"); time.sleep(1); refresh()
         st.markdown('</div>', unsafe_allow_html=True)
 
     with t4:
