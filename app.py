@@ -633,6 +633,7 @@ if page == "🏭 製造仕込み":
             submitted_ingredients = []
             water_items = []
 
+            # ★ 製品別の石灰増量ルールを取得
             lime_cfg = parse_lime_config(order_points, product_name=selected_p)
             lime_boost_active = is_lime_boost_active(lime_cfg, brew_date)
 
@@ -669,113 +670,95 @@ if page == "🏭 製造仕込み":
                         st.markdown(f"<div style='font-size:0.9rem; color:#b45309; font-weight:800; margin-top:4px;'>{lime_msg}</div>", unsafe_allow_html=True)
 
                     if is_konjac:
-                        st.markdown("<div style='background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0; margin-top:8px;'>", unsafe_allow_html=True)
                         blend_key = f"kb_{selected_p}_{i}"
                         blend_mode = st.radio("ブレンドモード", ["単一 (1種)", "2種ブレンド", "3種ブレンド"], key=blend_key, horizontal=True, label_visibility="collapsed")
                         konjac_mats = [m for m in materials if "こんにゃく" in m] or [r_name]
                         
-                        if blend_mode == "2種ブレンド":
-                            k_a = f"kr_a2_{selected_p}_{i}"
-                            k_b = f"kr_b2_{selected_p}_{i}"
-                            if k_a not in st.session_state: st.session_state[k_a] = 50.0
-                            if k_b not in st.session_state: st.session_state[k_b] = 50.0
+                        if blend_mode in ["2種ブレンド", "3種ブレンド"]:
+                            is_3 = (blend_mode == "3種ブレンド")
+                            k_a = f"kr_a_{selected_p}_{i}"
+                            k_b = f"kr_b_{selected_p}_{i}"
+                            k_c = f"kr_c_{selected_p}_{i}"
                             
-                            st.markdown("<div style='font-size:0.85rem; font-weight:700; color:#64748b; margin-bottom:6px;'>👇 🅰️の配合比率をタップ (🅱️は自動計算されます)</div>", unsafe_allow_html=True)
-                            st.markdown("<div class='ratio-btn-container'>", unsafe_allow_html=True)
+                            if k_a not in st.session_state: st.session_state[k_a] = 50.0 if not is_3 else 34.0
+                            if k_b not in st.session_state: st.session_state[k_b] = 50.0 if not is_3 else 33.0
+                            if k_c not in st.session_state: st.session_state[k_c] = 33.0
+
+                            st.markdown("<div style='background:#f8fafc; padding:12px 16px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:16px;'>", unsafe_allow_html=True)
+                            st.markdown("<div style='font-size:0.9rem; font-weight:800; color:#475569; margin-bottom:8px;'>🎯 ワンタッチ比率入力パネル</div>", unsafe_allow_html=True)
+                            
+                            target_key = f"blend_tgt_{selected_p}_{i}"
+                            if target_key not in st.session_state: st.session_state[target_key] = "🅰️"
+                            tgt_opts = ["🅰️", "🅱️", "🅲"] if is_3 else ["🅰️", "🅱️"]
+                            
+                            st.radio("入力対象を選択", tgt_opts, horizontal=True, key=target_key, label_visibility="collapsed")
+                            
+                            st.markdown("<div class='ratio-btn-container' style='margin-top:8px;'>", unsafe_allow_html=True)
                             btn_cols = st.columns(9)
+                            def update_ratio(v, tgt, ka, kb, kc, is_three):
+                                if tgt == "🅰️":
+                                    st.session_state[ka] = float(v)
+                                    if not is_three: st.session_state[kb] = 100.0 - float(v)
+                                elif tgt == "🅱️":
+                                    st.session_state[kb] = float(v)
+                                    if not is_three: st.session_state[ka] = 100.0 - float(v)
+                                elif tgt == "🅲" and is_three:
+                                    st.session_state[kc] = float(v)
+
                             for pidx, pv in enumerate(range(10, 100, 10)):
-                                is_sel = (st.session_state[k_a] == float(pv))
+                                curr_tgt = st.session_state[target_key]
+                                curr_val = st.session_state.get(k_a) if curr_tgt == "🅰️" else (st.session_state.get(k_b) if curr_tgt == "🅱️" else st.session_state.get(k_c))
+                                is_sel = (curr_val == float(pv))
+                                
                                 btn_cols[pidx].button(
                                     f"{pv}%", key=f"rbtn_{selected_p}_{i}_{pv}", 
-                                    on_click=lambda ka, kb, v: st.session_state.update({ka: float(v), kb: 100.0 - float(v)}), 
-                                    args=(k_a, k_b, pv), 
+                                    on_click=update_ratio, 
+                                    args=(pv, st.session_state[target_key], k_a, k_b, k_c, is_3), 
                                     type="primary" if is_sel else "secondary", use_container_width=True
                                 )
                             st.markdown("</div>", unsafe_allow_html=True)
 
-                            # 隠し入力として利用（直接入力も可能）
-                            c_a, c_b = st.columns(2)
-                            ratio_a = c_a.number_input("🅰️ 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_a, label_visibility="collapsed")
-                            ratio_b = c_b.number_input("🅱️ 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_b, label_visibility="collapsed")
-                            if round(ratio_a + ratio_b, 1) != 100.0: st.warning(f"⚠️ 比率合計が {ratio_a + ratio_b}% です。")
+                            cols_ratio = st.columns(3 if is_3 else 2)
+                            ratio_a = cols_ratio[0].number_input("🅰️ 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_a)
+                            ratio_b = cols_ratio[1].number_input("🅱️ 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_b)
+                            ratio_c = 0.0
+                            if is_3:
+                                ratio_c = cols_ratio[2].number_input("🅲 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_c)
                             
-                            st.markdown("<div style='margin-top:12px;'></div>", unsafe_allow_html=True)
+                            total_ratio = round(ratio_a + ratio_b + ratio_c, 1)
+                            if total_ratio != 100.0:
+                                st.warning(f"⚠️ 現在の比率合計: {total_ratio}% （100%になるように調整してください）")
                             
-                            mat_a = st.radio("🅰️ 原料種別", konjac_mats, key=f"kma2_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
-                            ca_amt, ca_lot = st.columns([1, 1])
-                            with ca_amt: act_a = render_amount_adjuster(f"🅰️ 投入量 ({ratio_a}%)", calc_kg * ratio_a / 100.0, f"adj_a2_{selected_p}_{i}")
-                            with ca_lot: lot_a = render_lot_selector(mat_a, f"lot_a2_{selected_p}_{i}_{mat_a}")
-                            
-                            st.markdown("<hr style='margin:16px 0; border-top:1px dashed #cbd5e1;'>", unsafe_allow_html=True)
-                            
-                            mat_b = st.radio("🅱️ 原料種別", konjac_mats, index=1 if len(konjac_mats)>1 else 0, key=f"kmb2_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
-                            cb_amt, cb_lot = st.columns([1, 1])
-                            with cb_amt: act_b = render_amount_adjuster(f"🅱️ 投入量 ({ratio_b}%)", calc_kg * ratio_b / 100.0, f"adj_b2_{selected_p}_{i}")
-                            with cb_lot: lot_b = render_lot_selector(mat_b, f"lot_b2_{selected_p}_{i}_{mat_b}")
-
-                            submitted_ingredients.append({"原料名": mat_a, "kg": act_a, "lot": f"{lot_a}({ratio_a}%)"})
-                            submitted_ingredients.append({"原料名": mat_b, "kg": act_b, "lot": f"{lot_b}({ratio_b}%)"})
-
-                        elif blend_mode == "3種ブレンド":
-                            k_a = f"kr_a3_{selected_p}_{i}"
-                            k_b = f"kr_b3_{selected_p}_{i}"
-                            k_c = f"kr_c3_{selected_p}_{i}"
-                            if k_a not in st.session_state: st.session_state[k_a] = 34.0
-                            if k_b not in st.session_state: st.session_state[k_b] = 33.0
-                            if k_c not in st.session_state: st.session_state[k_c] = 33.0
-                            
-                            st.markdown("<div style='font-size:0.85rem; font-weight:700; color:#64748b; margin-bottom:6px;'>👇 均等・よく使う比率をタップ</div>", unsafe_allow_html=True)
-                            st.markdown("<div class='ratio-btn-container'>", unsafe_allow_html=True)
-                            pc = st.columns(5)
-                            presets = [(34,33,33), (40,30,30), (50,25,25), (40,40,20), (50,30,20)]
-                            
-                            for pi, (pa, pb, pc_val) in enumerate(presets):
-                                is_sel = (st.session_state[k_a] == float(pa) and st.session_state[k_b] == float(pb))
-                                pc[pi].button(
-                                    f"{pa}:{pb}:{pc_val}", key=f"p3_{selected_p}_{i}_{pi}", 
-                                    on_click=lambda a,b,c,ka,kb,kc: st.session_state.update({ka:float(a), kb:float(b), kc:float(c)}), 
-                                    args=(pa, pb, pc_val, k_a, k_b, k_c), 
-                                    type="primary" if is_sel else "secondary", use_container_width=True
-                                )
                             st.markdown("</div>", unsafe_allow_html=True)
 
-                            c_a, c_b, c_c = st.columns(3)
-                            ratio_a = c_a.number_input("🅰️ 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_a, label_visibility="collapsed")
-                            ratio_b = c_b.number_input("🅱️ 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_b, label_visibility="collapsed")
-                            ratio_c = c_c.number_input("🅲 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_c, label_visibility="collapsed")
-                            if round(ratio_a + ratio_b + ratio_c, 1) != 100.0: st.warning(f"⚠️ 比率合計が {ratio_a + ratio_b + ratio_c}% です。")
-                            
-                            st.markdown("<div style='margin-top:12px;'></div>", unsafe_allow_html=True)
-                            
-                            mat_a = st.radio("🅰️ 原料種別", konjac_mats, key=f"kma3_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
+                            mat_a = st.radio("🅰️ 原料種別", konjac_mats, key=f"kma_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
                             ca_amt, ca_lot = st.columns([1, 1])
-                            with ca_amt: act_a = render_amount_adjuster(f"🅰️ 投入量 ({ratio_a}%)", calc_kg * ratio_a / 100.0, f"adj_a3_{selected_p}_{i}")
-                            with ca_lot: lot_a = render_lot_selector(mat_a, f"lot_a3_{selected_p}_{i}_{mat_a}")
+                            with ca_amt: act_a = render_amount_adjuster(f"🅰️ 投入量 ({ratio_a}%)", calc_kg * ratio_a / 100.0, f"adj_a_{selected_p}_{i}")
+                            with ca_lot: lot_a = render_lot_selector(mat_a, f"lot_a_{selected_p}_{i}_{mat_a}")
                             
                             st.markdown("<hr style='margin:16px 0; border-top:1px dashed #cbd5e1;'>", unsafe_allow_html=True)
                             
-                            mat_b = st.radio("🅱️ 原料種別", konjac_mats, index=1 if len(konjac_mats)>1 else 0, key=f"kmb3_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
+                            mat_b = st.radio("🅱️ 原料種別", konjac_mats, index=1 if len(konjac_mats)>1 else 0, key=f"kmb_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
                             cb_amt, cb_lot = st.columns([1, 1])
-                            with cb_amt: act_b = render_amount_adjuster(f"🅱️ 投入量 ({ratio_b}%)", calc_kg * ratio_b / 100.0, f"adj_b3_{selected_p}_{i}")
-                            with cb_lot: lot_b = render_lot_selector(mat_b, f"lot_b3_{selected_p}_{i}_{mat_b}")
-
-                            st.markdown("<hr style='margin:16px 0; border-top:1px dashed #cbd5e1;'>", unsafe_allow_html=True)
-                            
-                            mat_c = st.radio("🅲 原料種別", konjac_mats, index=2 if len(konjac_mats)>2 else 0, key=f"kmc3_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
-                            cc_amt, cc_lot = st.columns([1, 1])
-                            with cc_amt: act_c = render_amount_adjuster(f"🅲 投入量 ({ratio_c}%)", calc_kg * ratio_c / 100.0, f"adj_c3_{selected_p}_{i}")
-                            with cc_lot: lot_c = render_lot_selector(mat_c, f"lot_c3_{selected_p}_{i}_{mat_c}")
+                            with cb_amt: act_b = render_amount_adjuster(f"🅱️ 投入量 ({ratio_b}%)", calc_kg * ratio_b / 100.0, f"adj_b_{selected_p}_{i}")
+                            with cb_lot: lot_b = render_lot_selector(mat_b, f"lot_b_{selected_p}_{i}_{mat_b}")
 
                             submitted_ingredients.append({"原料名": mat_a, "kg": act_a, "lot": f"{lot_a}({ratio_a}%)"})
                             submitted_ingredients.append({"原料名": mat_b, "kg": act_b, "lot": f"{lot_b}({ratio_b}%)"})
-                            submitted_ingredients.append({"原料名": mat_c, "kg": act_c, "lot": f"{lot_c}({ratio_c}%)"})
+
+                            if is_3:
+                                st.markdown("<hr style='margin:16px 0; border-top:1px dashed #cbd5e1;'>", unsafe_allow_html=True)
+                                mat_c = st.radio("🅲 原料種別", konjac_mats, index=2 if len(konjac_mats)>2 else 0, key=f"kmc_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
+                                cc_amt, cc_lot = st.columns([1, 1])
+                                with cc_amt: act_c = render_amount_adjuster(f"🅲 投入量 ({ratio_c}%)", calc_kg * ratio_c / 100.0, f"adj_c_{selected_p}_{i}")
+                                with cc_lot: lot_c = render_lot_selector(mat_c, f"lot_c_{selected_p}_{i}_{mat_c}")
+                                submitted_ingredients.append({"原料名": mat_c, "kg": act_c, "lot": f"{lot_c}({ratio_c}%)"})
                             
                         else:
                             c_amt, c_lot = st.columns([1, 1])
                             with c_amt: act_kg = render_amount_adjuster(f"投入量（配合比 {fmt_kg(base_ratio)}%）", calc_kg, f"adj_{selected_p}_{i}")
                             with c_lot: final_lot = render_lot_selector(r_name, f"lot_{selected_p}_{i}")
                             submitted_ingredients.append({"原料名": r_name, "kg": act_kg, "lot": final_lot})
-                        st.markdown("</div>", unsafe_allow_html=True)
                     
                     else:
                         c_amt, c_lot = st.columns([1, 1])
@@ -847,7 +830,7 @@ if page == "🏭 製造仕込み":
                 })
                 
                 for key in list(st.session_state.keys()):
-                    if any(key.startswith(p) for p in ["adj_", "last_calc_", "lot_", "rad_", "txt_", "kb_", "kr_", "km", "use_season_", "season_vol_"]):
+                    if any(key.startswith(p) for p in ["adj_", "last_calc_", "lot_", "rad_", "txt_", "kb_", "kr_", "km", "blend_tgt_", "use_season_", "season_vol_"]):
                         del st.session_state[key]
                 
                 st.toast("✅ 製造記録を保存しました", icon="💾")
