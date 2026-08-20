@@ -82,21 +82,21 @@ h1, h2, h3, h4, h5, p, span, div, label { color: var(--c-secondary); letter-spac
 .section-title { font-size: 1.25rem; font-weight: 900; margin-bottom: 20px; border-bottom: 3px solid var(--c-border); padding-bottom: 8px; }
 
 /* ════════ ラジオボタンの完全色反転（落ち着いたブルー） ════════ */
-div[data-testid="stRadio"] > div { display: flex; flex-wrap: wrap; gap: 10px !important; }
+div[data-testid="stRadio"] > div { display: flex; flex-wrap: wrap; gap: 8px !important; }
 div[data-testid="stRadio"] label {
-    background-color: #ffffff; padding: 14px 20px !important; border-radius: var(--radius-md);
+    background-color: #ffffff; padding: 10px 16px !important; border-radius: var(--radius-sm);
     border: 2px solid var(--c-border) !important; cursor: pointer;
-    text-align: center; flex: 1 1 auto; justify-content: center; min-width: 120px;
+    text-align: center; flex: 1 1 auto; justify-content: center; min-width: 80px;
     transition: all 0.15s ease;
 }
 div[data-testid="stRadio"] label p {
-    font-size: 1.1rem !important; font-weight: 800 !important; color: var(--c-secondary) !important;
+    font-size: 1.0rem !important; font-weight: 700 !important; color: var(--c-secondary) !important;
 }
 div[data-testid="stRadio"] label:has(input:checked) {
     background-color: var(--c-primary) !important;
     border-color: var(--c-primary-hover) !important;
-    box-shadow: 0 3px 10px rgba(15, 118, 110, 0.3) !important;
-    transform: translateY(-2px);
+    box-shadow: 0 3px 10px rgba(15, 118, 110, 0.25) !important;
+    transform: translateY(-1px);
 }
 div[data-testid="stRadio"] label:has(input:checked) * {
     color: #ffffff !important; font-weight: 900 !important; fill: #ffffff !important;
@@ -132,13 +132,17 @@ button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStep
 }
 .stButton button[kind="primary"]:hover { background: var(--c-primary-hover) !important; transform: translateY(-2px); }
 
-/* ワンタッチ比率ボタン用コンパクト化 */
+/* ════════ ワンタッチ比率ボタン（スマート化） ════════ */
 .ratio-btn-container .stButton button {
-    min-height: 40px !important; padding: 6px 10px !important; font-size: 0.95rem !important;
-    background: #f8fafc !important; border: 2px solid #cbd5e1 !important; color: #334155 !important;
+    min-height: 38px !important; padding: 4px 6px !important; font-size: 0.95rem !important;
+    background: #f8fafc !important; border: 1px solid #cbd5e1 !important; color: #475569 !important;
+    border-radius: 6px !important; font-weight: 700 !important;
 }
 .ratio-btn-container .stButton button:hover {
     background: var(--c-primary-soft) !important; border-color: var(--c-primary) !important; color: var(--c-primary) !important;
+}
+.ratio-btn-container .stButton button[kind="primary"] {
+    background: var(--c-primary) !important; border: none !important; color: #ffffff !important;
 }
 
 /* サイドバー */
@@ -629,7 +633,6 @@ if page == "🏭 製造仕込み":
             submitted_ingredients = []
             water_items = []
 
-            # ★ 製品別の石灰増量ルールを取得
             lime_cfg = parse_lime_config(order_points, product_name=selected_p)
             lime_boost_active = is_lime_boost_active(lime_cfg, brew_date)
 
@@ -666,40 +669,46 @@ if page == "🏭 製造仕込み":
                         st.markdown(f"<div style='font-size:0.9rem; color:#b45309; font-weight:800; margin-top:4px;'>{lime_msg}</div>", unsafe_allow_html=True)
 
                     if is_konjac:
+                        st.markdown("<div style='background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0; margin-top:8px;'>", unsafe_allow_html=True)
                         blend_key = f"kb_{selected_p}_{i}"
-                        blend_mode = st.radio("🧪 こんにゃく粉の配合（ブレンド）", ["1種（単一）", "2種ブレンド", "3種ブレンド"], key=blend_key, horizontal=True)
+                        blend_mode = st.radio("ブレンドモード", ["単一 (1種)", "2種ブレンド", "3種ブレンド"], key=blend_key, horizontal=True, label_visibility="collapsed")
                         konjac_mats = [m for m in materials if "こんにゃく" in m] or [r_name]
                         
                         if blend_mode == "2種ブレンド":
-                            # ワンタッチ比率ボタン
-                            st.markdown("<div class='ratio-btn-container' style='margin-bottom:8px; display:flex; gap:6px; align-items:center;'><span style='font-weight:800; color:#475569; font-size:0.9rem;'>👇 ワンタッチ比率:</span></div>", unsafe_allow_html=True)
-                            pc = st.columns(6)
-                            presets = [(50,50), (60,40), (70,30), (80,20), (90,10), (100,0)]
                             k_a = f"kr_a2_{selected_p}_{i}"
                             k_b = f"kr_b2_{selected_p}_{i}"
                             if k_a not in st.session_state: st.session_state[k_a] = 50.0
                             if k_b not in st.session_state: st.session_state[k_b] = 50.0
                             
-                            for pi, (pa, pb) in enumerate(presets):
-                                pc[pi].markdown("<div class='ratio-btn-container'>", unsafe_allow_html=True)
-                                pc[pi].button(f"{pa}:{pb}", key=f"p2_{selected_p}_{i}_{pi}", 
-                                              on_click=lambda a,b,ka,kb: st.session_state.update({ka:float(a), kb:float(b)}), 
-                                              args=(pa, pb, k_a, k_b), use_container_width=True)
-                                pc[pi].markdown("</div>", unsafe_allow_html=True)
+                            st.markdown("<div style='font-size:0.85rem; font-weight:700; color:#64748b; margin-bottom:6px;'>👇 🅰️の配合比率をタップ (🅱️は自動計算されます)</div>", unsafe_allow_html=True)
+                            st.markdown("<div class='ratio-btn-container'>", unsafe_allow_html=True)
+                            btn_cols = st.columns(9)
+                            for pidx, pv in enumerate(range(10, 100, 10)):
+                                is_sel = (st.session_state[k_a] == float(pv))
+                                btn_cols[pidx].button(
+                                    f"{pv}%", key=f"rbtn_{selected_p}_{i}_{pv}", 
+                                    on_click=lambda ka, kb, v: st.session_state.update({ka: float(v), kb: 100.0 - float(v)}), 
+                                    args=(k_a, k_b, pv), 
+                                    type="primary" if is_sel else "secondary", use_container_width=True
+                                )
+                            st.markdown("</div>", unsafe_allow_html=True)
 
+                            # 隠し入力として利用（直接入力も可能）
                             c_a, c_b = st.columns(2)
-                            ratio_a = c_a.number_input("🅰️ の比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_a)
-                            ratio_b = c_b.number_input("🅱️ の比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_b)
-                            if round(ratio_a + ratio_b, 1) != 100.0: st.warning(f"⚠️ 比率合計が {ratio_a + ratio_b}% です。100%になるよう調整してください。")
+                            ratio_a = c_a.number_input("🅰️ 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_a, label_visibility="collapsed")
+                            ratio_b = c_b.number_input("🅱️ 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_b, label_visibility="collapsed")
+                            if round(ratio_a + ratio_b, 1) != 100.0: st.warning(f"⚠️ 比率合計が {ratio_a + ratio_b}% です。")
                             
-                            st.markdown("---")
-                            mat_a = st.radio("🅰️ 原料種別", konjac_mats, key=f"kma2_{selected_p}_{i}", horizontal=True)
+                            st.markdown("<div style='margin-top:12px;'></div>", unsafe_allow_html=True)
+                            
+                            mat_a = st.radio("🅰️ 原料種別", konjac_mats, key=f"kma2_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
                             ca_amt, ca_lot = st.columns([1, 1])
                             with ca_amt: act_a = render_amount_adjuster(f"🅰️ 投入量 ({ratio_a}%)", calc_kg * ratio_a / 100.0, f"adj_a2_{selected_p}_{i}")
                             with ca_lot: lot_a = render_lot_selector(mat_a, f"lot_a2_{selected_p}_{i}_{mat_a}")
                             
-                            st.markdown("---")
-                            mat_b = st.radio("🅱️ 原料種別", konjac_mats, index=1 if len(konjac_mats)>1 else 0, key=f"kmb2_{selected_p}_{i}", horizontal=True)
+                            st.markdown("<hr style='margin:16px 0; border-top:1px dashed #cbd5e1;'>", unsafe_allow_html=True)
+                            
+                            mat_b = st.radio("🅱️ 原料種別", konjac_mats, index=1 if len(konjac_mats)>1 else 0, key=f"kmb2_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
                             cb_amt, cb_lot = st.columns([1, 1])
                             with cb_amt: act_b = render_amount_adjuster(f"🅱️ 投入量 ({ratio_b}%)", calc_kg * ratio_b / 100.0, f"adj_b2_{selected_p}_{i}")
                             with cb_lot: lot_b = render_lot_selector(mat_b, f"lot_b2_{selected_p}_{i}_{mat_b}")
@@ -708,9 +717,6 @@ if page == "🏭 製造仕込み":
                             submitted_ingredients.append({"原料名": mat_b, "kg": act_b, "lot": f"{lot_b}({ratio_b}%)"})
 
                         elif blend_mode == "3種ブレンド":
-                            st.markdown("<div class='ratio-btn-container' style='margin-bottom:8px; display:flex; gap:6px; align-items:center;'><span style='font-weight:800; color:#475569; font-size:0.9rem;'>👇 ワンタッチ比率:</span></div>", unsafe_allow_html=True)
-                            pc = st.columns(5)
-                            presets = [(34,33,33), (40,30,30), (50,25,25), (40,40,20), (50,30,20)]
                             k_a = f"kr_a3_{selected_p}_{i}"
                             k_b = f"kr_b3_{selected_p}_{i}"
                             k_c = f"kr_c3_{selected_p}_{i}"
@@ -718,33 +724,44 @@ if page == "🏭 製造仕込み":
                             if k_b not in st.session_state: st.session_state[k_b] = 33.0
                             if k_c not in st.session_state: st.session_state[k_c] = 33.0
                             
+                            st.markdown("<div style='font-size:0.85rem; font-weight:700; color:#64748b; margin-bottom:6px;'>👇 均等・よく使う比率をタップ</div>", unsafe_allow_html=True)
+                            st.markdown("<div class='ratio-btn-container'>", unsafe_allow_html=True)
+                            pc = st.columns(5)
+                            presets = [(34,33,33), (40,30,30), (50,25,25), (40,40,20), (50,30,20)]
+                            
                             for pi, (pa, pb, pc_val) in enumerate(presets):
-                                pc[pi].markdown("<div class='ratio-btn-container'>", unsafe_allow_html=True)
-                                pc[pi].button(f"{pa}:{pb}:{pc_val}", key=f"p3_{selected_p}_{i}_{pi}", 
-                                              on_click=lambda a,b,c,ka,kb,kc: st.session_state.update({ka:float(a), kb:float(b), kc:float(c)}), 
-                                              args=(pa, pb, pc_val, k_a, k_b, k_c), use_container_width=True)
-                                pc[pi].markdown("</div>", unsafe_allow_html=True)
+                                is_sel = (st.session_state[k_a] == float(pa) and st.session_state[k_b] == float(pb))
+                                pc[pi].button(
+                                    f"{pa}:{pb}:{pc_val}", key=f"p3_{selected_p}_{i}_{pi}", 
+                                    on_click=lambda a,b,c,ka,kb,kc: st.session_state.update({ka:float(a), kb:float(b), kc:float(c)}), 
+                                    args=(pa, pb, pc_val, k_a, k_b, k_c), 
+                                    type="primary" if is_sel else "secondary", use_container_width=True
+                                )
+                            st.markdown("</div>", unsafe_allow_html=True)
 
                             c_a, c_b, c_c = st.columns(3)
-                            ratio_a = c_a.number_input("🅰️ の比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_a)
-                            ratio_b = c_b.number_input("🅱️ の比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_b)
-                            ratio_c = c_c.number_input("🅲 の比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_c)
-                            if round(ratio_a + ratio_b + ratio_c, 1) != 100.0: st.warning(f"⚠️ 比率合計が {ratio_a + ratio_b + ratio_c}% です。100%になるよう調整してください。")
+                            ratio_a = c_a.number_input("🅰️ 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_a, label_visibility="collapsed")
+                            ratio_b = c_b.number_input("🅱️ 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_b, label_visibility="collapsed")
+                            ratio_c = c_c.number_input("🅲 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_c, label_visibility="collapsed")
+                            if round(ratio_a + ratio_b + ratio_c, 1) != 100.0: st.warning(f"⚠️ 比率合計が {ratio_a + ratio_b + ratio_c}% です。")
                             
-                            st.markdown("---")
-                            mat_a = st.radio("🅰️ 原料種別", konjac_mats, key=f"kma3_{selected_p}_{i}", horizontal=True)
+                            st.markdown("<div style='margin-top:12px;'></div>", unsafe_allow_html=True)
+                            
+                            mat_a = st.radio("🅰️ 原料種別", konjac_mats, key=f"kma3_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
                             ca_amt, ca_lot = st.columns([1, 1])
                             with ca_amt: act_a = render_amount_adjuster(f"🅰️ 投入量 ({ratio_a}%)", calc_kg * ratio_a / 100.0, f"adj_a3_{selected_p}_{i}")
                             with ca_lot: lot_a = render_lot_selector(mat_a, f"lot_a3_{selected_p}_{i}_{mat_a}")
                             
-                            st.markdown("---")
-                            mat_b = st.radio("🅱️ 原料種別", konjac_mats, index=1 if len(konjac_mats)>1 else 0, key=f"kmb3_{selected_p}_{i}", horizontal=True)
+                            st.markdown("<hr style='margin:16px 0; border-top:1px dashed #cbd5e1;'>", unsafe_allow_html=True)
+                            
+                            mat_b = st.radio("🅱️ 原料種別", konjac_mats, index=1 if len(konjac_mats)>1 else 0, key=f"kmb3_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
                             cb_amt, cb_lot = st.columns([1, 1])
                             with cb_amt: act_b = render_amount_adjuster(f"🅱️ 投入量 ({ratio_b}%)", calc_kg * ratio_b / 100.0, f"adj_b3_{selected_p}_{i}")
                             with cb_lot: lot_b = render_lot_selector(mat_b, f"lot_b3_{selected_p}_{i}_{mat_b}")
 
-                            st.markdown("---")
-                            mat_c = st.radio("🅲 原料種別", konjac_mats, index=2 if len(konjac_mats)>2 else 0, key=f"kmc3_{selected_p}_{i}", horizontal=True)
+                            st.markdown("<hr style='margin:16px 0; border-top:1px dashed #cbd5e1;'>", unsafe_allow_html=True)
+                            
+                            mat_c = st.radio("🅲 原料種別", konjac_mats, index=2 if len(konjac_mats)>2 else 0, key=f"kmc3_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
                             cc_amt, cc_lot = st.columns([1, 1])
                             with cc_amt: act_c = render_amount_adjuster(f"🅲 投入量 ({ratio_c}%)", calc_kg * ratio_c / 100.0, f"adj_c3_{selected_p}_{i}")
                             with cc_lot: lot_c = render_lot_selector(mat_c, f"lot_c3_{selected_p}_{i}_{mat_c}")
@@ -758,6 +775,7 @@ if page == "🏭 製造仕込み":
                             with c_amt: act_kg = render_amount_adjuster(f"投入量（配合比 {fmt_kg(base_ratio)}%）", calc_kg, f"adj_{selected_p}_{i}")
                             with c_lot: final_lot = render_lot_selector(r_name, f"lot_{selected_p}_{i}")
                             submitted_ingredients.append({"原料名": r_name, "kg": act_kg, "lot": final_lot})
+                        st.markdown("</div>", unsafe_allow_html=True)
                     
                     else:
                         c_amt, c_lot = st.columns([1, 1])
@@ -828,7 +846,6 @@ if page == "🏭 製造仕込み":
                     "備考": f"{brew_remarks}", "登録日時": datetime.now().isoformat()
                 })
                 
-                # ★追加されたキー（kmc等）も含めてセッションステートをクリア
                 for key in list(st.session_state.keys()):
                     if any(key.startswith(p) for p in ["adj_", "last_calc_", "lot_", "rad_", "txt_", "kb_", "kr_", "km", "use_season_", "season_vol_"]):
                         del st.session_state[key]
