@@ -1,4 +1,3 @@
---- START OF FILE app.py ---
 
 # app.py
 import streamlit as st
