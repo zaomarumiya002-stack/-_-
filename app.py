@@ -325,7 +325,7 @@ def fmt_df_numeric(df, cols):
     return d
 
 # ════════════════════════════════════════════════════════════════
-#  在庫計算
+#  在庫計算 (浮動小数点の誤差を丸めて消去)
 # ════════════════════════════════════════════════════════════════
 def get_inventory():
     inv = {}
@@ -354,9 +354,10 @@ def get_inventory():
         if ano in inv: inv[ano]["調整袋数"] += float(adj.get("調整袋数") or 0.0)
     for v in inv.values():
         bpk = v["1袋重量"] if v["1袋重量"] > 0 else 20.0
-        v["使用袋数"] = v["使用量(kg)"] / bpk
-        v["現在庫(袋)"] = max(v["入荷袋数"] - v["使用袋数"] + v["調整袋数"], 0.0)
-        v["現在庫(kg)"] = v["現在庫(袋)"] * bpk
+        # ★ 小数点誤差を消去して正確な0を導き出すために丸め処理を適用
+        v["使用袋数"] = round(v["使用量(kg)"] / bpk, 4)
+        v["現在庫(袋)"] = max(round(v["入荷袋数"] - v["使用袋数"] + v["調整袋数"], 4), 0.0)
+        v["現在庫(kg)"] = round(v["現在庫(袋)"] * bpk, 4)
     return inv
 
 inventory_data = get_inventory()
@@ -369,7 +370,8 @@ for v in inventory_data.values():
 def _get_active_lots(mat):
     o = []
     for v in inventory_data.values():
-        if v["原料種別"] == mat and v["現在庫(kg)"] > 0.01 and v["ロットNo"] not in o: o.append(v["ロットNo"])
+        # ★ 0.001 以下は使い切ったと判定して選択肢から除外
+        if v["原料種別"] == mat and v["現在庫(袋)"] > 0.001 and v["ロットNo"] not in o: o.append(v["ロットNo"])
     if not o:
         for a in sorted(arrivals, key=lambda x: x.get("入荷日", ""), reverse=True):
             if str(a.get("原料種別", "")).strip() == mat:
@@ -765,14 +767,14 @@ if page == "🏭 製造仕込み":
 
                             mat_a = st.radio("🅰️ 原料種別", konjac_mats, key=f"kma_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
                             ca_amt, ca_lot = st.columns([1, 1])
-                            with ca_amt: act_a = render_amount_adjuster(f"🅰️ 投入量 ({ratio_a}%)", calc_kg * ratio_a / 100.0, f"adj_a_{selected_p}_{i}")
+                            with ca_amt: act_a = render_amount_adjuster(f"🅰️ 投入量", calc_kg * ratio_a / 100.0, f"adj_a_{selected_p}_{i}")
                             with ca_lot: lot_a = render_lot_selector(mat_a, f"lot_a_{selected_p}_{i}_{mat_a}")
                             
                             st.markdown("<hr style='margin:16px 0; border-top:1px dashed #cbd5e1;'>", unsafe_allow_html=True)
                             
                             mat_b = st.radio("🅱️ 原料種別", konjac_mats, index=1 if len(konjac_mats)>1 else 0, key=f"kmb_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
                             cb_amt, cb_lot = st.columns([1, 1])
-                            with cb_amt: act_b = render_amount_adjuster(f"🅱️ 投入量 ({ratio_b}%)", calc_kg * ratio_b / 100.0, f"adj_b_{selected_p}_{i}")
+                            with cb_amt: act_b = render_amount_adjuster(f"🅱️ 投入量", calc_kg * ratio_b / 100.0, f"adj_b_{selected_p}_{i}")
                             with cb_lot: lot_b = render_lot_selector(mat_b, f"lot_b_{selected_p}_{i}_{mat_b}")
 
                             submitted_ingredients.append({"原料名": mat_a, "kg": act_a, "lot": f"{lot_a}({ratio_a}%)"})
@@ -782,7 +784,7 @@ if page == "🏭 製造仕込み":
                                 st.markdown("<hr style='margin:16px 0; border-top:1px dashed #cbd5e1;'>", unsafe_allow_html=True)
                                 mat_c = st.radio("🅲 原料種別", konjac_mats, index=2 if len(konjac_mats)>2 else 0, key=f"kmc_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
                                 cc_amt, cc_lot = st.columns([1, 1])
-                                with cc_amt: act_c = render_amount_adjuster(f"🅲 投入量 ({ratio_c}%)", calc_kg * ratio_c / 100.0, f"adj_c_{selected_p}_{i}")
+                                with cc_amt: act_c = render_amount_adjuster(f"🅲 投入量", calc_kg * ratio_c / 100.0, f"adj_c_{selected_p}_{i}")
                                 with cc_lot: lot_c = render_lot_selector(mat_c, f"lot_c_{selected_p}_{i}_{mat_c}")
                                 submitted_ingredients.append({"原料名": mat_c, "kg": act_c, "lot": f"{lot_c}({ratio_c}%)"})
                             
@@ -848,19 +850,20 @@ if page == "🏭 製造仕込み":
                     elif "デンプン" in n or "でんぷん" in n: st_kg += amt; st_lot = lot if st_lot == "─" else (st_lot if lot in st_lot else f"{st_lot} / {lot}")
                     elif "石灰" in n or "カルシウム" in n: lime_kg += amt
 
-                next_no = sheets.next_brewing_no(brewing)
+                next_no = sheets.next_brewing_no(brewing) if hasattr(sheets, "next_brewing_no") else f"BRW-{datetime.now().strftime('%Y%m%d%H%M%S')}"
                 
                 text_ing = ", ".join([f"{ing['原料名']}:{ing['kg']}kg({ing['lot']})" for ing in submitted_ingredients])
 
-                sheets.append_brewing({
-                    "仕込No": next_no, "仕込日": str(brew_date), "品名": selected_p,
-                    "メーカー": operator, "主原料ロット": k_lot, "仕込量(kg)": round(target_size, 2),
-                    "こんにゃく精粉(kg)": round(k_kg, 2), "海藻粉(kg)": round(s_kg, 2), "海藻粉ロット": s_lot,
-                    "デンプン(kg)": round(st_kg, 2), "デンプンロット": st_lot, "デンプン種別": "-",
-                    "石灰(kg)": round(lime_kg, 2), "石灰水(L)": round(lime_water_size, 2),
-                    "その他添加物": text_ing,
-                    "備考": f"{brew_remarks}", "登録日時": datetime.now().isoformat()
-                })
+                if hasattr(sheets, "append_brewing"):
+                    sheets.append_brewing({
+                        "仕込No": next_no, "仕込日": str(brew_date), "品名": selected_p,
+                        "メーカー": operator, "主原料ロット": k_lot, "仕込量(kg)": round(target_size, 2),
+                        "こんにゃく精粉(kg)": round(k_kg, 2), "海藻粉(kg)": round(s_kg, 2), "海藻粉ロット": s_lot,
+                        "デンプン(kg)": round(st_kg, 2), "デンプンロット": st_lot, "デンプン種別": "-",
+                        "石灰(kg)": round(lime_kg, 2), "石灰水(L)": round(lime_water_size, 2),
+                        "その他添加物": text_ing,
+                        "備考": f"{brew_remarks}", "登録日時": datetime.now().isoformat()
+                    })
                 
                 for key in list(st.session_state.keys()):
                     if any(key.startswith(p) for p in ["adj_", "last_calc_", "lot_", "rad_", "txt_", "kb_", "kr_", "km", "blend_tgt_", "use_season_", "season_vol_"]):
@@ -953,12 +956,13 @@ elif page == "📊 ダッシュボード":
                         op_q = render_operator_selector(f"dash_qop_{m}")
 
                         def _dash_quick_adj(ano, delta, op_name):
-                            sheets.append_adjustment({
-                                "調整ID": f"ADJ-{datetime.now().strftime('%Y%m%d%H%M%S%f')}", "入荷No": ano,
-                                "調整日": str(date.today()), "調整袋数": delta,
-                                "理由": "【ダッシュボードからのクイック増減】",
-                                "担当者": op_name, "登録日時": datetime.now().isoformat()
-                            })
+                            if hasattr(sheets, "append_adjustment"):
+                                sheets.append_adjustment({
+                                    "調整ID": f"ADJ-{datetime.now().strftime('%Y%m%d%H%M%S%f')}", "入荷No": ano,
+                                    "調整日": str(date.today()), "調整袋数": delta,
+                                    "理由": "【ダッシュボードからのクイック増減】",
+                                    "担当者": op_name, "登録日時": datetime.now().isoformat()
+                                })
 
                         qc1, qc2, qc3, qc4 = st.columns(4)
                         if qc1.button("➖10", key=f"dq_m10_{m}", use_container_width=True):
@@ -971,8 +975,8 @@ elif page == "📊 ダッシュボード":
                             _dash_quick_adj(target_ano, 10, op_q); st.toast(f"✅ {m} を +10袋 しました"); time.sleep(1.0); refresh()
                     else:
                         st.caption("💡 実際に数えた「この原料全体の在庫数量(袋)」をそのまま入力してください。理論在庫との差分は自動計算され、選択中ロットに反映されます。")
-                        actual_total_bag = st.number_input("📋 実地棚卸で数えた実在庫数量（袋・原料全体）", min_value=0, value=int(float(curr_bag)), step=1, key=f"dash_actual_{m}")
-                        diff_total = round(actual_total_bag - curr_bag, 2)
+                        actual_total_bag = st.number_input("📋 実地棚卸で数えた実在庫数量（袋・原料全体）", min_value=0.0, value=float(round(curr_bag, 2)), step=0.1, key=f"dash_actual_{m}")
+                        diff_total = round(actual_total_bag - curr_bag, 4)
                         if diff_total > 0:
                             st.success(f"✅ 差分 +{fmt_kg(diff_total)}袋 をロット「{target_lot_data['ロットNo']}」に反映します → 保存後の{m}全体在庫: **{fmt_kg(actual_total_bag)}袋**")
                         elif diff_total < 0:
@@ -983,15 +987,16 @@ elif page == "📊 ダッシュボード":
                         reason_dash = st.text_input("調整理由（例: 棚卸差異、破損、計量誤差など）", key=f"dash_reason_{m}")
                         op_dash = render_operator_selector(f"dash_op_{m}")
                         if st.button("💾 実地数量で在庫を確定する", type="primary", use_container_width=True, key=f"dash_save_{m}"):
-                            sheets.append_adjustment({
-                                "調整ID": f"ADJ-{datetime.now().strftime('%Y%m%d%H%M%S')}", "入荷No": target_ano,
-                                "調整日": str(date.today()), "調整袋数": diff_total,
-                                "理由": f"【ダッシュボード棚卸調整:{m}全体を実地{fmt_kg(actual_total_bag)}袋に更新】{reason_dash}",
-                                "担当者": op_dash, "登録日時": datetime.now().isoformat()
-                            })
-                            st.success(f"✅ {m} の在庫を {fmt_kg(actual_total_bag)}袋 に更新しました。")
-                            time.sleep(1.5)
-                            refresh()
+                            if hasattr(sheets, "append_adjustment"):
+                                sheets.append_adjustment({
+                                    "調整ID": f"ADJ-{datetime.now().strftime('%Y%m%d%H%M%S')}", "入荷No": target_ano,
+                                    "調整日": str(date.today()), "調整袋数": diff_total,
+                                    "理由": f"【ダッシュボード棚卸調整:{m}全体を実地{fmt_kg(actual_total_bag)}袋に更新】{reason_dash}",
+                                    "担当者": op_dash, "登録日時": datetime.now().isoformat()
+                                })
+                                st.success(f"✅ {m} の在庫を {fmt_kg(actual_total_bag)}袋 に更新しました。")
+                                time.sleep(1.5)
+                                refresh()
 
             if is_konjac_material(m) and mat_lots:
                 breakdown = {}
@@ -1302,7 +1307,6 @@ elif page == "📥 入荷登録":
                     arr_editable_cols = ["入荷日", "原料種別", "メーカー", "ロットNo", "袋数", "1袋重量(kg)", "備考"]
                     if "グレード" in df_arr_sorted.columns: arr_editable_cols.insert(2, "グレード")
                     
-                    # NameErrorを防ぐため、上で定義した _save_arrivals_recalc を渡す
                     render_excel_history_editor(
                         full_records=arrivals, filtered_df=df_arr_sorted.head(200),
                         id_col="入荷No", editable_cols=arr_editable_cols,
@@ -1320,7 +1324,7 @@ elif page == "📦 在庫・棚卸":
     t_inv, t_adj = st.tabs(["📋 ロット別 現在庫", "⚖️ 棚卸し (在庫調整)"])
     
     with t_inv:
-        active_inv = [v for v in inventory_data.values() if v["現在庫(袋)"] > 0.0]
+        active_inv = [v for v in inventory_data.values() if v["現在庫(袋)"] > 0.001]
         if active_inv:
             df_active_inv = pd.DataFrame(sorted(active_inv, key=lambda v: v["入荷日"]))[["入荷日", "原料種別", "メーカー", "グレード", "ロットNo", "入荷袋数", "使用袋数", "調整袋数", "現在庫(袋)", "現在庫(kg)"]]
             st.dataframe(fmt_df_numeric(df_active_inv, ["入荷袋数", "使用袋数", "調整袋数", "現在庫(袋)", "現在庫(kg)"]), use_container_width=True, hide_index=True)
@@ -1331,35 +1335,39 @@ elif page == "📦 在庫・棚卸":
         st.markdown('<div class="section-title">⚖️ 棚卸調整（実地数量をそのまま入力）</div>', unsafe_allow_html=True)
         st.caption("💡 製造仕込みの登録によって減算されていく理論在庫と、実際の在庫数がズレてしまった場合はこちらで調整してください。差分を計算する必要はありません。**実際に数えた数量をそのまま入力**すれば、保存した瞬間からその数量が現在庫になります。")
         if inventory_data:
-            tgt_list = {f"{v['原料種別']} (ロット:{v['ロットNo']} / 入荷日:{v['入荷日']}) - 理論在庫:{fmt_kg(v['現在庫(袋)'])}袋": v["入荷No"] for v in inventory_data.values()}
-            selected_tgt = st.selectbox("調整対象ロット", list(tgt_list.keys()))
-            target_ano = tgt_list[selected_tgt]
-            theoretical_bags = next((v["現在庫(袋)"] for v in inventory_data.values() if v["入荷No"] == target_ano), 0.0)
+            tgt_list = {f"{v['原料種別']} (ロット:{v['ロットNo']} / 入荷日:{v['入荷日']}) - 理論在庫:{fmt_kg(v['現在庫(袋)'])}袋": v["入荷No"] for v in inventory_data.values() if v["現在庫(袋)"] > 0.001}
+            selected_tgt = st.selectbox("調整対象ロット", list(tgt_list.keys())) if tgt_list else None
+            
+            if selected_tgt:
+                target_ano = tgt_list[selected_tgt]
+                theoretical_bags = next((v["現在庫(袋)"] for v in inventory_data.values() if v["入荷No"] == target_ano), 0.0)
 
-            st.metric("📐 現在の理論在庫", f"{fmt_kg(theoretical_bags)} 袋")
-            actual_bags = st.number_input("📋 実地棚卸で数えた実在庫数量（袋）", min_value=0, value=int(float(theoretical_bags)), step=1)
-            diff_bags = actual_bags - theoretical_bags
+                st.metric("📐 現在の理論在庫", f"{fmt_kg(theoretical_bags)} 袋")
+                actual_bags = st.number_input("📋 実地棚卸で数えた実在庫数量（袋）", min_value=0.0, value=float(round(theoretical_bags, 2)), step=0.1)
+                diff_bags = round(actual_bags - theoretical_bags, 4)
 
-            if diff_bags > 0:
-                st.success(f"✅ 差分 +{fmt_kg(diff_bags)}袋 を自動計算して保存します → 保存後の在庫: **{fmt_kg(actual_bags)}袋**")
-            elif diff_bags < 0:
-                st.warning(f"⚠️ 差分 {fmt_kg(diff_bags)}袋 を自動計算して保存します → 保存後の在庫: **{fmt_kg(actual_bags)}袋**")
+                if diff_bags > 0:
+                    st.success(f"✅ 差分 +{fmt_kg(diff_bags)}袋 を自動計算して保存します → 保存後の在庫: **{fmt_kg(actual_bags)}袋**")
+                elif diff_bags < 0:
+                    st.warning(f"⚠️ 差分 {fmt_kg(diff_bags)}袋 を自動計算して保存します → 保存後の在庫: **{fmt_kg(actual_bags)}袋**")
+                else:
+                    st.info("理論在庫と一致しています。差分はありません。")
+
+                reason_txt = st.text_input("調整理由（例: 棚卸差異、破損、計量誤差など）")
+                op = render_operator_selector("adj_op")
+                if st.button("💾 実地数量で在庫を確定する", type="primary", use_container_width=True):
+                    if hasattr(sheets, "append_adjustment"):
+                        sheets.append_adjustment({
+                            "調整ID": f"ADJ-{datetime.now().strftime('%Y%m%d%H%M%S')}", "入荷No": target_ano,
+                            "調整日": str(date.today()), "調整袋数": diff_bags,
+                            "理由": f"【棚卸調整:実地{fmt_kg(actual_bags)}袋に更新】{reason_txt}",
+                            "担当者": op, "登録日時": datetime.now().isoformat()
+                        })
+                        st.success(f"✅ 現在庫を {fmt_kg(actual_bags)}袋 に更新しました。")
+                        time.sleep(1.5)
+                        refresh()
             else:
-                st.info("理論在庫と一致しています。差分はありません。")
-
-            reason_txt = st.text_input("調整理由（例: 棚卸差異、破損、計量誤差など）")
-            op = render_operator_selector("adj_op")
-            if st.button("💾 実地数量で在庫を確定する", type="primary", use_container_width=True):
-                if hasattr(sheets, "append_adjustment"):
-                    sheets.append_adjustment({
-                        "調整ID": f"ADJ-{datetime.now().strftime('%Y%m%d%H%M%S')}", "入荷No": target_ano,
-                        "調整日": str(date.today()), "調整袋数": diff_bags,
-                        "理由": f"【棚卸調整:実地{fmt_kg(actual_bags)}袋に更新】{reason_txt}",
-                        "担当者": op, "登録日時": datetime.now().isoformat()
-                    })
-                    st.success(f"✅ 現在庫を {fmt_kg(actual_bags)}袋 に更新しました。")
-                    time.sleep(1.5)
-                    refresh()
+                st.info("現在在庫があるロットはありません。")
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════
@@ -1458,8 +1466,8 @@ elif page == "🧹 資材管理":
                                     
                             else:
                                 st.caption("💡 実際に数えた数量をそのまま入力してください。理論在庫との差分は自動計算され反映されます。")
-                                actual_qty = st.number_input("📋 実地棚卸で数えた実在庫数量", min_value=0, value=int(float(curr_qty)), step=1, key=f"sup_actual_{sid}")
-                                diff_qty = actual_qty - curr_qty
+                                actual_qty = st.number_input("📋 実地棚卸で数えた実在庫数量", min_value=0.0, value=float(round(curr_qty, 2)), step=1.0, key=f"sup_actual_{sid}")
+                                diff_qty = round(actual_qty - curr_qty, 4)
                                 
                                 if diff_qty > 0:
                                     st.success(f"✅ 差分 +{fmt_kg(diff_qty)} を「入荷」として記録します → 保存後の在庫: **{fmt_kg(actual_qty)}**")
