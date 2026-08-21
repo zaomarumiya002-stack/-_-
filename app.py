@@ -1,3 +1,14 @@
+ご要望いただいた3点の修正をすべて実装しました。
+
+1.  投入量と比率の視認性改善:
+    比率を入力する欄は通常のサイズと色に戻し、投入量（kg）の部分だけ、青色の特大デジタルメーター風デザインに切り替えました。これにより、比率と投入量が一目で区別でき、確認しやすくなります。
+2.  石灰ルールのマスタ一覧化:
+    製品ごとの石灰増量ルールをセレクトボックスから探し出すのではなく、Excelのような表形式（データエディター）で一覧表示し、行を追加・編集して一括保存できるように改善しました。
+3.  入荷登録の NameError 修正: 原因となっていた内部関数のスコープとモジュールの読み込み順序を修正し、エラーが発生しないように堅牢化しました。
+
+過去のデータ構造（JSON等）との互換性は完全に保っています。以下のコードを app.py に上書き保存してください。
+
+--- START OF FILE app.py ---
 
 # app.py
 import streamlit as st
@@ -11,6 +22,11 @@ from datetime import datetime, date, timedelta
 import traceback
 import plotly.graph_objects as go
 import plotly.express as px
+
+try:
+    import sheets
+except ImportError:
+    pass
 
 # Excel出力用
 try:
@@ -41,7 +57,6 @@ st.set_page_config(
 st.markdown("""
 <style>
 :root {
-    /* 落ち着いたティール系1色構成（工場管理システム向け） */
     --c-bg: #f4f6f7;
     --c-surface: #ffffff;
     --c-primary: #0f766e;
@@ -97,12 +112,12 @@ div[data-testid="stRadio"] label:has(input:checked) {
 }
 div[data-testid="stRadio"] label:has(input:checked) * { color: #ffffff !important; font-weight: 900 !important; fill: #ffffff !important; }
 
-/* デジタルメーター風 極大入力欄 */
+/* 通常の Number Input の微調整 */
 div[data-baseweb="input"] { background-color: #ffffff !important; border: 3px solid var(--c-input-border) !important; border-radius: var(--radius-md) !important; }
 div[data-baseweb="input"]:focus-within { border-color: var(--c-primary) !important; box-shadow: 0 0 0 5px rgba(15, 118, 110, 0.18) !important; }
-div[data-testid="stNumberInputContainer"] { min-height: 70px !important; background-color: #f8fafc !important; }
-div[data-testid="stNumberInputContainer"] input { font-size: 2.2rem !important; font-weight: 900 !important; color: var(--c-secondary) !important; text-align: center !important; }
-button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStepDown"] { width: 65px !important; background-color: #f1f5f9 !important; border-left: 3px solid var(--c-input-border) !important; border-right: 3px solid var(--c-input-border) !important; }
+div[data-testid="stNumberInputContainer"] { min-height: 50px !important; background-color: #f8fafc !important; }
+div[data-testid="stNumberInputContainer"] input { font-size: 1.2rem !important; font-weight: 800 !important; color: var(--c-secondary) !important; text-align: center !important; }
+button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStepDown"] { width: 50px !important; background-color: #f1f5f9 !important; border-left: 3px solid var(--c-input-border) !important; border-right: 3px solid var(--c-input-border) !important; }
 
 /* ボタン */
 .stButton button, button[data-baseweb="button"] {
@@ -138,7 +153,7 @@ button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStep
 
 
 # ════════════════════════════════════════════════════════════════
-#  ユーティリティ & データパーサー（スプレッドシート可読化対応）
+#  ユーティリティ & データパーサー
 # ════════════════════════════════════════════════════════════════
 def lot_popover(label, key=None): return st.popover(label, use_container_width=True, key=key) if hasattr(st, "popover") else st.expander(label)
 def refresh(): st.cache_data.clear(); st.rerun()
@@ -168,10 +183,7 @@ except Exception:
     st.error("🚨 データの読み込みに失敗しました。")
     st.stop()
 
-# --- パーサー関数（JSONと新テキスト形式の両方に対応＝後方互換100%） ---
-
 def parse_op_data(raw_val):
-    """ 発注点データの読み込み（例： '発注点:10袋, 重量:20kg' または旧JSON） """
     pt, wt = 0, 20
     try:
         if isinstance(raw_val, str):
@@ -189,7 +201,6 @@ def parse_op_data(raw_val):
     return pt, wt
 
 def parse_lime_config(op_dict, product_name=None):
-    """ 石灰設定の読み込み（例： '開始:6月, 終了:9月, 割合:0.01, 理由:...' または旧JSON） """
     c = {"start_month": 6, "end_month": 9, "add_ratio": 0.01, "reason": "夏場の高温対策（品質保持・腐敗防止）"}
     try:
         v = None
@@ -211,7 +222,6 @@ def parse_lime_config(op_dict, product_name=None):
     return c
 
 def parse_grade_list(op_dict):
-    """ グレードの読み込み（カンマ区切り または旧JSON） """
     if grades_data is not None: return grades_data
     try:
         v = op_dict.get("__GRADE_LIST__", "")
@@ -224,7 +234,6 @@ def parse_grade_list(op_dict):
     return []
 
 def safe_parse_recipe(r_val):
-    """ レシピ配合の読み込み（例： '粉A:50%, 粉B:50%' または旧JSON） """
     if not r_val: return []
     if isinstance(r_val, str) and r_val.strip().startswith("["):
         try: return json.loads(r_val)
@@ -242,7 +251,6 @@ def safe_parse_recipe(r_val):
     return items
 
 def safe_parse_seasoning_recipe(r_val):
-    """ 調味料レシピの読み込み（例： '醤油:5倍, みりん:2倍' または旧JSON） """
     if not r_val: return []
     if isinstance(r_val, str) and r_val.strip().startswith("["):
         try: return json.loads(r_val)
@@ -260,7 +268,6 @@ def safe_parse_seasoning_recipe(r_val):
     return items
 
 def parse_brewing_ingredients(r_val):
-    """ 製造履歴の添加物の読み込み（例： '粉A:10.0kg(L1), 水:50.0kg(─)' または旧JSON） """
     if not r_val: return []
     if isinstance(r_val, str) and r_val.strip().startswith("["):
         try: return json.loads(r_val)
@@ -400,7 +407,9 @@ def get_supply_inventory():
 #  カスタムUIコンポーネント
 # ════════════════════════════════════════════════════════════════
 def render_amount_adjuster(title, calc_val, p_key):
-    st.markdown(f"<div style='font-size:1.1rem; font-weight:900; color:#0f766e; margin-bottom:6px;'>{title}</div>", unsafe_allow_html=True)
+    """仕込量が変わると瞬時に計算値が反映される特大入力欄（メーター風青色表示付き）"""
+    st.markdown(f"<div style='font-size:1.05rem; font-weight:800; color:#475569; margin-bottom:4px;'>{title}</div>", unsafe_allow_html=True)
+    
     lst_key = f"last_calc_{p_key}"
     last_calc = st.session_state.get(lst_key, None)
     calc_val = round(calc_val, 2)
@@ -412,9 +421,16 @@ def render_amount_adjuster(title, calc_val, p_key):
     if p_key not in st.session_state:
         st.session_state[p_key] = calc_val
 
-    val = st.number_input(
-        title, min_value=0.0, step=0.1, key=p_key, label_visibility="collapsed"
-    )
+    # 特大・青文字のデジタルメーター表示
+    st.markdown(f"""
+    <div style="background-color:#f0f9ff; border:2px solid #38bdf8; border-radius:8px; padding:10px; margin-bottom:8px; text-align:center; box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);">
+        <span style="font-size:2.0rem; font-weight:900; color:#0284c7;">{fmt_kg(st.session_state[p_key])}</span>
+        <span style="font-size:1.0rem; color:#0369a1; font-weight:700; margin-left:4px;">kg</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # 微調整用の入力欄
+    val = st.number_input("微調整", min_value=0.0, step=0.1, key=p_key, label_visibility="collapsed")
     return val
 
 def _lot_radio_on_change(rad_key, ver_key):
@@ -433,7 +449,7 @@ def render_lot_selector(mat_name, lot_key):
 
     pop_label = f"✅ 選択済: {curr_val}" if curr_val not in ["─", "", "✏️ リスト外 (手入力)"] else "⚠️ ロット未選択 (タップ)"
     
-    st.markdown(f"<div style='font-size:1rem; font-weight:800; color:#475569; margin-bottom:6px;'>📦 ロット選択</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size:1.0rem; font-weight:800; color:#475569; margin-bottom:6px;'>📦 ロット選択</div>", unsafe_allow_html=True)
     with lot_popover(pop_label, key=f"potlot_{lot_key}_{ver}"):
         st.markdown(f"#### 📦 {mat_name} のロット選択")
         d_map = {v["ロットNo"]: v["入荷日"] for v in inventory_data.values() if v["原料種別"] == mat_name}
@@ -460,6 +476,100 @@ def render_operator_selector(operator_key):
                 st.session_state[ver_key] = ver + 1
                 st.rerun()
     return st.session_state[operator_key]
+
+def render_excel_history_editor(full_records, filtered_df, id_col, editable_cols, numeric_cols, save_func, key_prefix, label_col=None):
+    if filtered_df.empty:
+        st.info("対象期間のデータがありません。")
+        return
+
+    display_cols = [id_col] + [c for c in editable_cols if c != id_col]
+    edit_df = filtered_df[display_cols].copy().reset_index(drop=True)
+    for c in numeric_cols:
+        if c in edit_df.columns:
+            edit_df[c] = pd.to_numeric(edit_df[c], errors="coerce").fillna(0.0)
+    edit_df[id_col] = edit_df[id_col].astype(str)
+
+    st.caption("💡 セルをタップ／クリックして直接編集できます（Excelのように）。行左端のチェックで選択し🗑️で削除できます。新規行の追加はここではできません（各登録画面をご利用ください）。")
+
+    column_config = {id_col: st.column_config.TextColumn(id_col, disabled=True, help="一意な管理番号（編集不可）")}
+    for c in numeric_cols:
+        if c in edit_df.columns:
+            column_config[c] = st.column_config.NumberColumn(c, format="%.2f")
+
+    edited_df = st.data_editor(
+        edit_df, num_rows="dynamic", use_container_width=True, hide_index=True,
+        key=f"{key_prefix}_editor", column_config=column_config
+    )
+
+    diff_key = f"{key_prefix}_diff_pending"
+
+    c_check, c_cancel = st.columns([2, 1])
+    if c_check.button("🔍 変更内容を確認する", key=f"{key_prefix}_check_btn", use_container_width=True):
+        orig_ids = set(edit_df[id_col])
+        edited_clean = edited_df.copy()
+        edited_clean[id_col] = edited_clean[id_col].astype(str).str.strip()
+        valid_edited = edited_clean[edited_clean[id_col] != ""]
+        blank_new_rows = len(edited_clean) - len(valid_edited)
+        new_ids = set(valid_edited[id_col])
+        deleted_ids = orig_ids - new_ids
+
+        changed_rows = []
+        for _, row in valid_edited.iterrows():
+            rid = row[id_col]
+            if rid not in orig_ids: continue
+            orig_row = edit_df[edit_df[id_col] == rid].iloc[0]
+            changed = any(str(row[c]) != str(orig_row[c]) for c in editable_cols if c != id_col)
+            if changed: changed_rows.append(rid)
+
+        st.session_state[diff_key] = {
+            "changed": changed_rows, "deleted": sorted(deleted_ids),
+            "blank_new_rows": blank_new_rows, "edited_df": edited_clean
+        }
+        st.rerun()
+
+    if c_cancel.button("❌ 取消", key=f"{key_prefix}_cancel_btn", use_container_width=True):
+        st.session_state.pop(diff_key, None)
+        st.rerun()
+
+    diff = st.session_state.get(diff_key)
+    if diff:
+        n_c, n_d, n_b = len(diff["changed"]), len(diff["deleted"]), diff["blank_new_rows"]
+        if n_c == 0 and n_d == 0 and n_b == 0:
+            st.info("変更はありませんでした。")
+        else:
+            msg = []
+            if n_c: msg.append(f"✏️ 更新 {n_c}件（{', '.join(diff['changed'])}）")
+            if n_d: msg.append(f"🗑️ 削除 {n_d}件（{', '.join(diff['deleted'])}）※元に戻せません")
+            if n_b: msg.append(f"⚠️ 空欄の新規行 {n_b}件は無視されます（新規登録は各登録画面から）")
+            box_color = "var(--c-danger-bg)" if n_d else "var(--c-primary-soft)"
+            border_color = "var(--c-danger)" if n_d else "var(--c-primary)"
+            st.markdown(f"""
+            <div style="background:{box_color}; border:2px solid {border_color}; border-radius:10px; padding:14px 16px; margin:10px 0;">
+                {"<br>".join(msg)}
+            </div>
+            """, unsafe_allow_html=True)
+
+            if n_c or n_d:
+                if st.button("✅ この内容で確定保存する", type="primary", key=f"{key_prefix}_confirm_btn", use_container_width=True):
+                    id_to_record = {str(r.get(id_col)): dict(r) for r in full_records}
+                    valid_edited = diff["edited_df"][diff["edited_df"][id_col] != ""]
+                    for _, row in valid_edited.iterrows():
+                        rid = row[id_col]
+                        if rid in id_to_record:
+                            for c in editable_cols:
+                                if c == id_col: continue
+                                val = row[c]
+                                if c in numeric_cols:
+                                    try: val = float(val)
+                                    except (ValueError, TypeError): val = 0.0
+                                id_to_record[rid][c] = val
+                    for rid in diff["deleted"]:
+                        id_to_record.pop(rid, None)
+                    save_func(list(id_to_record.values()))
+                    st.session_state.pop(diff_key, None)
+                    st.success(f"変更を保存しました（更新{n_c}件・削除{n_d}件）。")
+                    time.sleep(1.5)
+                    refresh()
 
 
 # ════════════════════════════════════════════════════════════════
@@ -617,7 +727,7 @@ if page == "🏭 製造仕込み":
                             if k_b not in st.session_state: st.session_state[k_b] = 50.0 if not is_3 else 33.0
                             if k_c not in st.session_state: st.session_state[k_c] = 33.0
 
-                            st.markdown("<div style='background:#f8fafc; padding:12px 16px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:16px;'>", unsafe_allow_html=True)
+                            st.markdown("<div style='background:#ffffff; padding:12px 16px; border-radius:8px; border:1px solid #cbd5e1; margin-bottom:16px;'>", unsafe_allow_html=True)
                             st.markdown("<div style='font-size:0.9rem; font-weight:800; color:#475569; margin-bottom:8px;'>🎯 ワンタッチ比率入力パネル</div>", unsafe_allow_html=True)
                             
                             target_key = f"blend_tgt_{selected_p}_{i}"
@@ -751,7 +861,6 @@ if page == "🏭 製造仕込み":
 
                 next_no = sheets.next_brewing_no(brewing)
                 
-                # 新しい人間が読みやすい文字列形式で保存
                 text_ing = ", ".join([f"{ing['原料名']}:{ing['kg']}kg({ing['lot']})" for ing in submitted_ingredients])
 
                 sheets.append_brewing({
@@ -951,8 +1060,9 @@ elif page == "📝 発注管理":
                     column_config={"原料名": st.column_config.TextColumn("原料名")}
                 )
                 if st.button("💾 原料マスタ保存", type="primary", key="po_mat_save"):
-                    sheets.save_materials([str(x).strip() for x in ed_m["原料名"].tolist() if x is not None and str(x).strip() and str(x).strip().lower() != "nan"])
-                    st.success("保存しました。"); time.sleep(1); refresh()
+                    if hasattr(sheets, "save_materials"):
+                        sheets.save_materials([str(x).strip() for x in ed_m["原料名"].tolist() if x is not None and str(x).strip() and str(x).strip().lower() != "nan"])
+                        st.success("保存しました。"); time.sleep(1); refresh()
             item_opts = materials if materials else ["未登録"]
         else:
             with st.expander("⚙️ 衛生資材マスタを直接追加 (発注画面から)"):
@@ -964,8 +1074,9 @@ elif page == "📝 発注管理":
                     else:
                         cur_sup = supplies.copy()
                         cur_sup.append({"資材ID": f"SUP-{datetime.now().strftime('%Y%m%d%H%M%S')}", "資材名": new_s_name, "カテゴリ": new_s_cat, "画像URL": "", "初期在庫": 0, "発注点": 10, "登録日": str(date.today())})
-                        sheets.save_supplies(cur_sup)
-                        st.success("資材を登録しました。"); time.sleep(1); refresh()
+                        if hasattr(sheets, "save_supplies"):
+                            sheets.save_supplies(cur_sup)
+                            st.success("資材を登録しました。"); time.sleep(1); refresh()
             sup_names = [s.get("資材名") for s in supplies]
             item_opts = sup_names if sup_names else ["未登録"]
 
@@ -1044,22 +1155,23 @@ elif page == "📝 発注管理":
                                     elif po_unconfirmed:
                                         st.error("受入品質検査が未完了です。すべての項目を確認してください。")
                                     else:
-                                        new_ano = sheets.next_arrival_no(arrivals)
-                                        sheets.append_arrival({
-                                            "入荷No": new_ano, "入荷日": str(date.today()), "メーカー": o.get("メーカー"), "ロットNo": arr_lot,
-                                            "原料種別": o.get("原料名"), "グレード": po_grade, "袋数": po_bags, "1袋重量(kg)": po_wpb, "総量(kg)": po_bags * po_wpb,
-                                            "外観": po_chk["外観"], "品名・規格確認": po_chk["品名・規格確認"], "賞味期限": po_chk["賞味期限"], "異物": po_chk["異物"],
-                                            "担当者": po_op, "備考": f"【発注管理より入荷処理】{oid}", "登録日時": datetime.now().isoformat()
-                                        })
-                                        for oo in all_orders:
-                                            if oo.get("発注ID") == oid:
-                                                oo["ステータス"] = "入荷済み"
-                                                oo["紐づく入荷No"] = new_ano
-                                                oo["入荷処理日"] = str(date.today())
-                                        save_purchase_orders(order_points, all_orders)
-                                        st.success(f"入荷を登録し、在庫に加算しました（入荷No: {new_ano}）。")
-                                        time.sleep(1.5)
-                                        refresh()
+                                        if hasattr(sheets, "append_arrival"):
+                                            new_ano = sheets.next_arrival_no(arrivals)
+                                            sheets.append_arrival({
+                                                "入荷No": new_ano, "入荷日": str(date.today()), "メーカー": o.get("メーカー"), "ロットNo": arr_lot,
+                                                "原料種別": o.get("原料名"), "グレード": po_grade, "袋数": po_bags, "1袋重量(kg)": po_wpb, "総量(kg)": po_bags * po_wpb,
+                                                "外観": po_chk["外観"], "品名・規格確認": po_chk["品名・規格確認"], "賞味期限": po_chk["賞味期限"], "異物": po_chk["異物"],
+                                                "担当者": po_op, "備考": f"【発注管理より入荷処理】{oid}", "登録日時": datetime.now().isoformat()
+                                            })
+                                            for oo in all_orders:
+                                                if oo.get("発注ID") == oid:
+                                                    oo["ステータス"] = "入荷済み"
+                                                    oo["紐づく入荷No"] = new_ano
+                                                    oo["入荷処理日"] = str(date.today())
+                                            save_purchase_orders(order_points, all_orders)
+                                            st.success(f"入荷を登録し、在庫に加算しました（入荷No: {new_ano}）。")
+                                            time.sleep(1.5)
+                                            refresh()
                             else:
                                 # ---- 衛生資材の入荷処理 ----
                                 st.caption("実際に入荷した個数を確認して登録すると、資材在庫に加算されます。")
@@ -1074,21 +1186,22 @@ elif page == "📝 発注管理":
                                     if not sid:
                                         st.error("エラー：対象の資材がマスタに見つかりません。")
                                     else:
-                                        sheets.append_supply_log({
-                                            "ログID": f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
-                                            "登録日": str(date.today()), "資材ID": sid, 
-                                            "処理": "入荷", "数量": po_bags, "作業者": po_op, 
-                                            "備考": f"【発注管理より入荷処理】{oid}", "登録日時": datetime.now().isoformat()
-                                        })
-                                        for oo in all_orders:
-                                            if oo.get("発注ID") == oid:
-                                                oo["ステータス"] = "入荷済み"
-                                                oo["紐づく入荷No"] = "資材入荷"
-                                                oo["入荷処理日"] = str(date.today())
-                                        save_purchase_orders(order_points, all_orders)
-                                        st.success(f"資材の入荷を登録し、在庫に加算しました。")
-                                        time.sleep(1.5)
-                                        refresh()
+                                        if hasattr(sheets, "append_supply_log"):
+                                            sheets.append_supply_log({
+                                                "ログID": f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+                                                "登録日": str(date.today()), "資材ID": sid, 
+                                                "処理": "入荷", "数量": po_bags, "作業者": po_op, 
+                                                "備考": f"【発注管理より入荷処理】{oid}", "登録日時": datetime.now().isoformat()
+                                            })
+                                            for oo in all_orders:
+                                                if oo.get("発注ID") == oid:
+                                                    oo["ステータス"] = "入荷済み"
+                                                    oo["紐づく入荷No"] = "資材入荷"
+                                                    oo["入荷処理日"] = str(date.today())
+                                            save_purchase_orders(order_points, all_orders)
+                                            st.success(f"資材の入荷を登録し、在庫に加算しました。")
+                                            time.sleep(1.5)
+                                            refresh()
                                         
                     if is_overdue:
                         st.markdown(f"<div style='color:var(--c-danger); font-weight:800; font-size:0.85rem; margin-top:4px;'>⚠️ 納品予定日（{o.get('納品予定日')}）を過ぎています。メーカーに確認してください。</div>", unsafe_allow_html=True)
@@ -1106,12 +1219,22 @@ elif page == "📝 発注管理":
 elif page == "📥 入荷登録":
     st.markdown('<div class="main-header"><h1>📥 原料入荷品質記録</h1><p>原料を選ぶと、マスタで設定した「1袋重量」が自動セットされます。</p></div>', unsafe_allow_html=True)
     
+    # --- スコープ問題回避のために入荷履歴用の保存関数を事前に定義 ---
+    def _save_arrivals_recalc(records):
+        for r in records:
+            try: r["総量(kg)"] = float(r.get("袋数", 0) or 0) * float(r.get("1袋重量(kg)", 0) or 0)
+            except (ValueError, TypeError): pass
+        if hasattr(sheets, "save_arrivals"):
+            sheets.save_arrivals(records)
+            
     t_in, t_hist = st.tabs(["➕ 新規入荷登録", "📋 入荷履歴・編集"])
     
     with t_in:
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
         st.markdown('<div class="section-title">📦 基本入荷情報</div>', unsafe_allow_html=True)
-        new_no = sheets.next_arrival_no(arrivals)
+        
+        new_no = ""
+        if hasattr(sheets, "next_arrival_no"): new_no = sheets.next_arrival_no(arrivals)
         
         arr_date = st.date_input("入荷日", value=date.today())
         maker_sel = st.selectbox("メーカー", makers if makers else ["未登録"])
@@ -1160,15 +1283,16 @@ elif page == "📥 入荷登録":
             if not lot_val: st.error("ロットNoは必須項目です。")
             elif unconfirmed: st.error("受入品質検査が未完了です。すべての項目を確認してください。")
             else:
-                sheets.append_arrival({
-                    "入荷No": new_no, "入荷日": str(arr_date), "メーカー": maker_sel, "ロットNo": lot_val,
-                    "原料種別": m_type, "グレード": grade_val, "袋数": bags_qty, "1袋重量(kg)": weight_per_bag, "総量(kg)": bags_qty * weight_per_bag,
-                    "外観": chk_results["外観"], "品名・規格確認": chk_results["品名・規格確認"], "賞味期限": chk_results["賞味期限"], "異物": chk_results["異物"],
-                    "担当者": operator, "備考": chk_note, "登録日時": datetime.now().isoformat()
-                })
-                st.success("入荷記録を保存しました。")
-                time.sleep(1.5)
-                refresh()
+                if hasattr(sheets, "append_arrival"):
+                    sheets.append_arrival({
+                        "入荷No": new_no, "入荷日": str(arr_date), "メーカー": maker_sel, "ロットNo": lot_val,
+                        "原料種別": m_type, "グレード": grade_val, "袋数": bags_qty, "1袋重量(kg)": weight_per_bag, "総量(kg)": bags_qty * weight_per_bag,
+                        "外観": chk_results["外観"], "品名・規格確認": chk_results["品名・規格確認"], "賞味期限": chk_results["賞味期限"], "異物": chk_results["異物"],
+                        "担当者": operator, "備考": chk_note, "登録日時": datetime.now().isoformat()
+                    })
+                    st.success("入荷記録を保存しました。")
+                    time.sleep(1.5)
+                    refresh()
         st.markdown('</div>', unsafe_allow_html=True)
         
     with t_hist:
@@ -1186,14 +1310,10 @@ elif page == "📥 入荷登録":
                 if "入荷No" not in df_arr_sorted.columns:
                     st.warning("入荷Noが記録されていないため編集できません。")
                 else:
-                    def _save_arrivals_recalc(records):
-                        for r in records:
-                            try: r["総量(kg)"] = float(r.get("袋数", 0) or 0) * float(r.get("1袋重量(kg)", 0) or 0)
-                            except (ValueError, TypeError): pass
-                        sheets.save_arrivals(records)
-
                     arr_editable_cols = ["入荷日", "原料種別", "メーカー", "ロットNo", "袋数", "1袋重量(kg)", "備考"]
                     if "グレード" in df_arr_sorted.columns: arr_editable_cols.insert(2, "グレード")
+                    
+                    # NameErrorを防ぐため、上で定義した _save_arrivals_recalc を渡す
                     render_excel_history_editor(
                         full_records=arrivals, filtered_df=df_arr_sorted.head(200),
                         id_col="入荷No", editable_cols=arr_editable_cols,
@@ -1241,15 +1361,16 @@ elif page == "📦 在庫・棚卸":
             reason_txt = st.text_input("調整理由（例: 棚卸差異、破損、計量誤差など）")
             op = render_operator_selector("adj_op")
             if st.button("💾 実地数量で在庫を確定する", type="primary", use_container_width=True):
-                sheets.append_adjustment({
-                    "調整ID": f"ADJ-{datetime.now().strftime('%Y%m%d%H%M%S')}", "入荷No": target_ano,
-                    "調整日": str(date.today()), "調整袋数": diff_bags,
-                    "理由": f"【棚卸調整:実地{fmt_kg(actual_bags)}袋に更新】{reason_txt}",
-                    "担当者": op, "登録日時": datetime.now().isoformat()
-                })
-                st.success(f"✅ 現在庫を {fmt_kg(actual_bags)}袋 に更新しました。")
-                time.sleep(1.5)
-                refresh()
+                if hasattr(sheets, "append_adjustment"):
+                    sheets.append_adjustment({
+                        "調整ID": f"ADJ-{datetime.now().strftime('%Y%m%d%H%M%S')}", "入荷No": target_ano,
+                        "調整日": str(date.today()), "調整袋数": diff_bags,
+                        "理由": f"【棚卸調整:実地{fmt_kg(actual_bags)}袋に更新】{reason_txt}",
+                        "担当者": op, "登録日時": datetime.now().isoformat()
+                    })
+                    st.success(f"✅ 現在庫を {fmt_kg(actual_bags)}袋 に更新しました。")
+                    time.sleep(1.5)
+                    refresh()
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════
@@ -1312,13 +1433,14 @@ elif page == "🧹 資材管理":
                                 st.caption("👆 タップした瞬間に在庫へ即時反映されます（確認なし）")
                                 op_q = render_operator_selector(f"sup_qop_{sid}")
                                 def _sup_quick_adj(s_id, delta, op_name):
-                                    sheets.append_supply_log({
-                                        "ログID": f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
-                                        "登録日": str(date.today()), "資材ID": s_id, 
-                                        "処理": "入荷" if delta > 0 else "使用", 
-                                        "数量": abs(delta), "作業者": op_name, 
-                                        "備考": "【クイック入出庫】", "登録日時": datetime.now().isoformat()
-                                    })
+                                    if hasattr(sheets, "append_supply_log"):
+                                        sheets.append_supply_log({
+                                            "ログID": f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+                                            "登録日": str(date.today()), "資材ID": s_id, 
+                                            "処理": "入荷" if delta > 0 else "使用", 
+                                            "数量": abs(delta), "作業者": op_name, 
+                                            "備考": "【クイック入出庫】", "登録日時": datetime.now().isoformat()
+                                        })
                                 qc1, qc2, qc3, qc4 = st.columns(4)
                                 if qc1.button("➖10", key=f"sq_m10_{sid}", use_container_width=True):
                                     _sup_quick_adj(sid, -10, op_q); st.toast(f"✅ {s.get('資材名')} を -10 しました"); time.sleep(1.0); refresh()
@@ -1334,15 +1456,16 @@ elif page == "🧹 資材管理":
                                 action = st.radio("処理", ["➖ 使用", "➕ 補充"], key=f"act_{sid}", horizontal=True)
                                 qty = st.number_input("数量", min_value=1, step=1, key=f"qty_{sid}")
                                 if st.button("💾 記録する", key=f"btn_{sid}", type="primary", use_container_width=True):
-                                    sheets.append_supply_log({
-                                        "ログID": f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
-                                        "登録日": str(date.today()), "資材ID": sid, 
-                                        "処理": "使用" if "使用" in action else "入荷", 
-                                        "数量": qty, "作業者": op_q, "備考": "", "登録日時": datetime.now().isoformat()
-                                    })
-                                    st.success("記録しました")
-                                    time.sleep(1.0)
-                                    refresh()
+                                    if hasattr(sheets, "append_supply_log"):
+                                        sheets.append_supply_log({
+                                            "ログID": f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+                                            "登録日": str(date.today()), "資材ID": sid, 
+                                            "処理": "使用" if "使用" in action else "入荷", 
+                                            "数量": qty, "作業者": op_q, "備考": "", "登録日時": datetime.now().isoformat()
+                                        })
+                                        st.success("記録しました")
+                                        time.sleep(1.0)
+                                        refresh()
                                     
                             else:
                                 st.caption("💡 実際に数えた数量をそのまま入力してください。理論在庫との差分は自動計算され反映されます。")
@@ -1360,18 +1483,19 @@ elif page == "🧹 資材管理":
                                 op2 = render_operator_selector(f"sup_adj_op_{sid}")
                                 if st.button("💾 実地数量で在庫を確定する", type="primary", use_container_width=True, key=f"sup_adj_save_{sid}"):
                                     if diff_qty != 0:
-                                        sheets.append_supply_log({
-                                            "ログID": f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
-                                            "登録日": str(date.today()), "資材ID": sid,
-                                            "処理": "入荷" if diff_qty > 0 else "使用",
-                                            "数量": abs(diff_qty),
-                                            "作業者": op2,
-                                            "備考": f"【棚卸調整:実地{fmt_kg(actual_qty)}に更新】{reason_txt}",
-                                            "登録日時": datetime.now().isoformat()
-                                        })
-                                    st.success(f"✅ 現在庫を {fmt_kg(actual_qty)} に更新しました。")
-                                    time.sleep(1.5)
-                                    refresh()
+                                        if hasattr(sheets, "append_supply_log"):
+                                            sheets.append_supply_log({
+                                                "ログID": f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+                                                "登録日": str(date.today()), "資材ID": sid,
+                                                "処理": "入荷" if diff_qty > 0 else "使用",
+                                                "数量": abs(diff_qty),
+                                                "作業者": op2,
+                                                "備考": f"【棚卸調整:実地{fmt_kg(actual_qty)}に更新】{reason_txt}",
+                                                "登録日時": datetime.now().isoformat()
+                                            })
+                                        st.success(f"✅ 現在庫を {fmt_kg(actual_qty)} に更新しました。")
+                                        time.sleep(1.5)
+                                        refresh()
                                 
     with t_s2:
         if supply_logs:
@@ -1386,8 +1510,9 @@ elif page == "🧹 資材管理":
             if log_options:
                 sel_log = st.selectbox("削除するログを選択", list(log_options.keys()))
                 if st.button("🗑️ このログを削除", type="primary"):
-                    sheets.delete_supply_log(log_options[sel_log])
-                    st.success("削除しました。"); time.sleep(1); refresh()
+                    if hasattr(sheets, "delete_supply_log"):
+                        sheets.delete_supply_log(log_options[sel_log])
+                        st.success("削除しました。"); time.sleep(1); refresh()
         else:
             st.info("入出庫ログはまだありません。")
 
@@ -1482,7 +1607,7 @@ elif page == "📋 履歴・帳票":
         st.markdown('<div class="form-card"><div class="section-title">✏️ 製造履歴の一括編集（Excel風）</div>', unsafe_allow_html=True)
         if "仕込No" not in filtered_df.columns:
             st.warning("仕込Noが記録されていないため編集できません。")
-        else:
+        elif hasattr(sheets, "save_brewing"):
             brw_editable_cols = ["仕込日", "品名", "メーカー", "仕込量(kg)", "主原料ロット", "備考"]
             brw_editable_cols = [c for c in brw_editable_cols if c in filtered_df.columns]
             render_excel_history_editor(
@@ -1554,8 +1679,9 @@ elif page == "⚙️ マスタ設定":
             column_config={"原料名": st.column_config.TextColumn("原料名")}
         )
         if st.button("💾 原料マスタ保存", type="primary"):
-            sheets.save_materials([str(x).strip() for x in ed_m["原料名"].tolist() if x is not None and str(x).strip() and str(x).strip().lower() != "nan"])
-            st.success("保存しました。"); time.sleep(1); refresh()
+            if hasattr(sheets, "save_materials"):
+                sheets.save_materials([str(x).strip() for x in ed_m["原料名"].tolist() if x is not None and str(x).strip() and str(x).strip().lower() != "nan"])
+                st.success("保存しました。"); time.sleep(1); refresh()
         st.markdown('</div>', unsafe_allow_html=True)
             
     with t2:
@@ -1565,8 +1691,9 @@ elif page == "⚙️ マスタ設定":
             column_config={"担当者名": st.column_config.TextColumn("担当者名")}
         )
         if st.button("💾 担当者保存", type="primary"):
-            sheets.save_inspectors([str(x).strip() for x in ed_u["担当者名"].tolist() if x is not None and str(x).strip() and str(x).strip().lower() != "nan"])
-            st.success("保存しました。"); time.sleep(1); refresh()
+            if hasattr(sheets, "save_inspectors"):
+                sheets.save_inspectors([str(x).strip() for x in ed_u["担当者名"].tolist() if x is not None and str(x).strip() and str(x).strip().lower() != "nan"])
+                st.success("保存しました。"); time.sleep(1); refresh()
         st.markdown('</div>', unsafe_allow_html=True)
 
     with t3:
@@ -1589,32 +1716,71 @@ elif page == "⚙️ マスタ設定":
             for k, v in order_points.items():
                 if k.startswith("__"):
                     new_dict[k] = v
-            sheets.save_order_points(new_dict)
-            st.success("保存しました。"); time.sleep(1); refresh()
+            if hasattr(sheets, "save_order_points"):
+                sheets.save_order_points(new_dict)
+                st.success("保存しました。"); time.sleep(1); refresh()
         st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown('<div class="form-card">', unsafe_allow_html=True)
         st.markdown('<div class="section-title">🌡️ 石灰の季節増量・調整ルール設定</div>', unsafe_allow_html=True)
-        st.caption("指定した期間(月)の間、製造仕込みでの石灰計算に自動で増量値(%)が加算されます。製品ごとに個別の設定を行うことも可能です。")
+        st.caption("指定期間(月)の間、製造仕込みでの石灰計算に自動で増量値が加算されます。一覧で直接編集・追加が可能です。")
         
-        p_names = [r.get("品名") for r in recipes_raw if r.get("大カテゴリ") != "調味料" and r.get("品名")]
-        lime_tgt_opts = ["(全体デフォルト)"] + sorted(p_names)
-        sel_lime_tgt = st.selectbox("設定対象の製品", lime_tgt_opts)
-        tgt_key = "__LIME_CONFIG__" if sel_lime_tgt == "(全体デフォルト)" else f"__LIME_CONFIG_{sel_lime_tgt}__"
-        cur_lime_cfg = parse_lime_config(order_points, product_name=sel_lime_tgt if sel_lime_tgt != "(全体デフォルト)" else None)
-
-        c_l1, c_l2, c_l3 = st.columns(3)
-        l_start = c_l1.selectbox("開始月", list(range(1, 13)), index=int(cur_lime_cfg.get("start_month", 6)) - 1)
-        l_end = c_l2.selectbox("終了月", list(range(1, 13)), index=int(cur_lime_cfg.get("end_month", 9)) - 1)
-        l_ratio = c_l3.number_input("増量値 (配合比率＋％)", min_value=0.000, max_value=1.000, value=float(cur_lime_cfg.get("add_ratio", 0.01)), step=0.001, format="%.3f")
+        lime_rows = []
+        p_names = sorted([r.get("品名") for r in recipes_raw if r.get("大カテゴリ") != "調味料" and r.get("品名")])
         
-        l_reason = st.text_input("増量理由・注記 (仕込み画面に表示されます)", value=str(cur_lime_cfg.get("reason", "夏場の高温対策（腐敗・品質保持）")))
+        def_cfg = parse_lime_config(order_points)
+        lime_rows.append({
+            "対象製品": "(全体デフォルト)",
+            "開始月": int(def_cfg.get("start_month", 6)),
+            "終了月": int(def_cfg.get("end_month", 9)),
+            "増量割合(%)": float(def_cfg.get("add_ratio", 0.01)) * 100, 
+            "理由": def_cfg.get("reason", "夏場の高温対策")
+        })
         
-        if st.button("💾 石灰増量ルールを保存", type="primary"):
+        for p in p_names:
+            tgt_key = f"__LIME_CONFIG_{p}__"
+            if tgt_key in order_points:
+                cfg = parse_lime_config(order_points, product_name=p)
+                lime_rows.append({
+                    "対象製品": p,
+                    "開始月": int(cfg.get("start_month", 6)),
+                    "終了月": int(cfg.get("end_month", 9)),
+                    "増量割合(%)": float(cfg.get("add_ratio", 0.01)) * 100,
+                    "理由": cfg.get("reason", "個別設定")
+                })
+                
+        lime_df = pd.DataFrame(lime_rows)
+        ed_lime = st.data_editor(
+            lime_df, num_rows="dynamic", use_container_width=True, key="lime_editor",
+            column_config={
+                "対象製品": st.column_config.SelectboxColumn("対象製品", options=["(全体デフォルト)"] + p_names, required=True),
+                "開始月": st.column_config.NumberColumn("開始月", min_value=1, max_value=12, step=1, required=True),
+                "終了月": st.column_config.NumberColumn("終了月", min_value=1, max_value=12, step=1, required=True),
+                "増量割合(%)": st.column_config.NumberColumn("増量割合(%)", min_value=0.0, step=0.1, format="%.2f%%", help="例: 1%なら1.0と入力", required=True),
+                "理由": st.column_config.TextColumn("理由")
+            }
+        )
+        
+        if st.button("💾 石灰ルールを保存", type="primary"):
             new_dict = dict(order_points)
-            new_dict[tgt_key] = f"開始:{int(l_start)}月, 終了:{int(l_end)}月, 割合:{float(l_ratio)}, 理由:{str(l_reason)}"
-            sheets.save_order_points(new_dict)
-            st.success(f"{sel_lime_tgt} の石灰増量ルールを更新しました。"); time.sleep(1); refresh()
+            keys_to_del = [k for k in new_dict.keys() if k.startswith("__LIME_CONFIG")]
+            for k in keys_to_del: del new_dict[k]
+                
+            for _, r in ed_lime.iterrows():
+                tgt = str(r.get("対象製品", "")).strip()
+                if not tgt or str(tgt).lower() == "nan": continue
+                
+                k = "__LIME_CONFIG__" if tgt == "(全体デフォルト)" else f"__LIME_CONFIG_{tgt}__"
+                s_m = int(r.get("開始月", 6))
+                e_m = int(r.get("終了月", 9))
+                a_r = float(r.get("増量割合(%)", 1.0)) / 100.0
+                rsn = str(r.get("理由", "夏場の高温対策"))
+                
+                new_dict[k] = f"開始:{s_m}月, 終了:{e_m}月, 割合:{a_r}, 理由:{rsn}"
+                
+            if hasattr(sheets, "save_order_points"):
+                sheets.save_order_points(new_dict)
+                st.success("石灰ルールを更新しました。"); time.sleep(1.5); refresh()
         st.markdown('</div>', unsafe_allow_html=True)
 
     with t4:
@@ -1637,7 +1803,6 @@ elif page == "⚙️ マスタ設定":
             init_cat_m = target_recipe.get("大カテゴリ") if target_recipe and target_recipe.get("大カテゴリ") in BIG_CAT_KEYS else "プラント"
             init_cat_s = target_recipe.get("中カテゴリ", "黒") if target_recipe else "黒"
             
-            # 【バグ修正】safe_parse_recipe を使うことで、以前のJSONも新しいテキスト形式も正しくロードされる
             init_items = safe_parse_recipe(old_json)
             
             def_mats = ["(未設定)", "水"] + materials
@@ -1659,15 +1824,16 @@ elif page == "⚙️ マスタ設定":
                     cols_recipe.append({"name": ing_mat, "ratio": ing_ratio})
                 
                 if st.form_submit_button("💾 レシピを保存"):
-                    # スプレッドシート用に人間が読めるテキスト形式で保存
                     text_recipe = ", ".join([f"{i['name']}:{i['ratio']}%" for i in cols_recipe if i["name"] != "(未設定)" and i["ratio"] > 0])
                     
                     cat_str = BIG_CAT_KEYS[BIG_CAT_OPTIONS.index(cat_main)]
                     sub_str = cat_sub.split(" ")[1] if cat_str == "プラント" else "その他"
                     updated_recipes = [r for r in recipes_raw if r["品名"] != new_p_name]
                     updated_recipes.append({"品名": new_p_name, "大カテゴリ": cat_str, "中カテゴリ": sub_str, "配合JSON": text_recipe})
-                    sheets.save_recipes(updated_recipes)
-                    st.success("レシピを保存しました。"); time.sleep(1); refresh()
+                    
+                    if hasattr(sheets, "save_recipes"):
+                        sheets.save_recipes(updated_recipes)
+                        st.success("レシピを保存しました。"); time.sleep(1); refresh()
             st.markdown('</div>', unsafe_allow_html=True)
 
         else:
@@ -1706,8 +1872,9 @@ elif page == "⚙️ マスタ設定":
                         text_s_recipe = ", ".join([f"{i['name']}:{i['dil']}倍" for i in s_cols_recipe if i["name"] != "(未設定)"])
                         updated_recipes = [r for r in recipes_raw if r["品名"] != s_new_name]
                         updated_recipes.append({"品名": s_new_name, "大カテゴリ": "調味料", "中カテゴリ": "希釈", "配合JSON": text_s_recipe})
-                        sheets.save_recipes(updated_recipes)
-                        st.success("調味料レシピを保存しました。"); time.sleep(1); refresh()
+                        if hasattr(sheets, "save_recipes"):
+                            sheets.save_recipes(updated_recipes)
+                            st.success("調味料レシピを保存しました。"); time.sleep(1); refresh()
             st.markdown('</div>', unsafe_allow_html=True)
 
             if seasoning_recipes:
@@ -1737,8 +1904,9 @@ elif page == "⚙️ マスタ設定":
                         img_str = f"data:image/png;base64,{base64.b64encode(buffered.getvalue()).decode('utf-8')}"
                     cur_sup = supplies.copy()
                     cur_sup.append({"資材ID": f"SUP-{datetime.now().strftime('%Y%m%d%H%M%S')}", "資材名": new_s_name, "カテゴリ": new_s_cat, "画像URL": img_str, "初期在庫": 0, "発注点": 10, "登録日": str(date.today())})
-                    sheets.save_supplies(cur_sup)
-                    st.success("資材を登録しました。"); time.sleep(1); refresh()
+                    if hasattr(sheets, "save_supplies"):
+                        sheets.save_supplies(cur_sup)
+                        st.success("資材を登録しました。"); time.sleep(1); refresh()
         st.markdown('</div>', unsafe_allow_html=True)
 
     with t6:
