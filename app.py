@@ -231,11 +231,6 @@ def fmt_kg(val):
     try: v = float(val); return f"{int(v)}" if v.is_integer() else f"{v:.2f}".rstrip('0').rstrip('.')
     except: return str(val)
 
-def fmt_kg0(val):
-    if val is None or val == "": return "0"
-    try: return f"{int(round(float(val)))}"
-    except: return str(val)
-
 def fmt_df_numeric(df, cols):
     d = df.copy()
     for c in cols:
@@ -243,7 +238,7 @@ def fmt_df_numeric(df, cols):
     return d
 
 # ════════════════════════════════════════════════════════════════
-#  在庫計算 (誤差丸めによる0化)
+#  在庫計算 (誤差丸めによる完全0化)
 # ════════════════════════════════════════════════════════════════
 def get_inventory():
     inv = {}
@@ -288,15 +283,10 @@ for v in inventory_data.values():
     type_totals_bag[m] = type_totals_bag.get(m, 0.0) + v["現在庫(袋)"]
 
 def _get_active_lots(mat):
+    """在庫が0.01袋以上あるロットのみを返す"""
     o = []
     for v in inventory_data.values():
-        if v["原料種別"] == mat and v["現在庫(袋)"] > 0.001 and v["ロットNo"] not in o: o.append(v["ロットNo"])
-    if not o:
-        for a in sorted(arrivals, key=lambda x: x.get("入荷日", ""), reverse=True):
-            if str(a.get("原料種別", "")).strip() == mat:
-                l = str(a.get("ロットNo", "")).strip()
-                if l and l not in o: o.append(l)
-                if len(o) >= 5: break
+        if v["原料種別"] == mat and v["現在庫(袋)"] > 0.01 and v["ロットNo"] not in o: o.append(v["ロットNo"])
     return o
 
 def get_lots_for_material(mat):
@@ -314,7 +304,7 @@ def get_supply_inventory():
     return inv
 
 # ════════════════════════════════════════════════════════════════
-#  カスタムUIコンポーネント (タップで閉じる対応)
+#  カスタムUIコンポーネント (タップで閉じる＆ロット整理対応)
 # ════════════════════════════════════════════════════════════════
 def render_amount_adjuster(title, calc_val, p_key):
     st.markdown(f"<div style='font-size:1.05rem; font-weight:800; color:#475569; margin-bottom:4px;'>{title}</div>", unsafe_allow_html=True)
@@ -332,27 +322,62 @@ def render_amount_adjuster(title, calc_val, p_key):
     """, unsafe_allow_html=True)
     return st.number_input("微調整", min_value=0.0, step=0.1, key=p_key, label_visibility="collapsed")
 
+
 def render_lot_selector(mat_name, lot_key):
+    """
+    在庫0のロットは一切出さず、マスタで指定されたロットを最優先で表示。
+    指定されていない在庫ありロットは「その他の在庫ありロット」に格納し、タップで確定＆閉じる。
+    """
     master_lots = get_active_lots_from_master(order_points, mat_name)
-    opts = master_lots if master_lots else _get_active_lots(mat_name)
-    curr_val = st.session_state.get(lot_key, opts[0] if len(opts)>0 else "─")
+    all_active_lots = _get_active_lots(mat_name)
+    
+    # マスタで指定されているが在庫がないロットは除外する（安全性のため）
+    valid_master_lots = [l for l in master_lots if l in all_active_lots]
+    # マスタで指定されていない在庫ありロット
+    other_lots = [l for l in all_active_lots if l not in valid_master_lots]
+    
+    # 初期値の設定
+    curr_val = st.session_state.get(lot_key, valid_master_lots[0] if valid_master_lots else (other_lots[0] if other_lots else "─"))
     pop_label = f"✅ 選択済: {curr_val}" if curr_val not in ["─", ""] else "⚠️ ロット未選択 (タップ)"
     
     st.markdown(f"<div style='font-size:1.0rem; font-weight:800; color:#475569; margin-bottom:6px;'>📦 ロット選択</div>", unsafe_allow_html=True)
     with st.popover(pop_label, use_container_width=True):
         st.markdown(f"**📦 {mat_name} のロット選択**")
-        if not opts: st.caption("選択可能なロットがありません。手入力してください。")
-        else:
-            d_map = {v["ロットNo"]: v["入荷日"] for v in inventory_data.values() if v["原料種別"] == mat_name}
-            for opt in opts:
-                if st.button(f"{opt} (入荷:{d_map.get(opt)})" if d_map.get(opt) else opt, key=f"btn_{lot_key}_{opt}", use_container_width=True):
+        d_map = {v["ロットNo"]: v["入荷日"] for v in inventory_data.values() if v["原料種別"] == mat_name}
+        
+        if valid_master_lots:
+            st.caption("📌 マスタで指定された使用中ロット")
+            for opt in valid_master_lots:
+                if st.button(f"{opt} (入荷:{d_map.get(opt, '不明')})", key=f"btn_{lot_key}_{opt}", use_container_width=True):
                     st.session_state[lot_key] = opt
                     st.rerun()
+                    
+        if other_lots:
+            if valid_master_lots:
+                with st.expander("📦 その他の在庫ありロット"):
+                    for opt in other_lots:
+                        if st.button(f"{opt} (入荷:{d_map.get(opt, '不明')})", key=f"btn_{lot_key}_{opt}", use_container_width=True):
+                            st.session_state[lot_key] = opt
+                            st.rerun()
+            else:
+                st.caption("📦 在庫ありロット")
+                for opt in other_lots:
+                    if st.button(f"{opt} (入荷:{d_map.get(opt, '不明')})", key=f"btn_{lot_key}_{opt}", use_container_width=True):
+                        st.session_state[lot_key] = opt
+                        st.rerun()
+                        
+        if not valid_master_lots and not other_lots:
+            st.caption("選択可能なロットがありません。")
+            
         st.divider()
         m_in = st.text_input("✏️ ロット手入力", key=f"txt_{lot_key}")
         if st.button("手入力で確定", key=f"btn_manual_{lot_key}", use_container_width=True):
-            if m_in.strip(): st.session_state[lot_key] = m_in.strip(); st.rerun()
+            if m_in.strip():
+                st.session_state[lot_key] = m_in.strip()
+                st.rerun()
+                
     return st.session_state.get(lot_key, "─")
+
 
 def render_operator_selector(operator_key):
     if operator_key not in st.session_state: st.session_state[operator_key] = inspectors[0] if inspectors else "未登録"
@@ -362,6 +387,7 @@ def render_operator_selector(operator_key):
                 st.session_state[operator_key] = insp
                 st.rerun()
     return st.session_state[operator_key]
+
 
 def render_excel_history_editor(full_records, filtered_df, id_col, editable_cols, numeric_cols, save_func, key_prefix):
     if filtered_df.empty:
@@ -419,6 +445,7 @@ def render_excel_history_editor(full_records, filtered_df, id_col, editable_cols
                 save_func(list(id_to_record.values()))
                 st.session_state.pop(diff_key, None)
                 st.success("保存しました。"); time.sleep(1.5); refresh()
+
 
 def render_lot_inventory_manager(active_inv):
     st.caption("💡 棚卸し・在庫調整はこの表で行います。「現在庫(袋)」の数値を実際の数に書き換えてください。**「0」にすれば確実にゼロになります。**")
@@ -746,6 +773,7 @@ elif page == "📊 ダッシュボード":
 
     st.markdown("---")
     sec_title("📦 主要原料 現在庫とアラート")
+    st.caption("※ 棚卸し等の在庫調整は「📦 在庫・棚卸」ページから行ってください。")
     cols = st.columns(min(3, len(materials) if materials else 1))
     
     for idx, m in enumerate(materials):
@@ -762,8 +790,14 @@ elif page == "📊 ダッシュボード":
         with cols[idx % 3]:
             st.markdown(f"""
             <div style="background:{bg_col}; border:2px solid {b_col}; border-radius:12px; padding:18px; margin-bottom:8px;">
-                <div style="display:flex; align-items:center; margin-bottom:8px;">{img_html}<div style="font-weight:900; color:#0f172a; font-size:1.15rem;">{m}</div></div>
-                <div style="font-size:2.2rem; font-weight:900; color:#0f766e; margin:6px 0 2px 0;">{fmt_kg(curr_kg)}<span style="font-size:1.1rem; color:#64748b; margin-right:8px;">kg</span> <span style="font-size:1.6rem; color:#0f172a;">({fmt_kg(curr_bag)}袋)</span></div>
+                <div style="display:flex; align-items:center; margin-bottom:8px;">
+                    {img_html}
+                    <div style="font-weight:900; color:#0f172a; font-size:1.15rem;">{m}</div>
+                </div>
+                <div class="mat-card-value" style="font-size:2.2rem; font-weight:900; color:#0f766e; margin:6px 0 2px 0;">
+                    {fmt_kg(curr_kg)}<span style="font-size:1.1rem; color:#64748b; margin-right:8px;">kg</span> 
+                    <span style="font-size:1.6rem; color:#0f172a;">({fmt_kg(curr_bag)}袋)</span>
+                </div>
                 <div style="font-size:0.85rem; color:#64748b; margin-bottom:4px;">1袋 = {fmt_kg(wt)} kg 換算</div>
                 {alert_msg}
             </div>
@@ -1187,7 +1221,10 @@ elif page == "⚙️ マスタ設定":
             if sel_m:
                 pt, wt = parse_op_data(order_points.get(sel_m, 0.0))
                 active_lots = get_active_lots_from_master(order_points, sel_m)
-                hist_lots = list(set([str(a.get("ロットNo", "")).strip() for a in arrivals if a.get("原料種別") == sel_m]))
+                
+                # 在庫があるロットのリスト
+                hist_lots = [v["ロットNo"] for v in inventory_data.values() if v["原料種別"] == sel_m and v["現在庫(袋)"] > 0.01]
+                # 万が一在庫ゼロでも既にピン留めされていたら消さないように追加
                 for l in active_lots:
                     if l not in hist_lots: hist_lots.append(l)
 
@@ -1197,9 +1234,9 @@ elif page == "⚙️ マスタ設定":
                     new_wt = c_wt.number_input("⚖️ 1袋重量 (kg)", value=int(wt), step=1)
                     
                     st.markdown("---")
-                    st.markdown("##### 📦 製造で使用するロット")
-                    st.caption("仕込み画面で選択肢として表示させたいロットのみを選んでください。（空欄にすると、在庫があるロットが自動で表示されます）")
-                    new_active_lots = st.multiselect("使用可能ロット", hist_lots, default=active_lots)
+                    st.markdown("##### 📦 製造で使用するロットの指定")
+                    st.caption("仕込み画面で「メインの選択肢」として最前面に表示させたいロットのみを選んでください。指定しなかった在庫は「その他の在庫ありロット」に折りたたまれます。")
+                    new_active_lots = st.multiselect("使用可能ロット", hist_lots, default=[x for x in active_lots if x in hist_lots])
                     
                     st.markdown("---")
                     st.markdown("##### 🖼️ 原料の画像")
