@@ -76,7 +76,6 @@ div[data-testid="stNumberInputContainer"] input { font-size: 1.2rem !important; 
 def card_start(): st.markdown('<div class="form-card">', unsafe_allow_html=True)
 def card_end(): st.markdown('</div>', unsafe_allow_html=True)
 def sec_title(title): st.markdown(f'<div class="section-title">{title}</div>', unsafe_allow_html=True)
-def set_val_cb(key, val): st.session_state[key] = val
 
 # ════════════════════════════════════════════════════════════════
 #  データロード & パーサー
@@ -265,14 +264,20 @@ def get_inventory():
                             if v["ロットNo"] == l: v["使用量(kg)"] += kl
     for adj in adjustments:
         ano = str(adj.get("入荷No", "")).strip()
-        if ano in inv: inv[ano]["調整袋数"] += float(adj.get("調整袋数") or 0.0)
+        if ano in inv:
+            try: inv[ano]["調整袋数"] += float(adj.get("調整袋数") or 0.0)
+            except: pass
     
     for v in inv.values():
         bpk = v["1袋重量"] if v["1袋重量"] > 0 else 20.0
-        v["使用袋数"] = round(v["使用量(kg)"] / bpk, 4)
-        raw_bags = v["入荷袋数"] - v["使用袋数"] + v["調整袋数"]
-        if abs(raw_bags) < 0.01: raw_bags = 0.0
-        v["現在庫(袋)"] = max(round(raw_bags, 3), 0.0)
+        v["使用袋数"] = v["使用量(kg)"] / bpk
+        
+        # 丸め誤差を消し、0.01袋（約200g）未満は強制的に0とする
+        raw_bags = round(v["入荷袋数"] - v["使用袋数"] + v["調整袋数"], 4)
+        if raw_bags < 0.01:
+            raw_bags = 0.0
+            
+        v["現在庫(袋)"] = max(raw_bags, 0.0)
         v["現在庫(kg)"] = round(v["現在庫(袋)"] * bpk, 3)
     return inv
 
@@ -284,10 +289,10 @@ for v in inventory_data.values():
     type_totals_bag[m] = type_totals_bag.get(m, 0.0) + v["現在庫(袋)"]
 
 def _get_active_lots(mat):
-    """在庫が0.000袋を超えるロットのみを返す（在庫ゼロは完全に除外）"""
+    """完全に在庫が0になったものは除外する"""
     o = []
     for v in inventory_data.values():
-        if v["原料種別"] == mat and round(v["現在庫(袋)"], 3) > 0.000 and v["ロットNo"] not in o: 
+        if v["原料種別"] == mat and v["現在庫(袋)"] > 0 and v["ロットNo"] not in o: 
             o.append(v["ロットNo"])
     return o
 
@@ -343,17 +348,23 @@ def render_lot_selector(mat_name, lot_key):
         if valid_master_lots:
             st.caption("📌 マスタで指定された使用中ロット")
             for opt in valid_master_lots:
-                st.button(f"{opt} (入荷:{d_map.get(opt, '不明')})", key=f"btn_{lot_key}_{opt}", on_click=set_val_cb, args=(lot_key, opt), use_container_width=True)
+                if st.button(f"{opt} (入荷:{d_map.get(opt, '不明')})", key=f"btn_{lot_key}_{opt}", use_container_width=True):
+                    st.session_state[lot_key] = opt
+                    st.rerun() # 明示的なrerunによりポップオーバーが確実に閉じます
                     
         if other_lots:
             if valid_master_lots:
                 with st.expander("📦 その他の在庫ありロット"):
                     for opt in other_lots:
-                        st.button(f"{opt} (入荷:{d_map.get(opt, '不明')})", key=f"btn_{lot_key}_{opt}", on_click=set_val_cb, args=(lot_key, opt), use_container_width=True)
+                        if st.button(f"{opt} (入荷:{d_map.get(opt, '不明')})", key=f"btn_{lot_key}_{opt}", use_container_width=True):
+                            st.session_state[lot_key] = opt
+                            st.rerun()
             else:
                 st.caption("📦 在庫ありロット")
                 for opt in other_lots:
-                    st.button(f"{opt} (入荷:{d_map.get(opt, '不明')})", key=f"btn_{lot_key}_{opt}", on_click=set_val_cb, args=(lot_key, opt), use_container_width=True)
+                    if st.button(f"{opt} (入荷:{d_map.get(opt, '不明')})", key=f"btn_{lot_key}_{opt}", use_container_width=True):
+                        st.session_state[lot_key] = opt
+                        st.rerun()
                         
         if not valid_master_lots and not other_lots:
             st.caption("選択可能なロットがありません。")
@@ -373,7 +384,9 @@ def render_operator_selector(operator_key):
         st.session_state[operator_key] = inspectors[0] if inspectors else "未登録"
     with st.popover(f"👨‍🏭 担当者: {st.session_state[operator_key]}", use_container_width=True):
         for insp in inspectors:
-            st.button(insp, key=f"btn_insp_{operator_key}_{insp}", on_click=set_val_cb, args=(operator_key, insp), use_container_width=True)
+            if st.button(insp, key=f"btn_insp_{operator_key}_{insp}", use_container_width=True):
+                st.session_state[operator_key] = insp
+                st.rerun() # 明示的なrerunによりポップオーバーが確実に閉じます
     return st.session_state[operator_key]
 
 
@@ -456,8 +469,14 @@ def render_lot_inventory_manager(active_inv):
             if not orig: continue
             del_flag = bool(r.get("🗑️ 削除(在庫0に)", False))
             theo = orig["現在庫(袋)"]
-            new_bags = 0.0 if del_flag else max(0.0, float(r["現在庫(袋)"]))
-            diff = round(new_bags - theo, 6)
+            
+            if del_flag:
+                diff = round(-theo, 4) # 完全に元在庫を打ち消す
+                new_bags = 0.0
+            else:
+                new_bags = max(0.0, float(r["現在庫(袋)"]))
+                diff = round(new_bags - theo, 4) # スプレッドシートの無限小数を防ぐ
+                
             if del_flag or abs(diff) > 0.005:
                 changes.append({"入荷No": ano, "ロットNo": orig["ロットNo"], "原料種別": orig["原料種別"], "旧在庫": theo, "新在庫": new_bags, "差分": diff, "削除": del_flag})
         st.session_state[diff_key] = changes
@@ -815,7 +834,7 @@ elif page == "📊 ダッシュボード":
                     if "クイック" in adj_mode:
                         st.caption("任意の数量を入力し増減できます")
                         c_amt, c_m_btn, c_p_btn = st.columns([2, 1, 1])
-                        q_val = c_amt.number_input("数量(袋)", min_value=0.1, value=1.0, step=1.0, key=f"dq_val_{m}", label_visibility="collapsed")
+                        q_val = c_amt.number_input("数量(袋)", min_value=1, value=1, step=1, key=f"dq_val_{m}", label_visibility="collapsed")
                         if c_m_btn.button("➖ 減らす", key=f"dq_m_{m}", use_container_width=True):
                             _dash_adj(target_ano, -q_val, f"【クイック減算:-{q_val}】"); st.toast(f"-{q_val}袋"); time.sleep(1); refresh()
                         if c_p_btn.button("➕ 増やす", key=f"dq_p_{m}", use_container_width=True):
@@ -1007,7 +1026,7 @@ elif page == "📦 在庫・棚卸":
     
     with t_inv:
         card_start()
-        active_inv = [v for v in inventory_data.values() if v["現在庫(袋)"] > 0.001]
+        active_inv = [v for v in inventory_data.values() if v["現在庫(袋)"] > 0]
         if active_inv: render_lot_inventory_manager(active_inv)
         else: st.info("在庫データがありません。")
         card_end()
@@ -1058,7 +1077,7 @@ elif page == "🧹 資材管理":
                             if "クイック" in adj_mode:
                                 st.caption("数値を入力し入出庫ボタンをタップしてください")
                                 c_amt, c_minus, c_plus = st.columns([2, 1, 1])
-                                q_val = c_amt.number_input("数量", min_value=1.0, value=1.0, step=1.0, key=f"sq_val_{sid}", label_visibility="collapsed")
+                                q_val = c_amt.number_input("数量", min_value=1, value=1, step=1, key=f"sq_val_{sid}", label_visibility="collapsed")
                                 if c_minus.button("➖ 出庫", key=f"sq_minus_{sid}", use_container_width=True): 
                                     _sup_adj(sid, -q_val, op_q, "【クイック出庫】"); st.toast(f"-{q_val}"); time.sleep(1); refresh()
                                 if c_plus.button("➕ 入庫", key=f"sq_plus_{sid}", use_container_width=True): 
