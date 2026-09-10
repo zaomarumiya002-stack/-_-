@@ -76,6 +76,7 @@ div[data-testid="stNumberInputContainer"] input { font-size: 1.2rem !important; 
 def card_start(): st.markdown('<div class="form-card">', unsafe_allow_html=True)
 def card_end(): st.markdown('</div>', unsafe_allow_html=True)
 def sec_title(title): st.markdown(f'<div class="section-title">{title}</div>', unsafe_allow_html=True)
+def set_val_cb(key, val): st.session_state[key] = val
 
 # ════════════════════════════════════════════════════════════════
 #  データロード & パーサー
@@ -283,10 +284,11 @@ for v in inventory_data.values():
     type_totals_bag[m] = type_totals_bag.get(m, 0.0) + v["現在庫(袋)"]
 
 def _get_active_lots(mat):
-    """在庫が0.01袋以上あるロットのみを返す"""
+    """在庫が0.000袋を超えるロットのみを返す（在庫ゼロは完全に除外）"""
     o = []
     for v in inventory_data.values():
-        if v["原料種別"] == mat and v["現在庫(袋)"] > 0.01 and v["ロットNo"] not in o: o.append(v["ロットNo"])
+        if v["原料種別"] == mat and round(v["現在庫(袋)"], 3) > 0.000 and v["ロットNo"] not in o: 
+            o.append(v["ロットNo"])
     return o
 
 def get_lots_for_material(mat):
@@ -324,19 +326,12 @@ def render_amount_adjuster(title, calc_val, p_key):
 
 
 def render_lot_selector(mat_name, lot_key):
-    """
-    在庫0のロットは一切出さず、マスタで指定されたロットを最優先で表示。
-    指定されていない在庫ありロットは「その他の在庫ありロット」に格納し、タップで確定＆閉じる。
-    """
     master_lots = get_active_lots_from_master(order_points, mat_name)
     all_active_lots = _get_active_lots(mat_name)
     
-    # マスタで指定されているが在庫がないロットは除外する（安全性のため）
     valid_master_lots = [l for l in master_lots if l in all_active_lots]
-    # マスタで指定されていない在庫ありロット
     other_lots = [l for l in all_active_lots if l not in valid_master_lots]
     
-    # 初期値の設定
     curr_val = st.session_state.get(lot_key, valid_master_lots[0] if valid_master_lots else (other_lots[0] if other_lots else "─"))
     pop_label = f"✅ 選択済: {curr_val}" if curr_val not in ["─", ""] else "⚠️ ロット未選択 (タップ)"
     
@@ -348,23 +343,17 @@ def render_lot_selector(mat_name, lot_key):
         if valid_master_lots:
             st.caption("📌 マスタで指定された使用中ロット")
             for opt in valid_master_lots:
-                if st.button(f"{opt} (入荷:{d_map.get(opt, '不明')})", key=f"btn_{lot_key}_{opt}", use_container_width=True):
-                    st.session_state[lot_key] = opt
-                    st.rerun()
+                st.button(f"{opt} (入荷:{d_map.get(opt, '不明')})", key=f"btn_{lot_key}_{opt}", on_click=set_val_cb, args=(lot_key, opt), use_container_width=True)
                     
         if other_lots:
             if valid_master_lots:
                 with st.expander("📦 その他の在庫ありロット"):
                     for opt in other_lots:
-                        if st.button(f"{opt} (入荷:{d_map.get(opt, '不明')})", key=f"btn_{lot_key}_{opt}", use_container_width=True):
-                            st.session_state[lot_key] = opt
-                            st.rerun()
+                        st.button(f"{opt} (入荷:{d_map.get(opt, '不明')})", key=f"btn_{lot_key}_{opt}", on_click=set_val_cb, args=(lot_key, opt), use_container_width=True)
             else:
                 st.caption("📦 在庫ありロット")
                 for opt in other_lots:
-                    if st.button(f"{opt} (入荷:{d_map.get(opt, '不明')})", key=f"btn_{lot_key}_{opt}", use_container_width=True):
-                        st.session_state[lot_key] = opt
-                        st.rerun()
+                    st.button(f"{opt} (入荷:{d_map.get(opt, '不明')})", key=f"btn_{lot_key}_{opt}", on_click=set_val_cb, args=(lot_key, opt), use_container_width=True)
                         
         if not valid_master_lots and not other_lots:
             st.caption("選択可能なロットがありません。")
@@ -380,12 +369,11 @@ def render_lot_selector(mat_name, lot_key):
 
 
 def render_operator_selector(operator_key):
-    if operator_key not in st.session_state: st.session_state[operator_key] = inspectors[0] if inspectors else "未登録"
+    if operator_key not in st.session_state: 
+        st.session_state[operator_key] = inspectors[0] if inspectors else "未登録"
     with st.popover(f"👨‍🏭 担当者: {st.session_state[operator_key]}", use_container_width=True):
         for insp in inspectors:
-            if st.button(insp, key=f"btn_insp_{operator_key}_{insp}", use_container_width=True):
-                st.session_state[operator_key] = insp
-                st.rerun()
+            st.button(insp, key=f"btn_insp_{operator_key}_{insp}", on_click=set_val_cb, args=(operator_key, insp), use_container_width=True)
     return st.session_state[operator_key]
 
 
@@ -825,12 +813,13 @@ elif page == "📊 ダッシュボード":
                             })
                             
                     if "クイック" in adj_mode:
-                        st.caption("ボタンをタップした瞬間に在庫が即時増減します")
-                        qc1, qc2, qc3, qc4 = st.columns(4)
-                        if qc1.button("➖10", key=f"dq_m10_{m}", use_container_width=True): _dash_adj(target_ano, -10, "【クイック増減:-10】"); st.toast("-10袋"); time.sleep(1); refresh()
-                        if qc2.button("➖1", key=f"dq_m1_{m}", use_container_width=True): _dash_adj(target_ano, -1, "【クイック増減:-1】"); st.toast("-1袋"); time.sleep(1); refresh()
-                        if qc3.button("➕1", key=f"dq_p1_{m}", use_container_width=True): _dash_adj(target_ano, 1, "【クイック増減:+1】"); st.toast("+1袋"); time.sleep(1); refresh()
-                        if qc4.button("➕10", key=f"dq_p10_{m}", use_container_width=True): _dash_adj(target_ano, 10, "【クイック増減:+10】"); st.toast("+10袋"); time.sleep(1); refresh()
+                        st.caption("任意の数量を入力し増減できます")
+                        c_amt, c_m_btn, c_p_btn = st.columns([2, 1, 1])
+                        q_val = c_amt.number_input("数量(袋)", min_value=0.1, value=1.0, step=1.0, key=f"dq_val_{m}", label_visibility="collapsed")
+                        if c_m_btn.button("➖ 減らす", key=f"dq_m_{m}", use_container_width=True):
+                            _dash_adj(target_ano, -q_val, f"【クイック減算:-{q_val}】"); st.toast(f"-{q_val}袋"); time.sleep(1); refresh()
+                        if c_p_btn.button("➕ 増やす", key=f"dq_p_{m}", use_container_width=True):
+                            _dash_adj(target_ano, q_val, f"【クイック加算:+{q_val}】"); st.toast(f"+{q_val}袋"); time.sleep(1); refresh()
                     else:
                         st.caption("実際に数えた袋数を入力してください。差分が自動記録されます（0にすれば在庫ゼロになります）。")
                         actual = st.number_input("実在庫数量(袋)", min_value=0.0, value=float(round(target_lot_data["現在庫(袋)"], 2)), step=1.0, key=f"dash_act_{m}")
@@ -1067,11 +1056,13 @@ elif page == "🧹 資材管理":
                                     sheets.append_supply_log({"ログID": f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}", "登録日": str(date.today()), "資材ID": s_id, "処理": "入荷" if delta > 0 else "使用", "数量": abs(delta), "作業者": op_name, "備考": reason, "登録日時": datetime.now().isoformat()})
                             
                             if "クイック" in adj_mode:
-                                qc1, qc2, qc3, qc4 = st.columns(4)
-                                if qc1.button("➖10", key=f"sq_m10_{sid}", use_container_width=True): _sup_adj(sid, -10, op_q, "【クイック増減】"); st.toast("-10"); time.sleep(1); refresh()
-                                if qc2.button("➖1", key=f"sq_m1_{sid}", use_container_width=True): _sup_adj(sid, -1, op_q, "【クイック増減】"); st.toast("-1"); time.sleep(1); refresh()
-                                if qc3.button("➕1", key=f"sq_p1_{sid}", use_container_width=True): _sup_adj(sid, 1, op_q, "【クイック増減】"); st.toast("+1"); time.sleep(1); refresh()
-                                if qc4.button("➕10", key=f"sq_p10_{sid}", use_container_width=True): _sup_adj(sid, 10, op_q, "【クイック増減】"); st.toast("+10"); time.sleep(1); refresh()
+                                st.caption("数値を入力し入出庫ボタンをタップしてください")
+                                c_amt, c_minus, c_plus = st.columns([2, 1, 1])
+                                q_val = c_amt.number_input("数量", min_value=1.0, value=1.0, step=1.0, key=f"sq_val_{sid}", label_visibility="collapsed")
+                                if c_minus.button("➖ 出庫", key=f"sq_minus_{sid}", use_container_width=True): 
+                                    _sup_adj(sid, -q_val, op_q, "【クイック出庫】"); st.toast(f"-{q_val}"); time.sleep(1); refresh()
+                                if c_plus.button("➕ 入庫", key=f"sq_plus_{sid}", use_container_width=True): 
+                                    _sup_adj(sid, q_val, op_q, "【クイック入庫】"); st.toast(f"+{q_val}"); time.sleep(1); refresh()
                             else:
                                 actual_qty = st.number_input("実在庫数量", min_value=0.0, value=float(round(curr_qty, 2)), step=1.0, key=f"sup_actual_{sid}")
                                 diff_qty = round(actual_qty - curr_qty, 4)
@@ -1222,9 +1213,8 @@ elif page == "⚙️ マスタ設定":
                 pt, wt = parse_op_data(order_points.get(sel_m, 0.0))
                 active_lots = get_active_lots_from_master(order_points, sel_m)
                 
-                # 在庫があるロットのリスト
-                hist_lots = [v["ロットNo"] for v in inventory_data.values() if v["原料種別"] == sel_m and v["現在庫(袋)"] > 0.01]
-                # 万が一在庫ゼロでも既にピン留めされていたら消さないように追加
+                # 0以上の在庫を持つロットのみを候補に
+                hist_lots = [v["ロットNo"] for v in inventory_data.values() if v["原料種別"] == sel_m and v["現在庫(袋)"] > 0.000]
                 for l in active_lots:
                     if l not in hist_lots: hist_lots.append(l)
 
@@ -1266,75 +1256,146 @@ elif page == "⚙️ マスタ設定":
         card_end()
 
     with t3:
+        st.markdown("### 🕒 レシピ変更履歴")
+        with st.expander("📝 履歴を確認する"):
+            if recipe_logs:
+                df_rlog = pd.DataFrame(recipe_logs)
+                if "変更日時" in df_rlog.columns: df_rlog = df_rlog.sort_values("変更日時", ascending=False)
+                st.dataframe(df_rlog, use_container_width=True, hide_index=True)
+            else:
+                st.info("変更履歴はありません。")
+
         recipe_kind = st.radio("レシピ種別を選択", ["🍽️ 通常レシピ（仕込み配合）", "🌶️ 調味料レシピ（希釈）"], horizontal=True)
+        op_recipe = render_operator_selector("recipe_op")
+        
         if "通常" in recipe_kind:
             card_start()
+            sec_title("🍽️ 通常レシピのエクセルライク編集")
+            st.caption("Excelのように表を直接編集できます。行を追加して新しいレシピを作成することも可能です。")
             normal_recipes = [r for r in recipes_raw if r.get("大カテゴリ") != "調味料"]
-            edit_mode = st.radio("操作", ["新規作成", "既存の編集"], horizontal=True)
-            target_recipe, old_json = None, "[]"
-            if edit_mode == "既存の編集" and normal_recipes:
-                target_recipe = next((r for r in normal_recipes if r["品名"] == st.selectbox("編集するレシピ", [r["品名"] for r in normal_recipes])), None)
-                if target_recipe: old_json = target_recipe.get("配合JSON", "[]")
-
-            init_name = target_recipe["品名"] if target_recipe else ""
-            init_cat_m = target_recipe.get("大カテゴリ") if target_recipe and target_recipe.get("大カテゴリ") in ["プラント", "OKM", "手詰め"] else "プラント"
-            init_cat_s = target_recipe.get("中カテゴリ", "黒") if target_recipe else "黒"
-            init_items = safe_parse_recipe(old_json)
-            def_mats = ["(未設定)", "水"] + materials
-
-            with st.form("recipe_form"):
-                cat_main = st.radio("大カテゴリ", ["🏭 プラント", "🟦 OKM", "✋ 手詰め"], index=["プラント", "OKM", "手詰め"].index(init_cat_m), horizontal=True)
-                cat_sub = st.radio("中カテゴリ", ["⚪ 白", "⚫ 黒", "❄️ 耐冷", "🍽️ ショクカイ", "🍜 めん", "📦 その他"], index=["白","黒","耐冷","ショクカイ","めん","その他"].index(init_cat_s) if init_cat_s in ["白","黒","耐冷","ショクカイ","めん","その他"] else 1, horizontal=True)
-                new_p_name = st.text_input("製品名", value=init_name, disabled=(target_recipe is not None))
+            MAX_ING = 8
+            
+            rows = []
+            for r in normal_recipes:
+                row = {"品名": r.get("品名", ""), "大カテゴリ": r.get("大カテゴリ", "プラント"), "中カテゴリ": r.get("中カテゴリ", "黒")}
+                items = safe_parse_recipe(r.get("配合JSON"))
+                for i in range(MAX_ING):
+                    row[f"原料{i+1}"] = items[i]["原料名"] if i < len(items) else None
+                    row[f"比率{i+1}(%)"] = float(items[i]["比率"]) if i < len(items) else 0.0
+                rows.append(row)
                 
-                cols_recipe = []
-                for j in range(10):
-                    c_n, c_w = st.columns([2, 1])
-                    def_mat_val = init_items[j]["原料名"] if j < len(init_items) else "(未設定)"
-                    def_rat_val = float(init_items[j]["比率"]) if j < len(init_items) else 0.00
-                    ing_mat = c_n.selectbox(f"成分 {j+1}", def_mats, index=def_mats.index(def_mat_val) if def_mat_val in def_mats else 0, key=f"rmat_{j}")
-                    ing_ratio = c_w.number_input("比率(％)", min_value=0.00, value=def_rat_val, step=0.01, key=f"rrat_{j}")
-                    cols_recipe.append({"name": ing_mat, "ratio": ing_ratio})
+            df_recipes = pd.DataFrame(rows)
+            col_cfg = {
+                "品名": st.column_config.TextColumn("製品名(必須)", required=True),
+                "大カテゴリ": st.column_config.SelectboxColumn("大カテゴリ", options=["プラント", "OKM", "手詰め"]),
+                "中カテゴリ": st.column_config.SelectboxColumn("中カテゴリ", options=["白", "黒", "耐冷", "ショクカイ", "めん", "その他"]),
+            }
+            mat_opts = [m for m in materials if not m.startswith("__")] + ["水"]
+            for i in range(MAX_ING):
+                col_cfg[f"原料{i+1}"] = st.column_config.SelectboxColumn(f"原料{i+1}", options=mat_opts)
+                col_cfg[f"比率{i+1}(%)"] = st.column_config.NumberColumn(f"比率{i+1}(%)", min_value=0.0, format="%.2f")
+
+            edited_df = st.data_editor(df_recipes, num_rows="dynamic", use_container_width=True, column_config=col_cfg, key="recipe_editor")
+            
+            if st.button("💾 通常レシピを保存し履歴を記録", type="primary", use_container_width=True):
+                new_recipes = []
+                changes = []
+                orig_dict = {r["品名"]: r.get("配合JSON", "") for r in normal_recipes}
                 
-                if st.form_submit_button("💾 レシピを保存"):
-                    text_recipe = ", ".join([f"{i['name']}:{i['ratio']}%" for i in cols_recipe if i["name"] != "(未設定)" and i["ratio"] > 0])
-                    cat_str = ["プラント", "OKM", "手詰め"][["🏭 プラント", "🟦 OKM", "✋ 手詰め"].index(cat_main)]
-                    updated_recipes = [r for r in recipes_raw if r["品名"] != new_p_name]
-                    updated_recipes.append({"品名": new_p_name, "大カテゴリ": cat_str, "中カテゴリ": cat_sub.split(" ")[1] if cat_str == "プラント" else "その他", "配合JSON": text_recipe})
-                    if hasattr(sheets, "save_recipes"): sheets.save_recipes(updated_recipes); st.success("保存しました。"); time.sleep(1); refresh()
+                for _, row in edited_df.iterrows():
+                    pname = str(row.get("品名", "")).strip()
+                    if not pname or pname.lower() == "nan": continue
+                    
+                    items = []
+                    for i in range(MAX_ING):
+                        m = str(row.get(f"原料{i+1}", "")).strip()
+                        rat = float(row.get(f"比率{i+1}(%)", 0.0) or 0.0)
+                        if m and m.lower() != "nan" and rat > 0: items.append(f"{m}:{rat}%")
+                    new_json = ", ".join(items)
+                    
+                    new_recipes.append({"品名": pname, "大カテゴリ": row.get("大カテゴリ", "プラント"), "中カテゴリ": row.get("中カテゴリ", "黒"), "配合JSON": new_json})
+                    
+                    if pname not in orig_dict: changes.append(f"【新規追加】{pname} ({new_json})")
+                    elif orig_dict[pname] != new_json: changes.append(f"【変更】{pname} ({orig_dict[pname]} → {new_json})")
+                
+                new_names = [r["品名"] for r in new_recipes]
+                for old_name in orig_dict:
+                    if old_name not in new_names: changes.append(f"【削除】{old_name}")
+                
+                if not changes: st.info("変更はありませんでした。")
+                else:
+                    updated_all = [r for r in recipes_raw if r.get("大カテゴリ") == "調味料"] + new_recipes
+                    if hasattr(sheets, "save_recipes"): sheets.save_recipes(updated_all)
+                    
+                    new_logs = recipe_logs.copy() if recipe_logs else []
+                    for c in changes:
+                        new_logs.append({"ログID": f"RLOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}", "変更日時": datetime.now().isoformat(), "担当者": op_recipe, "内容": c})
+                    if hasattr(sheets, "save_recipe_logs"): sheets.save_recipe_logs(new_logs)
+                    
+                    st.success(f"{len(changes)}件の変更を保存しました。"); time.sleep(1.5); refresh()
             card_end()
+            
         else:
             card_start()
-            sec_title("🌶️ 調味料 希釈レシピ設定")
+            sec_title("🌶️ 調味料レシピ（希釈）のエクセルライク編集")
+            st.caption("希釈倍率を設定します。")
             seasoning_recipes = [r for r in recipes_raw if r.get("大カテゴリ") == "調味料"]
-            s_edit_mode = st.radio("操作", ["新規作成", "既存の編集"], horizontal=True)
-            s_target, s_old_json = None, "[]"
-            if s_edit_mode == "既存の編集" and seasoning_recipes:
-                s_target = next((r for r in seasoning_recipes if r["品名"] == st.selectbox("編集する調味料", [r["品名"] for r in seasoning_recipes])), None)
-                if s_target: s_old_json = s_target.get("配合JSON", "[]")
-
-            s_init_name = s_target["品名"] if s_target else ""
-            s_init_items = safe_parse_seasoning_recipe(s_old_json)
-            season_def_mats = ["(未設定)"] + materials
-
-            with st.form("seasoning_recipe_form"):
-                s_new_name = st.text_input("調味料レシピ名", value=s_init_name, disabled=(s_target is not None))
-                s_cols_recipe = []
-                for j in range(5):
-                    c_n, c_r = st.columns([2, 1])
-                    def_mat_val = s_init_items[j]["原料名"] if j < len(s_init_items) else "(未設定)"
-                    def_ratio_val = float(s_init_items[j]["希釈倍率"]) if j < len(s_init_items) else 1.0
-                    ing_mat = c_n.selectbox(f"原料 {j+1}", season_def_mats, index=season_def_mats.index(def_mat_val) if def_mat_val in season_def_mats else 0, key=f"smat_{j}")
-                    ing_dil = c_r.number_input("希釈倍率", min_value=0.1, value=def_ratio_val, step=0.1, key=f"sdil_{j}")
-                    s_cols_recipe.append({"name": ing_mat, "dil": ing_dil})
-
-                if st.form_submit_button("💾 調味料レシピを保存"):
-                    if not s_new_name.strip(): st.error("レシピ名必須")
-                    else:
-                        text_s_recipe = ", ".join([f"{i['name']}:{i['dil']}倍" for i in s_cols_recipe if i["name"] != "(未設定)"])
-                        updated_recipes = [r for r in recipes_raw if r["品名"] != s_new_name]
-                        updated_recipes.append({"品名": s_new_name, "大カテゴリ": "調味料", "中カテゴリ": "希釈", "配合JSON": text_s_recipe})
-                        if hasattr(sheets, "save_recipes"): sheets.save_recipes(updated_recipes); st.success("保存しました。"); time.sleep(1); refresh()
+            MAX_S_ING = 5
+            
+            rows_s = []
+            for r in seasoning_recipes:
+                row = {"品名": r.get("品名", "")}
+                items = safe_parse_seasoning_recipe(r.get("配合JSON"))
+                for i in range(MAX_S_ING):
+                    row[f"原料{i+1}"] = items[i]["原料名"] if i < len(items) else None
+                    row[f"希釈倍率{i+1}"] = float(items[i]["希釈倍率"]) if i < len(items) else 0.0
+                rows_s.append(row)
+            
+            df_s = pd.DataFrame(rows_s)
+            col_cfg_s = {"品名": st.column_config.TextColumn("調味料名(必須)", required=True)}
+            s_mat_opts = [m for m in materials if not m.startswith("__")]
+            for i in range(MAX_S_ING):
+                col_cfg_s[f"原料{i+1}"] = st.column_config.SelectboxColumn(f"原料{i+1}", options=s_mat_opts)
+                col_cfg_s[f"希釈倍率{i+1}"] = st.column_config.NumberColumn(f"希釈倍率{i+1}", min_value=0.0, format="%.2f")
+                
+            edited_df_s = st.data_editor(df_s, num_rows="dynamic", use_container_width=True, column_config=col_cfg_s, key="season_editor")
+            
+            if st.button("💾 調味料レシピを保存し履歴を記録", type="primary", use_container_width=True):
+                new_s_recipes = []
+                changes_s = []
+                orig_s_dict = {r["品名"]: r.get("配合JSON", "") for r in seasoning_recipes}
+                
+                for _, row in edited_df_s.iterrows():
+                    pname = str(row.get("品名", "")).strip()
+                    if not pname or pname.lower() == "nan": continue
+                    
+                    items = []
+                    for i in range(MAX_S_ING):
+                        m = str(row.get(f"原料{i+1}", "")).strip()
+                        rat = float(row.get(f"希釈倍率{i+1}", 0.0) or 0.0)
+                        if m and m.lower() != "nan" and rat > 0: items.append(f"{m}:{rat}倍")
+                    new_json = ", ".join(items)
+                    
+                    new_s_recipes.append({"品名": pname, "大カテゴリ": "調味料", "中カテゴリ": "希釈", "配合JSON": new_json})
+                    
+                    if pname not in orig_s_dict: changes_s.append(f"【新規追加】{pname} ({new_json})")
+                    elif orig_s_dict[pname] != new_json: changes_s.append(f"【変更】{pname} ({orig_s_dict[pname]} → {new_json})")
+                
+                new_names = [r["品名"] for r in new_s_recipes]
+                for old_name in orig_s_dict:
+                    if old_name not in new_names: changes_s.append(f"【削除】{old_name}")
+                
+                if not changes_s: st.info("変更はありませんでした。")
+                else:
+                    updated_all = [r for r in recipes_raw if r.get("大カテゴリ") != "調味料"] + new_s_recipes
+                    if hasattr(sheets, "save_recipes"): sheets.save_recipes(updated_all)
+                    
+                    new_logs = recipe_logs.copy() if recipe_logs else []
+                    for c in changes_s:
+                        new_logs.append({"ログID": f"RLOG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}", "変更日時": datetime.now().isoformat(), "担当者": op_recipe, "内容": c})
+                    if hasattr(sheets, "save_recipe_logs"): sheets.save_recipe_logs(new_logs)
+                    
+                    st.success(f"{len(changes_s)}件の変更を保存しました。"); time.sleep(1.5); refresh()
             card_end()
             
         card_start()
