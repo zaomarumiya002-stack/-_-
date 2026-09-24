@@ -340,81 +340,54 @@ def _lot_date_sort_key(d_str):
 
 def render_lot_selector(mat_name, lot_key):
     """
-    ロット選択UI（ポップオーバー方式）。
-    ・「📦 ロット選択」ボタンをタップするとポップが開く
+    ロット選択UI（ドロップダウン方式）。
     ・在庫が残っているロットのみを候補として表示（在庫0のロットは表示しない）
     ・候補は入荷日の古い順（先入れ先出し）に表示
-    ・ロット名をタップすると選択され、ポップが自動的に閉じる
+    ・マスタ指定ロットには📌マークをつけて分かりやすくする
+    ・タップして選ぶと自動的に閉じる（ブラウザ標準のドロップダウン動作）
     """
     d_map = {v["ロットNo"]: v["入荷日"] for v in inventory_data.values() if v["原料種別"] == mat_name}
-
-    master_lots = get_active_lots_from_master(order_points, mat_name)
+    master_lots = set(get_active_lots_from_master(order_points, mat_name))
     all_active_lots = _get_active_lots(mat_name)  # 在庫 > 0 のロットのみ
 
-    valid_master_lots = sorted([l for l in master_lots if l in all_active_lots], key=lambda l: _lot_date_sort_key(d_map.get(l, "")))
-    other_lots = sorted([l for l in all_active_lots if l not in valid_master_lots], key=lambda l: _lot_date_sort_key(d_map.get(l, "")))
+    ordered_lots = sorted(all_active_lots, key=lambda l: _lot_date_sort_key(d_map.get(l, "")))
 
-    curr_val = st.session_state.get(lot_key, "─")
-    pop_label = f"✅ {curr_val}" if curr_val not in ("─", "") else "📦 ロット選択 (タップ)"
+    MANUAL_OPT = "✏️ 手入力する"
+    label_of = {l: f"{'📌 ' if l in master_lots else ''}{l} (入荷:{d_map.get(l, '不明')})" for l in ordered_lots}
+    options = [label_of[l] for l in ordered_lots] + [MANUAL_OPT]
+    rev_label = {v: k for k, v in label_of.items()}
 
-    st.markdown(f"<div style='font-size:0.95rem; font-weight:800; color:#475569; margin-bottom:6px;'>📦 {mat_name}</div>", unsafe_allow_html=True)
-    with st.popover(pop_label, use_container_width=True):
-        st.markdown(f"**📦 {mat_name} のロット選択（在庫あり・古い順）**")
+    widget_key = f"{lot_key}_select"
+    if widget_key not in st.session_state or st.session_state[widget_key] not in options:
+        st.session_state[widget_key] = options[0] if ordered_lots else MANUAL_OPT
 
-        if valid_master_lots:
-            st.caption("📌 マスタ指定ロット")
-            for opt in valid_master_lots:
-                if st.button(f"{opt} (入荷:{d_map.get(opt, '不明')})", key=f"btn_{lot_key}_{opt}", use_container_width=True):
-                    st.session_state[lot_key] = opt
-                    st.rerun()  # 明示的なrerunによりポップオーバーが確実に閉じます
+    chosen_label = st.selectbox(f"📦 {mat_name} のロット（在庫あり・古い順）", options, key=widget_key)
 
-        if other_lots:
-            if valid_master_lots:
-                with st.expander("📦 その他の在庫ありロット"):
-                    for opt in other_lots:
-                        if st.button(f"{opt} (入荷:{d_map.get(opt, '不明')})", key=f"btn_{lot_key}_{opt}", use_container_width=True):
-                            st.session_state[lot_key] = opt
-                            st.rerun()
-            else:
-                st.caption("📦 在庫ありロット")
-                for opt in other_lots:
-                    if st.button(f"{opt} (入荷:{d_map.get(opt, '不明')})", key=f"btn_{lot_key}_{opt}", use_container_width=True):
-                        st.session_state[lot_key] = opt
-                        st.rerun()
+    if chosen_label == MANUAL_OPT:
+        m_in = st.text_input("✏️ ロットNoを入力", key=f"{lot_key}_manual_txt", placeholder="例: L12345")
+        final_lot = m_in.strip() if m_in.strip() else "─"
+    else:
+        final_lot = rev_label.get(chosen_label, "─")
 
-        if not valid_master_lots and not other_lots:
-            st.caption("⚠️ 在庫のある候補ロットがありません。")
-
-        st.divider()
-        m_in = st.text_input("✏️ ロット手入力", key=f"txt_{lot_key}")
-        if st.button("手入力で確定", key=f"btn_manual_{lot_key}", use_container_width=True):
-            if m_in.strip():
-                st.session_state[lot_key] = m_in.strip()
-                st.rerun()
-
-    return st.session_state.get(lot_key, "─")
+    st.session_state[lot_key] = final_lot
+    return final_lot
 
 
 def render_operator_selector(operator_key):
     """
-    担当者選択UI（ポップオーバー方式）。
-    ・「👨‍🏭 担当者: ○○」ボタンをタップするとポップが開く
-    ・担当者名をタップすると選択され、ポップが自動的に閉じる
+    担当者選択UI（ドロップダウン方式）。
+    ・タップして選ぶと自動的に閉じる（ブラウザ標準のドロップダウン動作）
     """
-    if operator_key not in st.session_state:
-        st.session_state[operator_key] = inspectors[0] if inspectors else "未登録"
+    if not inspectors:
+        st.caption("⚠️ 担当者が登録されていません。「担当者」タブで登録してください。")
+        st.session_state[operator_key] = "未登録"
+        return "未登録"
 
-    with st.popover(f"👨‍🏭 担当者: {st.session_state[operator_key]}", use_container_width=True):
-        st.markdown("**👨‍🏭 担当者を選択**")
-        if inspectors:
-            for insp in inspectors:
-                if st.button(insp, key=f"btn_insp_{operator_key}_{insp}", use_container_width=True):
-                    st.session_state[operator_key] = insp
-                    st.rerun()  # 明示的なrerunによりポップオーバーが確実に閉じます
-        else:
-            st.caption("⚠️ 担当者が登録されていません。「担当者」タブで登録してください。")
+    if operator_key not in st.session_state or st.session_state[operator_key] not in inspectors:
+        st.session_state[operator_key] = inspectors[0]
 
-    return st.session_state[operator_key]
+    selected = st.selectbox("👨‍🏭 担当者", inspectors, key=operator_key)
+    return selected
 
 
 def render_excel_history_editor(full_records, filtered_df, id_col, editable_cols, numeric_cols, save_func, key_prefix):
