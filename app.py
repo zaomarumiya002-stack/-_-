@@ -40,36 +40,44 @@ st.set_page_config(page_title="食品工場 製造ERP", page_icon="🏭", layout
 st.markdown("""
 <style>
 :root {
-    --c-bg: #f4f6f7; --c-surface: #ffffff; --c-primary: #0f766e; --c-primary-hover: #0b5c56;
-    --c-primary-soft: #e6f2f1; --c-secondary: #1e293b; --c-muted: #64748b; --c-border: #dbe2e6;
-    --c-input-border: #a8b3ba; --c-danger: #b91c1c; --c-danger-bg: #fdf1f1; --c-success: #15803d;
-    --c-water: #94a3b8; --radius-lg: 16px; --radius-md: 10px; --radius-sm: 8px;
-    --shadow-card: 0 2px 6px -1px rgba(15,23,42,0.08);
+    --c-bg: #f8fafc; 
+    --c-surface: #ffffff; 
+    --c-primary: #0369a1; 
+    --c-primary-hover: #0284c7;
+    --c-primary-soft: #f0f9ff; 
+    --c-secondary: #334155; 
+    --c-muted: #64748b; 
+    --c-border: #e2e8f0;
+    --c-input-border: #cbd5e1; 
+    --c-danger: #ef4444; 
+    --c-danger-bg: #fef2f2; 
+    --c-success: #16a34a;
+    --radius-lg: 12px; 
+    --radius-md: 8px; 
+    --radius-sm: 6px;
+    --shadow-card: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1);
 }
 html, body, .stApp { background-color: var(--c-bg) !important; font-family: -apple-system, sans-serif !important; }
 h1, h2, h3, h4, p, span, div, label { color: var(--c-secondary); }
 .block-container { padding-top: 1.5rem !important; max-width: 1280px; }
-.main-header { background: var(--c-surface); padding: 18px 24px; border-radius: var(--radius-lg); margin-bottom: 24px; box-shadow: var(--shadow-card); border-left: 8px solid var(--c-primary); }
-.main-header h1 { font-size: 1.6rem !important; margin: 0 0 6px 0 !important; font-weight: 900 !important; }
-.form-card { background: var(--c-surface); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 24px; box-shadow: var(--shadow-card); border: 1px solid #e2e8f0; }
-.section-title { font-size: 1.25rem; font-weight: 900; margin-bottom: 20px; border-bottom: 3px solid var(--c-border); padding-bottom: 8px; }
+.main-header { background: var(--c-surface); padding: 16px 24px; border-radius: var(--radius-lg); margin-bottom: 24px; box-shadow: var(--shadow-card); border-left: 6px solid var(--c-primary); }
+.main-header h1 { font-size: 1.5rem !important; margin: 0 0 4px 0 !important; font-weight: 800 !important; }
+.form-card { background: var(--c-surface); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 24px; box-shadow: var(--shadow-card); border: 1px solid var(--c-border); }
+.section-title { font-size: 1.2rem; font-weight: 800; margin-bottom: 16px; border-bottom: 2px solid var(--c-border); padding-bottom: 6px; }
 div[data-testid="stRadio"] > div { display: flex; flex-wrap: wrap; gap: 8px !important; }
-div[data-testid="stRadio"] label { background-color: #ffffff; padding: 10px 16px !important; border-radius: var(--radius-sm); border: 2px solid var(--c-border) !important; cursor: pointer; text-align: center; flex: 1 1 auto; justify-content: center; min-width: 80px; transition: all 0.15s ease; }
+div[data-testid="stRadio"] label { background-color: #f8fafc; padding: 10px 16px !important; border-radius: var(--radius-sm); border: 1px solid var(--c-border) !important; cursor: pointer; text-align: center; flex: 1 1 auto; justify-content: center; min-width: 80px; transition: all 0.15s ease; }
 div[data-testid="stRadio"] label p { font-size: 1.0rem !important; font-weight: 700 !important; color: var(--c-secondary) !important; }
-div[data-testid="stRadio"] label:has(input:checked) { background-color: var(--c-primary) !important; border-color: var(--c-primary-hover) !important; box-shadow: 0 3px 10px rgba(15,118,110,0.25) !important; transform: translateY(-1px); }
-div[data-testid="stRadio"] label:has(input:checked) * { color: #ffffff !important; font-weight: 900 !important; fill: #ffffff !important; }
-div[data-baseweb="input"] { background-color: #ffffff !important; border: 3px solid var(--c-input-border) !important; border-radius: var(--radius-md) !important; }
-div[data-baseweb="input"]:focus-within { border-color: var(--c-primary) !important; box-shadow: 0 0 0 5px rgba(15,118,110,0.18) !important; }
-div[data-testid="stNumberInputContainer"] { min-height: 50px !important; background-color: #f8fafc !important; }
-div[data-testid="stNumberInputContainer"] input { font-size: 1.2rem !important; font-weight: 800 !important; text-align: center !important; }
-.stButton button { border-radius: var(--radius-sm) !important; font-weight: 800 !important; padding: 14px 20px !important; min-height: 52px !important; border: 2px solid var(--c-input-border) !important; }
-.stButton button[kind="primary"] { background: var(--c-primary) !important; color: #ffffff !important; border: none !important; box-shadow: 0 4px 12px rgba(15,118,110,0.3) !important; }
-.stButton button[kind="primary"]:hover { background: var(--c-primary-hover) !important; transform: translateY(-2px); }
-.ratio-btn-container .stButton button { min-height: 38px !important; padding: 4px 6px !important; font-size: 0.95rem !important; background: #f8fafc !important; border: 1px solid #cbd5e1 !important; border-radius: 6px !important; }
-.ratio-btn-container .stButton button:hover { background: var(--c-primary-soft) !important; border-color: var(--c-primary) !important; color: var(--c-primary) !important; }
-.ratio-btn-container .stButton button[kind="primary"] { background: var(--c-primary) !important; border: none !important; color: #ffffff !important; }
-[data-testid="stSidebar"] { background-color: #f8fafc !important; border-right: 2px solid var(--c-border); padding-top: 1rem; }
-[data-testid="stSidebar"] div[role="radiogroup"] label { background: #ffffff !important; border: 2px solid var(--c-border) !important; padding: 14px 16px !important; border-radius: var(--radius-md) !important; margin-bottom: 0 !important; }
+div[data-testid="stRadio"] label:has(input:checked) { background-color: var(--c-primary) !important; border-color: var(--c-primary) !important; box-shadow: none !important; }
+div[data-testid="stRadio"] label:has(input:checked) * { color: #ffffff !important; font-weight: 800 !important; fill: #ffffff !important; }
+div[data-baseweb="input"] { background-color: #ffffff !important; border: 2px solid var(--c-input-border) !important; border-radius: var(--radius-md) !important; }
+div[data-baseweb="input"]:focus-within { border-color: var(--c-primary) !important; }
+div[data-testid="stNumberInputContainer"] { min-height: 48px !important; background-color: #f8fafc !important; }
+div[data-testid="stNumberInputContainer"] input { font-size: 1.1rem !important; font-weight: 700 !important; text-align: center !important; }
+.stButton button { border-radius: var(--radius-sm) !important; font-weight: 700 !important; padding: 12px 20px !important; min-height: 48px !important; border: 1px solid var(--c-input-border) !important; }
+.stButton button[kind="primary"] { background: var(--c-primary) !important; color: #ffffff !important; border: none !important; box-shadow: none !important; }
+.stButton button[kind="primary"]:hover { background: var(--c-primary-hover) !important; }
+[data-testid="stSidebar"] { background-color: #ffffff !important; border-right: 1px solid var(--c-border); padding-top: 1rem; }
+[data-testid="stSidebar"] div[role="radiogroup"] label { background: #ffffff !important; border: 1px solid var(--c-border) !important; padding: 12px 16px !important; border-radius: var(--radius-md) !important; margin-bottom: 0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -227,35 +235,21 @@ def sub_cat_icon(name): return SUB_CAT_ICONS.get(name, _deterministic_icon(name,
 def product_icon(name): return _deterministic_icon(name, _PRODUCT_ICON_POOL)
 
 def to_float(v, default=0.0):
-    """スプレッドシートから来る値を安全にfloatへ変換する。
-    全角数字・カンマ・空文字・None・不正値などをすべて吸収し、
-    従来のように例外を握りつぶして値を失うことを防ぐ。"""
     if v is None: return default
     if isinstance(v, (int, float)):
         try:
-            if v != v:  # NaN
-                return default
-        except Exception:
-            pass
+            if v != v: return default
+        except Exception: pass
         return float(v)
     s = str(v).strip()
     if s == "" or s.lower() == "nan": return default
     trans = str.maketrans("０１２３４５６７８９．－", "0123456789.-")
     s = s.translate(trans).replace(",", "").replace("袋", "").replace("kg", "").strip()
-    try:
-        return float(s)
-    except Exception:
-        return default
+    try: return float(s)
+    except Exception: return default
 
-# 在庫が「実質ゼロ」とみなす許容誤差（袋）。丸め誤差の蓄積で0.000...1のような
-# 半端な値が残り、棚卸で0を入力しても0にならない・削除してもロット選択に
-# 出続けてしまう不具合の主因だったため、統一的にこの関数で処理する。
-EPS_BAGS = 0.03
-EPS_QTY = 0.03
-
-def snap_zero(v, eps=EPS_BAGS):
-    v = to_float(v)
-    return 0.0 if abs(v) < eps else v
+# 誤差吸収用（0.05袋 ≒ 1kg未満、あるいは資材0.05個未満は確実にゼロとみなす）
+EPS_TOLERANCE = 0.05
 
 def fmt_kg(val):
     if val is None or val == "": return "0"
@@ -279,7 +273,7 @@ def get_inventory():
         inv[ano] = {
             "入荷No": ano, "入荷日": str(a.get("入荷日", "")).strip() or "-", "ロットNo": str(a.get("ロットNo", "")).strip(), "原料種別": str(a.get("原料種別", "")).strip(), 
             "メーカー": str(a.get("メーカー", "")).strip(), "グレード": str(a.get("グレード", "")).strip(),
-            "1袋重量": round(float(a.get("1袋重量(kg)") or 20.0), 3), "入荷袋数": round(float(a.get("袋数") or 0.0), 3), "使用量(kg)": 0.0, "調整袋数": 0.0
+            "1袋重量": float(a.get("1袋重量(kg)") or 20.0), "入荷袋数": float(a.get("袋数") or 0.0), "使用量(kg)": 0.0, "調整袋数": 0.0
         }
     for b in brewing:
         oa = b.get("その他添加物", "")
@@ -293,35 +287,24 @@ def get_inventory():
                     for l in v_lots:
                         for v in inv.values():
                             if v["ロットNo"] == l: v["使用量(kg)"] += kl
-    hidden_lots_all = set()
-    for mkey, mval in order_points.items():
-        if isinstance(mkey, str) and mkey.startswith("__HIDDEN_LOTS_"):
-            try: hidden_lots_all.update(json.loads(mval))
-            except Exception: pass
 
     for adj in adjustments:
         ano = str(adj.get("入荷No", "")).strip()
         if ano in inv:
-            # to_floatは全角数字・カンマ・空文字などを吸収するため、
-            # 従来のtry/exceptのように値が消えてサイレントに失敗することがない
             inv[ano]["調整袋数"] += to_float(adj.get("調整袋数"))
 
     for v in inv.values():
         bpk = v["1袋重量"] if v["1袋重量"] > 0 else 20.0
         v["使用袋数"] = v["使用量(kg)"] / bpk
 
-        # 丸め誤差を消し、EPS_BAGS未満（デフォルト0.03袋 ≒ 600g）は強制的に0とする。
-        # 0を入力/削除した直後に浮動小数の誤差でわずかに残ってしまうケースを防ぐ。
-        raw_bags = round(v["入荷袋数"] - v["使用袋数"] + v["調整袋数"], 4)
-        raw_bags = snap_zero(raw_bags)
+        raw_bags = v["入荷袋数"] - v["使用袋数"] + v["調整袋数"]
+        
+        # 誤差吸収: 0.05袋未満は確実に0とする
+        if abs(raw_bags) < EPS_TOLERANCE:
+            raw_bags = 0.0
 
-        v["現在庫(袋)"] = max(raw_bags, 0.0)
+        v["現在庫(袋)"] = max(round(raw_bags, 3), 0.0)
         v["現在庫(kg)"] = round(v["現在庫(袋)"] * bpk, 3)
-        # 手動で「強制的に選択肢から除外」に指定されたロットは、
-        # データ不整合などが理由でも確実にゼロ扱い・非表示にする緊急措置
-        if v["ロットNo"] in hidden_lots_all:
-            v["現在庫(袋)"] = 0.0
-            v["現在庫(kg)"] = 0.0
     return inv
 
 inventory_data = get_inventory()
@@ -332,7 +315,6 @@ for v in inventory_data.values():
     type_totals_bag[m] = type_totals_bag.get(m, 0.0) + v["現在庫(袋)"]
 
 def _get_active_lots(mat):
-    """完全に在庫が0になったものは除外する"""
     o = []
     for v in inventory_data.values():
         if v["原料種別"] == mat and v["現在庫(袋)"] > 0 and v["ロットNo"] not in o: 
@@ -340,8 +322,6 @@ def _get_active_lots(mat):
     return o
 
 def sorted_supplies(sup_list=None):
-    """資材マスタで設定した「表示順」に従って並び替える。未設定(空欄)のものは
-    末尾に、登録された順で並ぶ。"""
     sup_list = supplies if sup_list is None else sup_list
     def _key(s):
         o = s.get("表示順", "")
@@ -350,21 +330,14 @@ def sorted_supplies(sup_list=None):
     return sorted(sup_list, key=_key)
 
 def sorted_materials():
-    """原料マスタの並び順（materialsのリスト順そのものが表示順）をそのまま返す。"""
     return [m for m in materials if not str(m).startswith("__")]
 
 def get_lots_for_material(mat):
-    l = [v for v in inventory_data.values() if v["原料種別"] == mat]
+    l = [v for v in inventory_data.values() if v["原料種別"] == mat and v["現在庫(袋)"] > 0]
     l.sort(key=lambda v: v["現在庫(袋)"], reverse=True)
     return l
 
 def get_supply_inventory():
-    hidden_supplies = set()
-    for mkey, mval in order_points.items():
-        if mkey == "__HIDDEN_SUPPLIES__":
-            try: hidden_supplies.update(json.loads(mval))
-            except Exception: pass
-
     inv = {s.get("資材ID"): to_float(s.get("初期在庫")) for s in supplies}
     for log in supply_logs:
         sid, qty, act = log.get("資材ID"), to_float(log.get("数量")), log.get("処理")
@@ -373,18 +346,18 @@ def get_supply_inventory():
             elif act == "使用": inv[sid] -= qty
 
     for sid in list(inv.keys()):
-        # 原料の在庫と同様、丸め誤差でゼロにならない・0を入力しても
-        # ゼロにならない不具合を防ぐため、同じ許容誤差でゼロに丸める
-        inv[sid] = max(snap_zero(inv[sid], EPS_QTY), 0.0)
-        if sid in hidden_supplies:
+        # 誤差吸収: 0.05未満は確実に0とする
+        if abs(inv[sid]) < EPS_TOLERANCE:
             inv[sid] = 0.0
+        else:
+            inv[sid] = max(round(inv[sid], 3), 0.0)
     return inv
 
 # ════════════════════════════════════════════════════════════════
-#  カスタムUIコンポーネント (タップで閉じる＆ロット整理対応)
+#  カスタムUIコンポーネント
 # ════════════════════════════════════════════════════════════════
 def render_amount_adjuster(title, calc_val, p_key):
-    st.markdown(f"<div style='font-size:1.05rem; font-weight:800; color:#475569; margin-bottom:4px;'>{title}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size:1.0rem; font-weight:700; color:#475569; margin-bottom:4px;'>{title}</div>", unsafe_allow_html=True)
     lst_key = f"last_calc_{p_key}"
     last_calc, calc_val = st.session_state.get(lst_key, None), round(calc_val, 2)
     if (last_calc is None) or (abs(float(last_calc) - float(calc_val)) > 1e-6):
@@ -392,33 +365,23 @@ def render_amount_adjuster(title, calc_val, p_key):
     if p_key not in st.session_state: st.session_state[p_key] = calc_val
 
     st.markdown(f"""
-    <div style="background-color:#f0f9ff; border:2px solid #38bdf8; border-radius:8px; padding:10px; margin-bottom:8px; text-align:center; box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);">
-        <span style="font-size:2.0rem; font-weight:900; color:#0284c7;">{fmt_kg(st.session_state[p_key])}</span>
-        <span style="font-size:1.0rem; color:#0369a1; font-weight:700; margin-left:4px;">kg</span>
+    <div style="background-color:#f0f9ff; border:1px solid #cbd5e1; border-radius:8px; padding:10px; margin-bottom:8px; text-align:center;">
+        <span style="font-size:1.8rem; font-weight:800; color:#0284c7;">{fmt_kg(st.session_state[p_key])}</span>
+        <span style="font-size:0.9rem; color:#0369a1; font-weight:600; margin-left:4px;">kg</span>
     </div>
     """, unsafe_allow_html=True)
     return st.number_input("微調整", min_value=0.0, step=0.1, key=p_key, label_visibility="collapsed")
 
 
 def _lot_date_sort_key(d_str):
-    """入荷日文字列 (YYYY-MM-DD) を古い順に並べるためのキー。不明な日付は最後に回す。"""
-    try:
-        return datetime.strptime(str(d_str).strip(), "%Y-%m-%d")
-    except Exception:
-        return datetime.max
+    try: return datetime.strptime(str(d_str).strip(), "%Y-%m-%d")
+    except Exception: return datetime.max
 
 
 def render_lot_selector(mat_name, lot_key):
-    """
-    ロット選択UI（ドロップダウン方式）。
-    ・在庫が残っているロットのみを候補として表示（在庫0のロットは表示しない）
-    ・候補は入荷日の古い順（先入れ先出し）に表示
-    ・マスタ指定ロットには📌マークをつけて分かりやすくする
-    ・タップして選ぶと自動的に閉じる（ブラウザ標準のドロップダウン動作）
-    """
     d_map = {v["ロットNo"]: v["入荷日"] for v in inventory_data.values() if v["原料種別"] == mat_name}
     master_lots = set(get_active_lots_from_master(order_points, mat_name))
-    all_active_lots = _get_active_lots(mat_name)  # 在庫 > 0 のロットのみ
+    all_active_lots = _get_active_lots(mat_name)
 
     ordered_lots = sorted(all_active_lots, key=lambda l: _lot_date_sort_key(d_map.get(l, "")))
 
@@ -444,18 +407,12 @@ def render_lot_selector(mat_name, lot_key):
 
 
 def render_operator_selector(operator_key):
-    """
-    担当者選択UI（ドロップダウン方式）。
-    ・タップして選ぶと自動的に閉じる（ブラウザ標準のドロップダウン動作）
-    """
     if not inspectors:
         st.caption("⚠️ 担当者が登録されていません。「担当者」タブで登録してください。")
         st.session_state[operator_key] = "未登録"
         return "未登録"
-
     if operator_key not in st.session_state or st.session_state[operator_key] not in inspectors:
         st.session_state[operator_key] = inspectors[0]
-
     selected = st.selectbox("👨‍🏭 担当者", inspectors, key=operator_key)
     return selected
 
@@ -503,7 +460,7 @@ def render_excel_history_editor(full_records, filtered_df, id_col, editable_cols
             msg = []
             if n_c: msg.append(f"✏️ 更新 {n_c}件")
             if n_d: msg.append(f"🗑️ 削除 {n_d}件")
-            st.markdown(f'<div style="background:{"#fdf1f1" if n_d else "#e6f2f1"}; border:2px solid {"#b91c1c" if n_d else "#0f766e"}; border-radius:10px; padding:14px; margin:10px 0;">{"<br>".join(msg)}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="background:{"#fef2f2" if n_d else "#f0f9ff"}; border:1px solid {"#ef4444" if n_d else "#0284c7"}; border-radius:8px; padding:12px; margin:10px 0;">{"<br>".join(msg)}</div>', unsafe_allow_html=True)
 
             if (n_c or n_d) and st.button("✅ この内容で確定保存する", type="primary", key=f"{key_prefix}_confirm_btn", use_container_width=True):
                 id_to_record = {str(r.get(id_col)): dict(r) for r in full_records}
@@ -519,13 +476,13 @@ def render_excel_history_editor(full_records, filtered_df, id_col, editable_cols
 
 
 def render_lot_inventory_manager(active_inv):
-    st.caption("💡 棚卸し・在庫調整はこの表で行います。「現在庫(袋)」の数値を実際の数に書き換えてください。**「0」にすれば確実にゼロになります。**")
+    st.caption("💡 棚卸し・在庫調整はこの表で行います。「現在庫(袋)」の数値を実際の数に書き換えてください。**「0」にすれば確実に在庫ゼロになります。**")
     rows = sorted(active_inv, key=lambda v: v["入荷日"])
     orig_map = {v["入荷No"]: v for v in rows}
 
-    df_edit = pd.DataFrame([{"入荷No": v["入荷No"], "入荷日": v["入荷日"], "原料種別": v["原料種別"], "メーカー": v["メーカー"], "ロットNo": v["ロットNo"], "現在庫(袋)": round(v["現在庫(袋)"], 3), "🗑️ 削除(在庫0に)": False} for v in rows])
+    df_edit = pd.DataFrame([{"入荷No": v["入荷No"], "入荷日": v["入荷日"], "原料種別": v["原料種別"], "メーカー": v["メーカー"], "ロットNo": v["ロットNo"], "現在庫(袋)": float(v["現在庫(袋)"])} for v in rows])
     col_cfg = {c: st.column_config.TextColumn(c, disabled=True) for c in ["入荷No", "入荷日", "原料種別", "メーカー", "ロットNo"]}
-    col_cfg["現在庫(袋)"] = st.column_config.NumberColumn("現在庫(袋)【編集可】", format="%.3f", min_value=0.0, step=0.1)
+    col_cfg["現在庫(袋)"] = st.column_config.NumberColumn("現在庫(袋)【編集可】", format="%.2f", min_value=0.0, step=0.5)
 
     edited_df = st.data_editor(df_edit, use_container_width=True, hide_index=True, num_rows="fixed", key="lot_inv_editor", column_config=col_cfg)
     diff_key = "lot_inv_diff_pending"
@@ -537,19 +494,15 @@ def render_lot_inventory_manager(active_inv):
             ano = str(r["入荷No"])
             orig = orig_map.get(ano)
             if not orig: continue
-            del_flag = bool(r.get("🗑️ 削除(在庫0に)", False))
-            theo = to_float(orig["現在庫(袋)"])
-
-            if del_flag:
-                diff = round(-theo, 4) # 完全に元在庫を打ち消す
+            
+            theo = orig["現在庫(袋)"]
+            new_bags = max(0.0, to_float(r["現在庫(袋)"]))
+            if new_bags < EPS_TOLERANCE: 
                 new_bags = 0.0
-            else:
-                new_bags = max(0.0, to_float(r["現在庫(袋)"]))
-                if new_bags < EPS_BAGS: new_bags = 0.0  # 0付近の入力は確実に0として扱う
-                diff = round(new_bags - theo, 4) # スプレッドシートの無限小数を防ぐ
-
-            if del_flag or abs(diff) > 0.005:
-                changes.append({"入荷No": ano, "ロットNo": orig["ロットNo"], "原料種別": orig["原料種別"], "旧在庫": theo, "新在庫": new_bags, "差分": diff, "削除": del_flag})
+                
+            diff = new_bags - theo
+            if abs(diff) > 0.01:
+                changes.append({"入荷No": ano, "ロットNo": orig["ロットNo"], "原料種別": orig["原料種別"], "旧在庫": theo, "新在庫": new_bags, "差分": diff})
         st.session_state[diff_key] = changes
         st.rerun()
 
@@ -560,16 +513,16 @@ def render_lot_inventory_manager(active_inv):
     if changes is not None:
         if not changes: st.info("変更はありませんでした。")
         else:
-            msg_lines = [f"{'🗑️ 0設定' if c['削除'] or c['新在庫']==0 else '✏️ 編集'} {c['原料種別']} ロット:{c['ロットNo']} {fmt_kg(c['旧在庫'])}袋 → {fmt_kg(c['新在庫'])}袋" for c in changes]
-            st.markdown(f'<div style="background:#fdf1f1; border:2px solid #b91c1c; border-radius:10px; padding:14px; margin:10px 0;">{"<br>".join(msg_lines)}</div>', unsafe_allow_html=True)
-            reason_txt = st.text_input("変更理由", key="lot_inv_reason")
+            msg_lines = [f"{'🗑️ 0設定' if c['新在庫']==0 else '✏️ 編集'} {c['原料種別']} ロット:{c['ロットNo']} {fmt_kg(c['旧在庫'])}袋 → {fmt_kg(c['新在庫'])}袋" for c in changes]
+            st.markdown(f'<div style="background:#f0f9ff; border:1px solid #cbd5e1; border-radius:8px; padding:12px; margin:10px 0;">{"<br>".join(msg_lines)}</div>', unsafe_allow_html=True)
+            reason_txt = st.text_input("変更理由 (任意)", key="lot_inv_reason")
             op = render_operator_selector("lot_inv_op")
-            if st.button("✅ 確定保存する（履歴に記録）", type="primary", key="lot_inv_confirm_btn", use_container_width=True):
+            if st.button("✅ 確定保存する", type="primary", key="lot_inv_confirm_btn", use_container_width=True):
                 if hasattr(sheets, "append_adjustment"):
                     for c in changes:
                         sheets.append_adjustment({
                             "調整ID": f"ADJ-{datetime.now().strftime('%Y%m%d%H%M%S%f')}", "入荷No": c["入荷No"], "調整日": str(date.today()),
-                            "調整袋数": c["差分"], "理由": f"【ロット現在庫編集】{fmt_kg(c['旧在庫'])}→{fmt_kg(c['新在庫'])} {reason_txt}",
+                            "調整袋数": c["差分"], "理由": f"【棚卸】{fmt_kg(c['旧在庫'])}→{fmt_kg(c['新在庫'])} {reason_txt}",
                             "担当者": op, "登録日時": datetime.now().isoformat()
                         })
                     st.success(f"{len(changes)}件の変更を保存しました。")
@@ -580,7 +533,7 @@ def render_lot_inventory_manager(active_inv):
 #  サイドバー
 # ════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown('<div style="font-size:1.6rem; font-weight:900; margin-bottom:1.5rem; color:#0f172a;">🏭 製造ERP</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:1.4rem; font-weight:800; margin-bottom:1.5rem; color:#0f172a;">🏭 製造ERP</div>', unsafe_allow_html=True)
     page = st.radio("メニュー", [
         "🏭 製造仕込み", "📊 ダッシュボード", "📝 発注管理", "📥 入荷登録", "📦 在庫・棚卸", 
         "🧹 資材管理", "🔍 トレース", "📋 履歴・帳票", "📈 分析", "⚙️ マスタ設定"
@@ -602,7 +555,7 @@ if page == "🏭 製造仕込み":
     seasoning_recipes_all = [r for r in recipes_raw if r.get("大カテゴリ") == "調味料"]
 
     sec_title("🏭 ライン・製品選択")
-    st.markdown('<div style="font-weight:800; color:#64748b; margin-bottom:8px;">① ラインを選択</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-weight:700; color:#64748b; margin-bottom:8px;">① ラインを選択</div>', unsafe_allow_html=True)
     BASE_BIG_CAT_ORDER = ["プラント", "OKM", "手詰め"]
     dynamic_cats = {v["大カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ")}
     big_cats = list(BASE_BIG_CAT_ORDER) + sorted(dynamic_cats - set(BASE_BIG_CAT_ORDER))
@@ -615,13 +568,13 @@ if page == "🏭 製造仕込み":
     sub_cats = sorted(sub_cats_set, key=lambda c: (SUB_CAT_ORDER.index(c) if c in SUB_CAT_ORDER else len(SUB_CAT_ORDER), c))
     sub_str = None
     if big_cat and len(sub_cats) > 1:
-        st.markdown('<div style="font-weight:800; color:#64748b; margin:24px 0 8px 0;">② 種別を選択</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-weight:700; color:#64748b; margin:24px 0 8px 0;">② 種別を選択</div>', unsafe_allow_html=True)
         sub_cat_labels = [f"{sub_cat_icon(c)} {c}" for c in sub_cats]
         sel_sub_label = st.radio("種別", sub_cat_labels, horizontal=True, label_visibility="collapsed")
         sub_str = sub_cats[sub_cat_labels.index(sel_sub_label)]
     elif sub_cats: sub_str = sub_cats[0]
 
-    st.markdown('<div style="font-weight:800; color:#64748b; margin:24px 0 8px 0;">③ 製品品番を選択</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-weight:700; color:#64748b; margin:24px 0 8px 0;">③ 製品品番を選択</div>', unsafe_allow_html=True)
     filtered_opts = [k for k, v in p_recipes.items() if v.get("大カテゴリ") == big_cat and v.get("中カテゴリ") == sub_str] if big_cat and sub_str else []
     selected_p = None
     active_recipe = []
@@ -644,7 +597,7 @@ if page == "🏭 製造仕込み":
 
         col_in1, col_in2 = st.columns(2)
         with col_in1:
-            st.markdown("<div style='font-weight:800; color:#475569; margin-bottom:6px;'>🏭 希望仕込製品量 (kg)</div>", unsafe_allow_html=True)
+            st.markdown("<div style='font-weight:700; color:#475569; margin-bottom:6px;'>🏭 希望仕込製品量 (kg)</div>", unsafe_allow_html=True)
             c1, c2, c3, c4 = st.columns(4)
             c1.button("+1000", key="btn_t_1000", on_click=add_t_size, args=(1000,), use_container_width=True)
             c2.button("+100",  key="btn_t_100",  on_click=add_t_size, args=(100,),  use_container_width=True)
@@ -653,7 +606,7 @@ if page == "🏭 製造仕込み":
             target_size = st.number_input("仕込量", min_value=0.0, step=10.0, key="t_size", label_visibility="collapsed", format="%.0f")
 
         with col_in2:
-            st.markdown("<div style='font-weight:800; color:#475569; margin-bottom:6px;'>💧 石灰水作成量 (kg)</div>", unsafe_allow_html=True)
+            st.markdown("<div style='font-weight:700; color:#475569; margin-bottom:6px;'>💧 石灰水作成量 (kg)</div>", unsafe_allow_html=True)
             c1, c2, c3, c4 = st.columns(4)
             c1.button("+100", key="btn_l_100", on_click=add_l_size, args=(100,), use_container_width=True)
             c2.button("+10",  key="btn_l_10",  on_click=add_l_size, args=(10,),  use_container_width=True)
@@ -697,8 +650,8 @@ if page == "🏭 製造仕込み":
                     continue
 
                 with st.container(border=True):
-                    st.markdown(f"<div style='font-size:1.3rem; font-weight:900;'>{icon} {r_name}</div>", unsafe_allow_html=True)
-                    if is_lime and lime_msg: st.markdown(f"<div style='font-size:0.9rem; color:#b45309; font-weight:800; margin-top:4px;'>{lime_msg}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='font-size:1.2rem; font-weight:800;'>{icon} {r_name}</div>", unsafe_allow_html=True)
+                    if is_lime and lime_msg: st.markdown(f"<div style='font-size:0.9rem; color:#b45309; font-weight:700; margin-top:4px;'>{lime_msg}</div>", unsafe_allow_html=True)
 
                     if is_konjac:
                         st.markdown("<div style='background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0; margin-top:8px;'>", unsafe_allow_html=True)
@@ -713,29 +666,16 @@ if page == "🏭 製造仕込み":
                             if k_c not in st.session_state: st.session_state[k_c] = 33.0
 
                             st.markdown("<div style='background:#ffffff; padding:12px 16px; border-radius:8px; border:1px solid #cbd5e1; margin-bottom:16px;'>", unsafe_allow_html=True)
-                            st.markdown("<div style='font-size:0.9rem; font-weight:800; color:#475569; margin-bottom:8px;'>🎯 ワンタッチ比率入力パネル</div>", unsafe_allow_html=True)
+                            st.markdown("<div style='font-size:0.9rem; font-weight:700; color:#475569; margin-bottom:8px;'>🎯 ブレンド比率入力</div>", unsafe_allow_html=True)
                             
-                            target_key = f"blend_tgt_{selected_p}_{i}"
-                            if target_key not in st.session_state: st.session_state[target_key] = "🅰️"
-                            st.radio("入力対象を選択", ["🅰️", "🅱️", "🅲"] if is_3 else ["🅰️", "🅱️"], horizontal=True, key=target_key, label_visibility="collapsed")
-                            
-                            st.markdown("<div class='ratio-btn-container' style='margin-top:8px;'>", unsafe_allow_html=True)
-                            btn_cols = st.columns(9)
-                            def update_ratio(v, tgt, ka, kb, kc, is_three):
-                                if tgt == "🅰️": st.session_state[ka] = float(v); st.session_state[kb] = 100.0 - float(v) if not is_three else st.session_state[kb]
-                                elif tgt == "🅱️": st.session_state[kb] = float(v); st.session_state[ka] = 100.0 - float(v) if not is_three else st.session_state[ka]
-                                elif tgt == "🅲" and is_three: st.session_state[kc] = float(v)
-                            
-                            for pidx, pv in enumerate(range(10, 100, 10)):
-                                curr_tgt = st.session_state[target_key]
-                                curr_val = st.session_state.get(k_a) if curr_tgt == "🅰️" else (st.session_state.get(k_b) if curr_tgt == "🅱️" else st.session_state.get(k_c))
-                                btn_cols[pidx].button(f"{pv}%", key=f"rbtn_{selected_p}_{i}_{pv}", on_click=update_ratio, args=(pv, curr_tgt, k_a, k_b, k_c, is_3), type="primary" if (curr_val == float(pv)) else "secondary", use_container_width=True)
-                            st.markdown("</div>", unsafe_allow_html=True)
-
                             cols_ratio = st.columns(3 if is_3 else 2)
                             ratio_a = cols_ratio[0].number_input("🅰️ 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_a)
                             ratio_b = cols_ratio[1].number_input("🅱️ 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_b)
                             ratio_c = cols_ratio[2].number_input("🅲 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_c) if is_3 else 0.0
+                            
+                            total_ratio = ratio_a + ratio_b + ratio_c
+                            if abs(total_ratio - 100.0) > 0.1:
+                                st.warning(f"⚠️ 合計が100%になりません (現在: {total_ratio}%)")
                             st.markdown("</div>", unsafe_allow_html=True)
 
                             mat_a = st.radio("🅰️ 原料種別", konjac_mats, key=f"kma_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
@@ -790,9 +730,9 @@ if page == "🏭 製造仕込み":
             st.markdown("<br>", unsafe_allow_html=True)
             total_in = sum(ing["kg"] for ing in submitted_ingredients)
             st.markdown(f"""
-            <div style="background-color: var(--c-primary-soft); border: 2px solid var(--c-primary); border-radius: 12px; padding: 16px; margin-bottom: 24px; text-align: center;">
-                <div style="font-weight: 800; color: var(--c-muted); font-size: 1.1rem;">💡 合計投入予定量（全原料・水を含む）</div>
-                <div style="font-size: 2.2rem; font-weight: 900; color: var(--c-secondary);">{fmt_kg(total_in)} <span style="font-size:1.2rem; color:var(--c-muted);">kg</span></div>
+            <div style="background-color: var(--c-primary-soft); border: 1px solid var(--c-primary); border-radius: 12px; padding: 16px; margin-bottom: 24px; text-align: center;">
+                <div style="font-weight: 700; color: var(--c-muted); font-size: 1.0rem;">💡 合計投入予定量（全原料・水を含む）</div>
+                <div style="font-size: 2.0rem; font-weight: 800; color: var(--c-secondary);">{fmt_kg(total_in)} <span style="font-size:1.0rem; color:var(--c-muted);">kg</span></div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -824,7 +764,7 @@ if page == "🏭 製造仕込み":
                         del st.session_state[key]
                 
                 st.toast("✅ 製造記録を保存しました", icon="💾")
-                st.markdown(f'<div style="background-color: #dcfce7; border: 2px solid #22c55e; border-radius: 12px; padding: 18px; margin-top: 16px; text-align: center;"><div style="font-size: 1.4rem; font-weight: 900; color: #15803d;">✅ 製造記録を正しく登録しました (仕込No. {next_no})</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="background-color: #dcfce7; border: 1px solid #22c55e; border-radius: 12px; padding: 18px; margin-top: 16px; text-align: center;"><div style="font-size: 1.2rem; font-weight: 800; color: #15803d;">✅ 製造記録を正しく登録しました (仕込No. {next_no})</div></div>', unsafe_allow_html=True)
                 time.sleep(1.8); refresh()
 
 
@@ -859,22 +799,22 @@ elif page == "📊 ダッシュボード":
         curr_kg = type_totals_kg.get(m, 0.0)
         curr_bag = curr_kg / wt if wt > 0 else 0
         is_alert = (pt > 0 and curr_bag < pt)
-        bg_col, b_col = ("#fef2f2", "#ef4444") if is_alert else ("#ffffff", "#cbd5e1")
+        bg_col, b_col = ("#fef2f2", "#ef4444") if is_alert else ("#ffffff", "#e2e8f0")
         alert_msg = f"<div style='font-size:0.9rem; color:#ef4444; font-weight:bold; margin-top:8px;'>⚠️ 発注点({fmt_kg(pt)}袋) 以下</div>" if is_alert else f"<div style='font-size:0.9rem; color:#64748b; font-weight:bold; margin-top:8px;'>✅ 発注点: {fmt_kg(pt)}袋</div>"
 
         img_b64 = get_material_image(order_points, m)
-        img_html = f'<img src="{img_b64}" style="width:50px; height:50px; object-fit:cover; border-radius:6px; margin-right:12px; border:1px solid #e2e8f0;">' if img_b64 else f'<div style="width:50px; height:50px; background:#e2e8f0; border-radius:6px; margin-right:12px; display:flex; align-items:center; justify-content:center; font-size:20px;">🥦</div>'
+        img_html = f'<img src="{img_b64}" style="width:50px; height:50px; object-fit:cover; border-radius:6px; margin-right:12px; border:1px solid #e2e8f0;">' if img_b64 else f'<div style="width:50px; height:50px; background:#f1f5f9; border-radius:6px; margin-right:12px; display:flex; align-items:center; justify-content:center; font-size:20px;">📦</div>'
 
         with cols[idx % 3]:
             st.markdown(f"""
-            <div style="background:{bg_col}; border:2px solid {b_col}; border-radius:12px; padding:18px; margin-bottom:8px;">
+            <div style="background:{bg_col}; border:1px solid {b_col}; border-radius:12px; padding:18px; margin-bottom:8px;">
                 <div style="display:flex; align-items:center; margin-bottom:8px;">
                     {img_html}
-                    <div style="font-weight:900; color:#0f172a; font-size:1.15rem;">{m}</div>
+                    <div style="font-weight:800; color:#0f172a; font-size:1.1rem;">{m}</div>
                 </div>
-                <div class="mat-card-value" style="font-size:2.2rem; font-weight:900; color:#0f766e; margin:6px 0 2px 0;">
-                    {fmt_kg(curr_kg)}<span style="font-size:1.1rem; color:#64748b; margin-right:8px;">kg</span> 
-                    <span style="font-size:1.6rem; color:#0f172a;">({fmt_kg(curr_bag)}袋)</span>
+                <div class="mat-card-value" style="font-size:2.0rem; font-weight:800; color:#0369a1; margin:6px 0 2px 0;">
+                    {fmt_kg(curr_kg)}<span style="font-size:1.0rem; color:#64748b; margin-right:8px;">kg</span> 
+                    <span style="font-size:1.2rem; color:#0f172a;">({fmt_kg(curr_bag)}袋)</span>
                 </div>
                 <div style="font-size:0.85rem; color:#64748b; margin-bottom:4px;">1袋 = {fmt_kg(wt)} kg 換算</div>
                 {alert_msg}
@@ -911,8 +851,9 @@ elif page == "📊 ダッシュボード":
                         if c_p_btn.button("➕ 増やす", key=f"dq_p_{m}", use_container_width=True):
                             _dash_adj(target_ano, q_val, f"【クイック加算:+{q_val}】"); st.toast(f"+{q_val}袋"); time.sleep(1); refresh()
                     else:
-                        st.caption("実際に数えた袋数を入力してください。差分が自動記録されます（0にすれば在庫ゼロになります）。")
-                        actual = st.number_input("実在庫数量(袋)", min_value=0.0, value=float(round(target_lot_data["現在庫(袋)"], 2)), step=1.0, key=f"dash_act_{m}")
+                        st.caption("実際に数えた袋数を入力してください。")
+                        actual = st.number_input("実在庫数量(袋)", min_value=0.0, value=float(round(target_lot_data["現在庫(袋)"], 2)), step=0.5, key=f"dash_act_{m}")
+                        if actual < EPS_TOLERANCE: actual = 0.0
                         diff = round(actual - target_lot_data["現在庫(袋)"], 4)
                         if st.button("💾 この実地数量で確定", type="primary", key=f"dash_save_{m}", use_container_width=True):
                             _dash_adj(target_ano, diff, f"【実地棚卸で {fmt_kg(actual)}袋 に更新】")
@@ -927,7 +868,7 @@ elif page == "📊 ダッシュボード":
                 with st.expander(f"🏷️ {m} のメーカー・グレード別内訳"):
                     for (mk, gr), vals in sorted(breakdown.items()):
                         if vals["kg"] > 0.01:
-                            st.markdown(f'<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-bottom:1px solid #e2e8f0;"><div style="font-weight:800; font-size:0.85rem;">🏢 {mk} / 🏷️ {gr}</div><div style="font-weight:900; color:#0f766e;">{fmt_kg(vals["kg"])} kg（{fmt_kg(vals["bag"])}袋）</div></div>', unsafe_allow_html=True)
+                            st.markdown(f'<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-bottom:1px solid #e2e8f0;"><div style="font-weight:700; font-size:0.85rem;">🏢 {mk} / 🏷️ {gr}</div><div style="font-weight:800; color:#0369a1;">{fmt_kg(vals["kg"])} kg（{fmt_kg(vals["bag"])}袋）</div></div>', unsafe_allow_html=True)
             st.markdown("<div style='margin-bottom:16px;'></div>", unsafe_allow_html=True)
 
 
@@ -1093,13 +1034,13 @@ elif page == "📥 入荷登録":
 # ═══════════════════════════════════════════════════════════════
 elif page == "📦 在庫・棚卸":
     st.markdown('<div class="main-header"><h1>📦 在庫・棚卸管理</h1></div>', unsafe_allow_html=True)
-    t_inv, t_hist, t_hide = st.tabs(["📋 在庫一覧・棚卸し", "🕒 変更履歴", "🚫 表示除外（緊急措置）"])
+    t_inv, t_hist = st.tabs(["📋 在庫一覧・棚卸し", "🕒 変更履歴"])
     
     with t_inv:
         card_start()
         active_inv = [v for v in inventory_data.values() if v["現在庫(袋)"] > 0]
         if active_inv: render_lot_inventory_manager(active_inv)
-        else: st.info("在庫データがありません。")
+        else: st.info("現在庫のある原料データがありません。")
         card_end()
 
     with t_hist:
@@ -1110,27 +1051,13 @@ elif page == "📦 在庫・棚卸":
             df_adj["ロットNo"] = df_adj.get("入荷No", "").astype(str).map(ano_lot_map)
             st.dataframe(fmt_df_numeric(df_adj[[c for c in ["登録日時", "調整日", "入荷No", "ロットNo", "調整袋数", "理由", "担当者"] if c in df_adj.columns]].head(200), ["調整袋数"]), use_container_width=True, hide_index=True)
 
-    with t_hide:
-        card_start()
-        st.caption("💡 0にした・削除したはずのロットが、データの反映タイミングなどの事情でどうしても仕込みのロット選択に残ってしまう場合、ここで該当ロットを指定すると強制的に在庫ゼロ・非表示にできます。")
-        sel_mat_h = st.selectbox("原料を選択", materials if materials else ["未登録"], key="hide_lot_mat")
-        all_lots_for_mat = sorted(list(set(str(v["ロットNo"]) for v in inventory_data.values() if v["原料種別"] == sel_mat_h and v["ロットNo"])))
-        try: cur_hidden = json.loads(order_points.get(f"__HIDDEN_LOTS_{sel_mat_h}__", "[]") or "[]")
-        except Exception: cur_hidden = []
-        new_hidden = st.multiselect("強制的に非表示・在庫ゼロにするロットNo", all_lots_for_mat, default=[l for l in cur_hidden if l in all_lots_for_mat])
-        if st.button("💾 除外設定を保存", type="primary", key="save_hidden_lots"):
-            d = dict(order_points); d[f"__HIDDEN_LOTS_{sel_mat_h}__"] = json.dumps(new_hidden, ensure_ascii=False)
-            if hasattr(sheets, "save_order_points"):
-                sheets.save_order_points(d); st.success("保存しました。"); time.sleep(1.2); refresh()
-        card_end()
-
 
 # ═══════════════════════════════════════════════════════════════
 #  🧹 資材管理
 # ═══════════════════════════════════════════════════════════════
 elif page == "🧹 資材管理":
     st.markdown('<div class="main-header"><h1>🧹 資材・消耗品管理</h1></div>', unsafe_allow_html=True)
-    t_s1, t_s2, t_s3 = st.tabs(["📋 在庫一覧・入出庫・棚卸", "🕒 ログ管理", "🚫 表示除外（緊急措置）"])
+    t_s1, t_s2 = st.tabs(["📋 在庫一覧・入出庫・棚卸", "🕒 ログ管理"])
     
     with t_s1:
         if not supplies: st.warning("資材が未登録です。マスタ設定よりご登録ください。")
@@ -1140,7 +1067,7 @@ elif page == "🧹 資材管理":
             cat_list = sorted(list(set([str(s.get("カテゴリ") or "").strip() or "未分類" for s in supplies_ordered])))
             cat_options = ["📋 すべて表示"] + [f"{_deterministic_icon(c, _ICON_POOL)} {c}" for c in cat_list]
 
-            st.markdown('<div style="font-weight:900; margin-bottom:8px;">① カテゴリを選択</div>', unsafe_allow_html=True)
+            st.markdown('<div style="font-weight:700; margin-bottom:8px;">① カテゴリを選択</div>', unsafe_allow_html=True)
             sel_cat_label = st.radio("カテゴリ", cat_options, horizontal=True, key="supply_cat_filter", label_visibility="collapsed")
             filtered_supplies = supplies_ordered if sel_cat_label == "📋 すべて表示" else [s for s in supplies_ordered if (str(s.get("カテゴリ") or "").strip() or "未分類") == cat_list[cat_options.index(sel_cat_label) - 1]]
 
@@ -1149,8 +1076,8 @@ elif page == "🧹 資材管理":
                 sid = s.get("資材ID"); curr_qty = supply_inventory.get(sid, 0.0)
                 with cols_grid[idx % 3]:
                     with st.container(border=True):
-                        img_html = f'<img src="{s.get("画像URL")}" style="width:60px; height:60px; object-fit:cover; border-radius:8px; margin-right:12px; border:1px solid #e2e8f0;">' if s.get("画像URL") else '<div style="width:60px; height:60px; background:#e2e8f0; border-radius:8px; margin-right:12px; display:flex; align-items:center; justify-content:center; font-size:24px;">📦</div>'
-                        st.markdown(f'<div style="display:flex; align-items:center; margin-bottom:12px;">{img_html}<div><div style="font-weight:900; font-size:1.1rem; color:#0f172a;">{s.get("資材名")}</div><div style="font-size:0.8rem; color:#64748b;">🏷️ {s.get("カテゴリ") or "未分類"}</div></div></div><div style="font-size:2.0rem; font-weight:900; color:#0f766e; margin-bottom:12px; text-align:center;">{fmt_kg(curr_qty)} <span style="font-size:1rem; color:#64748b;">個</span></div>', unsafe_allow_html=True)
+                        img_html = f'<img src="{s.get("画像URL")}" style="width:60px; height:60px; object-fit:cover; border-radius:8px; margin-right:12px; border:1px solid #e2e8f0;">' if s.get("画像URL") else '<div style="width:60px; height:60px; background:#f1f5f9; border-radius:8px; margin-right:12px; display:flex; align-items:center; justify-content:center; font-size:24px;">📦</div>'
+                        st.markdown(f'<div style="display:flex; align-items:center; margin-bottom:12px;">{img_html}<div><div style="font-weight:800; font-size:1.1rem; color:#0f172a;">{s.get("資材名")}</div><div style="font-size:0.8rem; color:#64748b;">🏷️ {s.get("カテゴリ") or "未分類"}</div></div></div><div style="font-size:2.0rem; font-weight:800; color:#0369a1; margin-bottom:12px; text-align:center;">{fmt_kg(curr_qty)} <span style="font-size:1rem; color:#64748b;">個</span></div>', unsafe_allow_html=True)
                         
                         with st.popover("🔧 増減・棚卸調整", use_container_width=True):
                             adj_mode = st.radio("調整方法", ["➕➖ クイック入出庫", "📋 実地数量で確定"], key=f"sup_mode_{sid}", horizontal=True)
@@ -1170,11 +1097,11 @@ elif page == "🧹 資材管理":
                                     _sup_adj(sid, q_val, op_q, "【クイック入庫】"); st.toast(f"+{q_val}"); time.sleep(1); refresh()
                             else:
                                 actual_qty = st.number_input("実在庫数量", min_value=0.0, value=float(round(curr_qty, 2)), step=1.0, key=f"sup_actual_{sid}")
-                                actual_qty = 0.0 if actual_qty < EPS_QTY else actual_qty  # 0付近の入力は確実に0として扱う
+                                if actual_qty < EPS_TOLERANCE: actual_qty = 0.0
                                 diff_qty = round(actual_qty - curr_qty, 4)
-                                reason_txt = st.text_input("調整理由", key=f"sup_adj_reason_{sid}")
+                                reason_txt = st.text_input("調整理由 (任意)", key=f"sup_adj_reason_{sid}")
                                 if st.button("💾 この実地数量で確定", type="primary", use_container_width=True, key=f"sup_adj_save_{sid}"):
-                                    if abs(diff_qty) > 0.001:
+                                    if abs(diff_qty) > 0.01:
                                         _sup_adj(sid, diff_qty, op_q, f"【棚卸調整:実地{fmt_kg(actual_qty)}に更新】{reason_txt}")
                                         st.success(f"現在庫を {fmt_kg(actual_qty)} に更新しました。"); time.sleep(1.5); refresh()
 
@@ -1194,20 +1121,6 @@ elif page == "🧹 資材管理":
                     if hasattr(sheets, "delete_supply_log"):
                         sheets.delete_supply_log(log_options[sel_log])
                         st.success("削除しました。"); time.sleep(1); refresh()
-
-    with t_s3:
-        card_start()
-        st.caption("💡 実地数量で0にしたはずの資材が反映の都合で残ってしまう場合、ここで強制的に在庫ゼロ・非表示にできます。")
-        try: cur_hidden_sup = json.loads(order_points.get("__HIDDEN_SUPPLIES__", "[]") or "[]")
-        except Exception: cur_hidden_sup = []
-        sup_name_map = {s.get("資材ID"): s.get("資材名") for s in supplies}
-        sup_id_opts = list(sup_name_map.keys())
-        new_hidden_sup = st.multiselect("強制的に非表示・在庫ゼロにする資材", sup_id_opts, default=[x for x in cur_hidden_sup if x in sup_id_opts], format_func=lambda sid: sup_name_map.get(sid, sid))
-        if st.button("💾 除外設定を保存", type="primary", key="save_hidden_supplies"):
-            d = dict(order_points); d["__HIDDEN_SUPPLIES__"] = json.dumps(new_hidden_sup, ensure_ascii=False)
-            if hasattr(sheets, "save_order_points"):
-                sheets.save_order_points(d); st.success("保存しました。"); time.sleep(1.2); refresh()
-        card_end()
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1278,8 +1191,6 @@ elif page == "📈 分析":
     st.markdown('<div class="main-header"><h1>📈 製造・原料・資材 分析</h1></div>', unsafe_allow_html=True)
 
     def build_material_consumption_events():
-        """製造記録(その他添加物欄)から、原料が「いつ・どれだけ」消費されたかの
-        履歴イベントを組み立てる。現在庫のスナップショットではなく、実際の使用実績のみを扱う。"""
         events = []
         for b in brewing:
             bdate = str(b.get("仕込日", "")).strip()
@@ -1305,7 +1216,7 @@ elif page == "📈 分析":
 
             card_start()
             monthly_trend = df_brw_global.groupby("month")["仕込量(kg)"].sum().reset_index().sort_values("month")
-            fig = go.Figure(go.Bar(x=monthly_trend["month"], y=monthly_trend["仕込量(kg)"], marker_color="#0f766e"))
+            fig = go.Figure(go.Bar(x=monthly_trend["month"], y=monthly_trend["仕込量(kg)"], marker_color="#0369a1"))
             fig.update_layout(title="月間生産推移 (kg)", xaxis_title="年月", yaxis_title="総製造量", plot_bgcolor="#ffffff")
             st.plotly_chart(fig, use_container_width=True)
             card_end()
@@ -1314,7 +1225,7 @@ elif page == "📈 分析":
             with c1:
                 card_start()
                 pie_data = df_brw_global.groupby("品名")["仕込量(kg)"].sum().reset_index().sort_values("仕込量(kg)", ascending=False)
-                fig_tree = px.treemap(pie_data[pie_data["仕込量(kg)"] > 0], path=["品名"], values="仕込量(kg)", color="仕込量(kg)", color_continuous_scale=["#fde4d0", "#0f766e"], title="製品構成比")
+                fig_tree = px.treemap(pie_data[pie_data["仕込量(kg)"] > 0], path=["品名"], values="仕込量(kg)", color="仕込量(kg)", color_continuous_scale=["#f0f9ff", "#0369a1"], title="製品構成比")
                 fig_tree.update_traces(texttemplate="<b>%{label}</b><br>%{value:,.0f} kg", textfont_size=14); fig_tree.update_layout(margin=dict(t=50, l=6, r=6, b=6))
                 st.plotly_chart(fig_tree, use_container_width=True)
                 card_end()
@@ -1322,12 +1233,12 @@ elif page == "📈 分析":
                 card_start()
                 topN = pie_data.sort_values("仕込量(kg)", ascending=True).tail(15)
                 fig_bar = px.bar(topN, x="仕込量(kg)", y="品名", orientation='h', title="製造量 上位15品目", text="仕込量(kg)")
-                fig_bar.update_traces(texttemplate="%{text:,.0f} kg", textposition="outside", marker_color="#0f766e"); fig_bar.update_layout(height=max(380, 34 * len(topN)), plot_bgcolor="#ffffff", yaxis_title="")
+                fig_bar.update_traces(texttemplate="%{text:,.0f} kg", textposition="outside", marker_color="#0369a1"); fig_bar.update_layout(height=max(380, 34 * len(topN)), plot_bgcolor="#ffffff", yaxis_title="")
                 st.plotly_chart(fig_bar, use_container_width=True)
                 card_end()
 
     # ---------------------------------------------------------------
-    # 🌾 こんにゃく粉・原料 消費分析（いつ・どれだけ消費したか。現在庫は表示しない）
+    # 🌾 こんにゃく粉・原料 消費分析
     # ---------------------------------------------------------------
     with t_konjac:
         df_ev = build_material_consumption_events()
@@ -1351,7 +1262,7 @@ elif page == "📈 分析":
                 st.info("対象期間内の消費実績がありません。")
             else:
                 card_start()
-                sec_title("📅 月別 消費量の推移（いつ・どれだけ消費したか）")
+                sec_title("📅 月別 消費量の推移")
                 monthly = df_focus.groupby(["month", "原料名"])["kg"].sum().reset_index()
                 fig_m = px.bar(monthly, x="month", y="kg", color="原料名", title="原料別 月間消費量 (kg)", barmode="stack")
                 fig_m.update_layout(plot_bgcolor="#ffffff", xaxis_title="年月", yaxis_title="消費量(kg)")
@@ -1361,10 +1272,10 @@ elif page == "📈 分析":
                 c1, c2 = st.columns(2)
                 with c1:
                     card_start()
-                    sec_title("🏆 原料別 合計消費量（期間内）")
+                    sec_title("🏆 原料別 合計消費量")
                     total_by_mat = df_focus.groupby("原料名")["kg"].sum().reset_index().sort_values("kg", ascending=True)
                     fig_t = px.bar(total_by_mat, x="kg", y="原料名", orientation="h", text="kg", title="合計消費量 (kg)")
-                    fig_t.update_traces(texttemplate="%{text:,.0f} kg", textposition="outside", marker_color="#0f766e")
+                    fig_t.update_traces(texttemplate="%{text:,.0f} kg", textposition="outside", marker_color="#0369a1")
                     fig_t.update_layout(plot_bgcolor="#ffffff", height=max(300, 34 * len(total_by_mat)), yaxis_title="")
                     st.plotly_chart(fig_t, use_container_width=True)
                     card_end()
@@ -1385,7 +1296,7 @@ elif page == "📈 分析":
                 card_end()
 
     # ---------------------------------------------------------------
-    # 🧻 資材 消費分析（いつ・どれだけ消費したか。現在庫は表示しない）
+    # 🧻 資材 消費分析
     # ---------------------------------------------------------------
     with t_supply:
         if not supply_logs:
@@ -1415,7 +1326,7 @@ elif page == "📈 分析":
                     df_use_f["month"] = df_use_f["日付_dt"].dt.to_period("M").astype(str)
 
                     card_start()
-                    sec_title("📅 月別 消費量の推移（いつ・どれだけ消費したか）")
+                    sec_title("📅 月別 消費量の推移")
                     monthly_s = df_use_f.groupby(["month", "資材名"])["数量"].sum().reset_index()
                     fig_ms = px.bar(monthly_s, x="month", y="数量", color="資材名", title="資材別 月間消費数量", barmode="stack")
                     fig_ms.update_layout(plot_bgcolor="#ffffff", xaxis_title="年月", yaxis_title="消費数量")
@@ -1425,10 +1336,10 @@ elif page == "📈 分析":
                     c1, c2 = st.columns(2)
                     with c1:
                         card_start()
-                        sec_title("🏆 資材別 合計消費量（期間内）")
+                        sec_title("🏆 資材別 合計消費量")
                         total_by_sup = df_use_f.groupby("資材名")["数量"].sum().reset_index().sort_values("数量", ascending=True)
                         fig_ts = px.bar(total_by_sup, x="数量", y="資材名", orientation="h", text="数量", title="合計消費数量")
-                        fig_ts.update_traces(texttemplate="%{text:,.0f}", textposition="outside", marker_color="#0f766e")
+                        fig_ts.update_traces(texttemplate="%{text:,.0f}", textposition="outside", marker_color="#0369a1")
                         fig_ts.update_layout(plot_bgcolor="#ffffff", height=max(300, 34 * len(total_by_sup)), yaxis_title="")
                         st.plotly_chart(fig_ts, use_container_width=True)
                         card_end()
@@ -1513,6 +1424,10 @@ elif page == "⚙️ マスタ設定":
                             img = Image.open(uploaded_file); img.thumbnail((150, 150)); buffered = BytesIO(); img.save(buffered, format="PNG")
                             d[f"__IMAGE_{sel_m}__"] = f"data:image/png;base64,{base64.b64encode(buffered.getvalue()).decode('utf-8')}"
                         
+                        # hidden lots related key cleaning
+                        keys_to_remove = [k for k in d.keys() if k.startswith("__HIDDEN_LOTS_")]
+                        for k in keys_to_remove: d.pop(k, None)
+
                         if hasattr(sheets, "save_order_points"):
                             sheets.save_order_points(d)
                             st.success(f"{sel_m} の詳細設定を保存しました。"); time.sleep(1.5); refresh()
@@ -1760,3 +1675,5 @@ elif page == "⚙️ マスタ設定":
             save_grade_list(order_points, [str(x).strip() for x in ed_grade["グレード名"].tolist() if x is not None and str(x).strip() and str(x).strip().lower() != "nan"])
             st.success("保存しました。"); time.sleep(1); refresh()
         card_end()
+
+--- END OF FILE app.py ---
