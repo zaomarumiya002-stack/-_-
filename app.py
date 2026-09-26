@@ -226,6 +226,37 @@ def big_cat_icon(name): return BIG_CAT_ICONS.get(name, _deterministic_icon(name,
 def sub_cat_icon(name): return SUB_CAT_ICONS.get(name, _deterministic_icon(name, _ICON_POOL))
 def product_icon(name): return _deterministic_icon(name, _PRODUCT_ICON_POOL)
 
+def to_float(v, default=0.0):
+    """スプレッドシートから来る値を安全にfloatへ変換する。
+    全角数字・カンマ・空文字・None・不正値などをすべて吸収し、
+    従来のように例外を握りつぶして値を失うことを防ぐ。"""
+    if v is None: return default
+    if isinstance(v, (int, float)):
+        try:
+            if v != v:  # NaN
+                return default
+        except Exception:
+            pass
+        return float(v)
+    s = str(v).strip()
+    if s == "" or s.lower() == "nan": return default
+    trans = str.maketrans("０１２３４５６７８９．－", "0123456789.-")
+    s = s.translate(trans).replace(",", "").replace("袋", "").replace("kg", "").strip()
+    try:
+        return float(s)
+    except Exception:
+        return default
+
+# 在庫が「実質ゼロ」とみなす許容誤差（袋）。丸め誤差の蓄積で0.000...1のような
+# 半端な値が残り、棚卸で0を入力しても0にならない・削除してもロット選択に
+# 出続けてしまう不具合の主因だったため、統一的にこの関数で処理する。
+EPS_BAGS = 0.03
+EPS_QTY = 0.03
+
+def snap_zero(v, eps=EPS_BAGS):
+    v = to_float(v)
+    return 0.0 if abs(v) < eps else v
+
 def fmt_kg(val):
     if val is None or val == "": return "0"
     try: v = float(val); return f"{int(v)}" if v.is_integer() else f"{v:.2f}".rstrip('0').rstrip('.')
@@ -262,23 +293,35 @@ def get_inventory():
                     for l in v_lots:
                         for v in inv.values():
                             if v["ロットNo"] == l: v["使用量(kg)"] += kl
+    hidden_lots_all = set()
+    for mkey, mval in order_points.items():
+        if isinstance(mkey, str) and mkey.startswith("__HIDDEN_LOTS_"):
+            try: hidden_lots_all.update(json.loads(mval))
+            except Exception: pass
+
     for adj in adjustments:
         ano = str(adj.get("入荷No", "")).strip()
         if ano in inv:
-            try: inv[ano]["調整袋数"] += float(adj.get("調整袋数") or 0.0)
-            except: pass
-    
+            # to_floatは全角数字・カンマ・空文字などを吸収するため、
+            # 従来のtry/exceptのように値が消えてサイレントに失敗することがない
+            inv[ano]["調整袋数"] += to_float(adj.get("調整袋数"))
+
     for v in inv.values():
         bpk = v["1袋重量"] if v["1袋重量"] > 0 else 20.0
         v["使用袋数"] = v["使用量(kg)"] / bpk
-        
-        # 丸め誤差を消し、0.01袋（約200g）未満は強制的に0とする
+
+        # 丸め誤差を消し、EPS_BAGS未満（デフォルト0.03袋 ≒ 600g）は強制的に0とする。
+        # 0を入力/削除した直後に浮動小数の誤差でわずかに残ってしまうケースを防ぐ。
         raw_bags = round(v["入荷袋数"] - v["使用袋数"] + v["調整袋数"], 4)
-        if raw_bags < 0.01:
-            raw_bags = 0.0
-            
+        raw_bags = snap_zero(raw_bags)
+
         v["現在庫(袋)"] = max(raw_bags, 0.0)
         v["現在庫(kg)"] = round(v["現在庫(袋)"] * bpk, 3)
+        # 手動で「強制的に選択肢から除外」に指定されたロットは、
+        # データ不整合などが理由でも確実にゼロ扱い・非表示にする緊急措置
+        if v["ロットNo"] in hidden_lots_all:
+            v["現在庫(袋)"] = 0.0
+            v["現在庫(kg)"] = 0.0
     return inv
 
 inventory_data = get_inventory()
@@ -296,18 +339,45 @@ def _get_active_lots(mat):
             o.append(v["ロットNo"])
     return o
 
+def sorted_supplies(sup_list=None):
+    """資材マスタで設定した「表示順」に従って並び替える。未設定(空欄)のものは
+    末尾に、登録された順で並ぶ。"""
+    sup_list = supplies if sup_list is None else sup_list
+    def _key(s):
+        o = s.get("表示順", "")
+        o = to_float(o, default=None) if str(o).strip() != "" else None
+        return (o is None, o if o is not None else 0.0)
+    return sorted(sup_list, key=_key)
+
+def sorted_materials():
+    """原料マスタの並び順（materialsのリスト順そのものが表示順）をそのまま返す。"""
+    return [m for m in materials if not str(m).startswith("__")]
+
 def get_lots_for_material(mat):
     l = [v for v in inventory_data.values() if v["原料種別"] == mat]
     l.sort(key=lambda v: v["現在庫(袋)"], reverse=True)
     return l
 
 def get_supply_inventory():
-    inv = {s.get("資材ID"): float(s.get("初期在庫") or 0.0) for s in supplies}
+    hidden_supplies = set()
+    for mkey, mval in order_points.items():
+        if mkey == "__HIDDEN_SUPPLIES__":
+            try: hidden_supplies.update(json.loads(mval))
+            except Exception: pass
+
+    inv = {s.get("資材ID"): to_float(s.get("初期在庫")) for s in supplies}
     for log in supply_logs:
-        sid, qty, act = log.get("資材ID"), float(log.get("数量") or 0.0), log.get("処理")
+        sid, qty, act = log.get("資材ID"), to_float(log.get("数量")), log.get("処理")
         if sid in inv:
             if act == "入荷": inv[sid] += qty
             elif act == "使用": inv[sid] -= qty
+
+    for sid in list(inv.keys()):
+        # 原料の在庫と同様、丸め誤差でゼロにならない・0を入力しても
+        # ゼロにならない不具合を防ぐため、同じ許容誤差でゼロに丸める
+        inv[sid] = max(snap_zero(inv[sid], EPS_QTY), 0.0)
+        if sid in hidden_supplies:
+            inv[sid] = 0.0
     return inv
 
 # ════════════════════════════════════════════════════════════════
@@ -468,15 +538,16 @@ def render_lot_inventory_manager(active_inv):
             orig = orig_map.get(ano)
             if not orig: continue
             del_flag = bool(r.get("🗑️ 削除(在庫0に)", False))
-            theo = orig["現在庫(袋)"]
-            
+            theo = to_float(orig["現在庫(袋)"])
+
             if del_flag:
                 diff = round(-theo, 4) # 完全に元在庫を打ち消す
                 new_bags = 0.0
             else:
-                new_bags = max(0.0, float(r["現在庫(袋)"]))
+                new_bags = max(0.0, to_float(r["現在庫(袋)"]))
+                if new_bags < EPS_BAGS: new_bags = 0.0  # 0付近の入力は確実に0として扱う
                 diff = round(new_bags - theo, 4) # スプレッドシートの無限小数を防ぐ
-                
+
             if del_flag or abs(diff) > 0.005:
                 changes.append({"入荷No": ano, "ロットNo": orig["ロットNo"], "原料種別": orig["原料種別"], "旧在庫": theo, "新在庫": new_bags, "差分": diff, "削除": del_flag})
         st.session_state[diff_key] = changes
@@ -1011,7 +1082,7 @@ elif page == "📥 入荷登録":
             df_arr = pd.DataFrame(arrivals).sort_values("入荷日", ascending=False).reset_index(drop=True)
             card_start()
             sec_title("✏️ 入荷履歴の一括編集（Excel風）")
-            arr_editable_cols = ["入荷日", "原料種別", "メーカー", "ロットNo", "袋数", "1袋重量(kg)", "備考"]
+            arr_editable_cols = [c for c in ["入荷日", "原料種別", "メーカー", "ロットNo", "袋数", "1袋重量(kg)", "備考"] if c in df_arr.columns]
             if "グレード" in df_arr.columns: arr_editable_cols.insert(2, "グレード")
             render_excel_history_editor(full_records=arrivals, filtered_df=df_arr.head(200), id_col="入荷No", editable_cols=arr_editable_cols, numeric_cols=["袋数", "1袋重量(kg)"], save_func=_save_arrivals_recalc, key_prefix="arr_hist")
             card_end()
@@ -1022,7 +1093,7 @@ elif page == "📥 入荷登録":
 # ═══════════════════════════════════════════════════════════════
 elif page == "📦 在庫・棚卸":
     st.markdown('<div class="main-header"><h1>📦 在庫・棚卸管理</h1></div>', unsafe_allow_html=True)
-    t_inv, t_hist = st.tabs(["📋 在庫一覧・棚卸し", "🕒 変更履歴"])
+    t_inv, t_hist, t_hide = st.tabs(["📋 在庫一覧・棚卸し", "🕒 変更履歴", "🚫 表示除外（緊急措置）"])
     
     with t_inv:
         card_start()
@@ -1039,24 +1110,39 @@ elif page == "📦 在庫・棚卸":
             df_adj["ロットNo"] = df_adj.get("入荷No", "").astype(str).map(ano_lot_map)
             st.dataframe(fmt_df_numeric(df_adj[[c for c in ["登録日時", "調整日", "入荷No", "ロットNo", "調整袋数", "理由", "担当者"] if c in df_adj.columns]].head(200), ["調整袋数"]), use_container_width=True, hide_index=True)
 
+    with t_hide:
+        card_start()
+        st.caption("💡 0にした・削除したはずのロットが、データの反映タイミングなどの事情でどうしても仕込みのロット選択に残ってしまう場合、ここで該当ロットを指定すると強制的に在庫ゼロ・非表示にできます。")
+        sel_mat_h = st.selectbox("原料を選択", materials if materials else ["未登録"], key="hide_lot_mat")
+        all_lots_for_mat = sorted(list(set(str(v["ロットNo"]) for v in inventory_data.values() if v["原料種別"] == sel_mat_h and v["ロットNo"])))
+        try: cur_hidden = json.loads(order_points.get(f"__HIDDEN_LOTS_{sel_mat_h}__", "[]") or "[]")
+        except Exception: cur_hidden = []
+        new_hidden = st.multiselect("強制的に非表示・在庫ゼロにするロットNo", all_lots_for_mat, default=[l for l in cur_hidden if l in all_lots_for_mat])
+        if st.button("💾 除外設定を保存", type="primary", key="save_hidden_lots"):
+            d = dict(order_points); d[f"__HIDDEN_LOTS_{sel_mat_h}__"] = json.dumps(new_hidden, ensure_ascii=False)
+            if hasattr(sheets, "save_order_points"):
+                sheets.save_order_points(d); st.success("保存しました。"); time.sleep(1.2); refresh()
+        card_end()
+
 
 # ═══════════════════════════════════════════════════════════════
 #  🧹 資材管理
 # ═══════════════════════════════════════════════════════════════
 elif page == "🧹 資材管理":
     st.markdown('<div class="main-header"><h1>🧹 資材・消耗品管理</h1></div>', unsafe_allow_html=True)
-    t_s1, t_s2 = st.tabs(["📋 在庫一覧・入出庫・棚卸", "🕒 ログ管理"])
+    t_s1, t_s2, t_s3 = st.tabs(["📋 在庫一覧・入出庫・棚卸", "🕒 ログ管理", "🚫 表示除外（緊急措置）"])
     
     with t_s1:
         if not supplies: st.warning("資材が未登録です。マスタ設定よりご登録ください。")
         else:
             supply_inventory = get_supply_inventory()
-            cat_list = sorted(list(set([str(s.get("カテゴリ") or "").strip() or "未分類" for s in supplies])))
+            supplies_ordered = sorted_supplies()
+            cat_list = sorted(list(set([str(s.get("カテゴリ") or "").strip() or "未分類" for s in supplies_ordered])))
             cat_options = ["📋 すべて表示"] + [f"{_deterministic_icon(c, _ICON_POOL)} {c}" for c in cat_list]
 
             st.markdown('<div style="font-weight:900; margin-bottom:8px;">① カテゴリを選択</div>', unsafe_allow_html=True)
             sel_cat_label = st.radio("カテゴリ", cat_options, horizontal=True, key="supply_cat_filter", label_visibility="collapsed")
-            filtered_supplies = supplies if sel_cat_label == "📋 すべて表示" else [s for s in supplies if (str(s.get("カテゴリ") or "").strip() or "未分類") == cat_list[cat_options.index(sel_cat_label) - 1]]
+            filtered_supplies = supplies_ordered if sel_cat_label == "📋 すべて表示" else [s for s in supplies_ordered if (str(s.get("カテゴリ") or "").strip() or "未分類") == cat_list[cat_options.index(sel_cat_label) - 1]]
 
             cols_grid = st.columns(min(3, len(filtered_supplies))) if filtered_supplies else []
             for idx, s in enumerate(filtered_supplies):
@@ -1084,10 +1170,11 @@ elif page == "🧹 資材管理":
                                     _sup_adj(sid, q_val, op_q, "【クイック入庫】"); st.toast(f"+{q_val}"); time.sleep(1); refresh()
                             else:
                                 actual_qty = st.number_input("実在庫数量", min_value=0.0, value=float(round(curr_qty, 2)), step=1.0, key=f"sup_actual_{sid}")
+                                actual_qty = 0.0 if actual_qty < EPS_QTY else actual_qty  # 0付近の入力は確実に0として扱う
                                 diff_qty = round(actual_qty - curr_qty, 4)
                                 reason_txt = st.text_input("調整理由", key=f"sup_adj_reason_{sid}")
                                 if st.button("💾 この実地数量で確定", type="primary", use_container_width=True, key=f"sup_adj_save_{sid}"):
-                                    if diff_qty != 0:
+                                    if abs(diff_qty) > 0.001:
                                         _sup_adj(sid, diff_qty, op_q, f"【棚卸調整:実地{fmt_kg(actual_qty)}に更新】{reason_txt}")
                                         st.success(f"現在庫を {fmt_kg(actual_qty)} に更新しました。"); time.sleep(1.5); refresh()
 
@@ -1107,6 +1194,20 @@ elif page == "🧹 資材管理":
                     if hasattr(sheets, "delete_supply_log"):
                         sheets.delete_supply_log(log_options[sel_log])
                         st.success("削除しました。"); time.sleep(1); refresh()
+
+    with t_s3:
+        card_start()
+        st.caption("💡 実地数量で0にしたはずの資材が反映の都合で残ってしまう場合、ここで強制的に在庫ゼロ・非表示にできます。")
+        try: cur_hidden_sup = json.loads(order_points.get("__HIDDEN_SUPPLIES__", "[]") or "[]")
+        except Exception: cur_hidden_sup = []
+        sup_name_map = {s.get("資材ID"): s.get("資材名") for s in supplies}
+        sup_id_opts = list(sup_name_map.keys())
+        new_hidden_sup = st.multiselect("強制的に非表示・在庫ゼロにする資材", sup_id_opts, default=[x for x in cur_hidden_sup if x in sup_id_opts], format_func=lambda sid: sup_name_map.get(sid, sid))
+        if st.button("💾 除外設定を保存", type="primary", key="save_hidden_supplies"):
+            d = dict(order_points); d["__HIDDEN_SUPPLIES__"] = json.dumps(new_hidden_sup, ensure_ascii=False)
+            if hasattr(sheets, "save_order_points"):
+                sheets.save_order_points(d); st.success("保存しました。"); time.sleep(1.2); refresh()
+        card_end()
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1174,36 +1275,178 @@ elif page == "📋 履歴・帳票":
 #  📈 分析
 # ═══════════════════════════════════════════════════════════════
 elif page == "📈 分析":
-    st.markdown('<div class="main-header"><h1>📈 製造・原料 分析</h1></div>', unsafe_allow_html=True)
-    df_brw_global = pd.DataFrame(brewing)
-    if df_brw_global.empty: st.info("データがありません。")
-    else:
-        df_brw_global["仕込日_dt"] = pd.to_datetime(df_brw_global["仕込日"], errors="coerce")
-        df_brw_global["month"] = df_brw_global["仕込日_dt"].dt.to_period("M").astype(str)
-        df_brw_global["仕込量(kg)"] = pd.to_numeric(df_brw_global["仕込量(kg)"], errors="coerce").fillna(0)
-        
-        card_start()
-        monthly_trend = df_brw_global.groupby("month")["仕込量(kg)"].sum().reset_index().sort_values("month")
-        fig = go.Figure(go.Bar(x=monthly_trend["month"], y=monthly_trend["仕込量(kg)"], marker_color="#0f766e"))
-        fig.update_layout(title="月間生産推移 (kg)", xaxis_title="年月", yaxis_title="総製造量", plot_bgcolor="#ffffff")
-        st.plotly_chart(fig, use_container_width=True)
-        card_end()
-        
-        c1, c2 = st.columns(2)
-        with c1:
+    st.markdown('<div class="main-header"><h1>📈 製造・原料・資材 分析</h1></div>', unsafe_allow_html=True)
+
+    def build_material_consumption_events():
+        """製造記録(その他添加物欄)から、原料が「いつ・どれだけ」消費されたかの
+        履歴イベントを組み立てる。現在庫のスナップショットではなく、実際の使用実績のみを扱う。"""
+        events = []
+        for b in brewing:
+            bdate = str(b.get("仕込日", "")).strip()
+            pname = b.get("品名", "")
+            for it in parse_brewing_ingredients(b.get("その他添加物", "")):
+                n = str(it.get("原料名", "")).strip()
+                if not n or n in ("水", "お湯"): continue
+                events.append({"日付": bdate, "原料名": n, "kg": to_float(it.get("kg", 0)), "品名": pname, "仕込No": b.get("仕込No", "")})
+        return pd.DataFrame(events)
+
+    t_prod, t_konjac, t_supply = st.tabs(["🏭 生産分析", "🌾 こんにゃく粉・原料 消費分析", "🧻 資材 消費分析"])
+
+    # ---------------------------------------------------------------
+    # 🏭 生産分析（従来の製造量分析）
+    # ---------------------------------------------------------------
+    with t_prod:
+        df_brw_global = pd.DataFrame(brewing)
+        if df_brw_global.empty: st.info("データがありません。")
+        else:
+            df_brw_global["仕込日_dt"] = pd.to_datetime(df_brw_global["仕込日"], errors="coerce")
+            df_brw_global["month"] = df_brw_global["仕込日_dt"].dt.to_period("M").astype(str)
+            df_brw_global["仕込量(kg)"] = pd.to_numeric(df_brw_global["仕込量(kg)"], errors="coerce").fillna(0)
+
             card_start()
-            pie_data = df_brw_global.groupby("品名")["仕込量(kg)"].sum().reset_index().sort_values("仕込量(kg)", ascending=False)
-            fig_tree = px.treemap(pie_data[pie_data["仕込量(kg)"] > 0], path=["品名"], values="仕込量(kg)", color="仕込量(kg)", color_continuous_scale=["#fde4d0", "#0f766e"], title="製品構成比")
-            fig_tree.update_traces(texttemplate="<b>%{label}</b><br>%{value:,.0f} kg", textfont_size=14); fig_tree.update_layout(margin=dict(t=50, l=6, r=6, b=6))
-            st.plotly_chart(fig_tree, use_container_width=True)
+            monthly_trend = df_brw_global.groupby("month")["仕込量(kg)"].sum().reset_index().sort_values("month")
+            fig = go.Figure(go.Bar(x=monthly_trend["month"], y=monthly_trend["仕込量(kg)"], marker_color="#0f766e"))
+            fig.update_layout(title="月間生産推移 (kg)", xaxis_title="年月", yaxis_title="総製造量", plot_bgcolor="#ffffff")
+            st.plotly_chart(fig, use_container_width=True)
             card_end()
-        with c2:
+
+            c1, c2 = st.columns(2)
+            with c1:
+                card_start()
+                pie_data = df_brw_global.groupby("品名")["仕込量(kg)"].sum().reset_index().sort_values("仕込量(kg)", ascending=False)
+                fig_tree = px.treemap(pie_data[pie_data["仕込量(kg)"] > 0], path=["品名"], values="仕込量(kg)", color="仕込量(kg)", color_continuous_scale=["#fde4d0", "#0f766e"], title="製品構成比")
+                fig_tree.update_traces(texttemplate="<b>%{label}</b><br>%{value:,.0f} kg", textfont_size=14); fig_tree.update_layout(margin=dict(t=50, l=6, r=6, b=6))
+                st.plotly_chart(fig_tree, use_container_width=True)
+                card_end()
+            with c2:
+                card_start()
+                topN = pie_data.sort_values("仕込量(kg)", ascending=True).tail(15)
+                fig_bar = px.bar(topN, x="仕込量(kg)", y="品名", orientation='h', title="製造量 上位15品目", text="仕込量(kg)")
+                fig_bar.update_traces(texttemplate="%{text:,.0f} kg", textposition="outside", marker_color="#0f766e"); fig_bar.update_layout(height=max(380, 34 * len(topN)), plot_bgcolor="#ffffff", yaxis_title="")
+                st.plotly_chart(fig_bar, use_container_width=True)
+                card_end()
+
+    # ---------------------------------------------------------------
+    # 🌾 こんにゃく粉・原料 消費分析（いつ・どれだけ消費したか。現在庫は表示しない）
+    # ---------------------------------------------------------------
+    with t_konjac:
+        df_ev = build_material_consumption_events()
+        if df_ev.empty:
+            st.info("製造記録がまだありません。")
+        else:
+            df_ev["日付_dt"] = pd.to_datetime(df_ev["日付"], errors="coerce")
+            df_ev["month"] = df_ev["日付_dt"].dt.to_period("M").astype(str)
+            df_ev["is_konjac"] = df_ev["原料名"].apply(is_konjac_material)
+
             card_start()
-            topN = pie_data.sort_values("仕込量(kg)", ascending=True).tail(15)
-            fig_bar = px.bar(topN, x="仕込量(kg)", y="品名", orientation='h', title="製造量 上位15品目", text="仕込量(kg)")
-            fig_bar.update_traces(texttemplate="%{text:,.0f} kg", textposition="outside", marker_color="#0f766e"); fig_bar.update_layout(height=max(380, 34 * len(topN)), plot_bgcolor="#ffffff", yaxis_title="")
-            st.plotly_chart(fig_bar, use_container_width=True)
+            focus = st.radio("対象", ["🌾 こんにゃく粉のみ", "📦 すべての原料"], horizontal=True, key="konjac_focus")
+            df_focus = df_ev[df_ev["is_konjac"]] if "こんにゃく粉のみ" in focus else df_ev
+            c_a, c_b = st.columns(2)
+            f_start = c_a.date_input("開始日", value=(date.today() - timedelta(days=180)), key="konjac_start")
+            f_end = c_b.date_input("終了日", value=date.today(), key="konjac_end")
+            df_focus = df_focus[(df_focus["日付_dt"].dt.date >= f_start) & (df_focus["日付_dt"].dt.date <= f_end)]
             card_end()
+
+            if df_focus.empty:
+                st.info("対象期間内の消費実績がありません。")
+            else:
+                card_start()
+                sec_title("📅 月別 消費量の推移（いつ・どれだけ消費したか）")
+                monthly = df_focus.groupby(["month", "原料名"])["kg"].sum().reset_index()
+                fig_m = px.bar(monthly, x="month", y="kg", color="原料名", title="原料別 月間消費量 (kg)", barmode="stack")
+                fig_m.update_layout(plot_bgcolor="#ffffff", xaxis_title="年月", yaxis_title="消費量(kg)")
+                st.plotly_chart(fig_m, use_container_width=True)
+                card_end()
+
+                c1, c2 = st.columns(2)
+                with c1:
+                    card_start()
+                    sec_title("🏆 原料別 合計消費量（期間内）")
+                    total_by_mat = df_focus.groupby("原料名")["kg"].sum().reset_index().sort_values("kg", ascending=True)
+                    fig_t = px.bar(total_by_mat, x="kg", y="原料名", orientation="h", text="kg", title="合計消費量 (kg)")
+                    fig_t.update_traces(texttemplate="%{text:,.0f} kg", textposition="outside", marker_color="#0f766e")
+                    fig_t.update_layout(plot_bgcolor="#ffffff", height=max(300, 34 * len(total_by_mat)), yaxis_title="")
+                    st.plotly_chart(fig_t, use_container_width=True)
+                    card_end()
+                with c2:
+                    card_start()
+                    sec_title("📊 消費実績サマリー")
+                    days_span = max(1, (f_end - f_start).days + 1)
+                    summary = df_focus.groupby("原料名").agg(合計消費量_kg=("kg", "sum"), 使用回数=("仕込No", "count"), 直近使用日=("日付", "max")).reset_index()
+                    summary["1日あたり平均_kg"] = (summary["合計消費量_kg"] / days_span).round(2)
+                    summary = summary.sort_values("合計消費量_kg", ascending=False)
+                    st.dataframe(fmt_df_numeric(summary, ["合計消費量_kg", "1日あたり平均_kg"]), use_container_width=True, hide_index=True)
+                    card_end()
+
+                card_start()
+                sec_title("🕒 消費履歴（詳細）")
+                detail = df_focus[["日付", "原料名", "kg", "品名", "仕込No"]].sort_values("日付", ascending=False).rename(columns={"kg": "消費量(kg)"})
+                st.dataframe(fmt_df_numeric(detail.head(300), ["消費量(kg)"]), use_container_width=True, hide_index=True)
+                card_end()
+
+    # ---------------------------------------------------------------
+    # 🧻 資材 消費分析（いつ・どれだけ消費したか。現在庫は表示しない）
+    # ---------------------------------------------------------------
+    with t_supply:
+        if not supply_logs:
+            st.info("資材の入出庫ログがまだありません。")
+        else:
+            id_name_map_a = {s.get("資材ID"): s.get("資材名") for s in supplies}
+            df_sl = pd.DataFrame(supply_logs)
+            df_sl["資材名"] = df_sl["資材ID"].map(id_name_map_a)
+            df_sl["数量"] = df_sl["数量"].apply(to_float)
+            df_use = df_sl[df_sl["処理"] == "使用"].copy()
+            df_use["日付_dt"] = pd.to_datetime(df_use["登録日"], errors="coerce")
+
+            if df_use.empty:
+                st.info("資材の使用（消費）実績がまだありません。")
+            else:
+                card_start()
+                c_a, c_b = st.columns(2)
+                s_start = c_a.date_input("開始日", value=(date.today() - timedelta(days=180)), key="sup_an_start")
+                s_end = c_b.date_input("終了日", value=date.today(), key="sup_an_end")
+                df_use_f = df_use[(df_use["日付_dt"].dt.date >= s_start) & (df_use["日付_dt"].dt.date <= s_end)]
+                card_end()
+
+                if df_use_f.empty:
+                    st.info("対象期間内の消費実績がありません。")
+                else:
+                    df_use_f = df_use_f.copy()
+                    df_use_f["month"] = df_use_f["日付_dt"].dt.to_period("M").astype(str)
+
+                    card_start()
+                    sec_title("📅 月別 消費量の推移（いつ・どれだけ消費したか）")
+                    monthly_s = df_use_f.groupby(["month", "資材名"])["数量"].sum().reset_index()
+                    fig_ms = px.bar(monthly_s, x="month", y="数量", color="資材名", title="資材別 月間消費数量", barmode="stack")
+                    fig_ms.update_layout(plot_bgcolor="#ffffff", xaxis_title="年月", yaxis_title="消費数量")
+                    st.plotly_chart(fig_ms, use_container_width=True)
+                    card_end()
+
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        card_start()
+                        sec_title("🏆 資材別 合計消費量（期間内）")
+                        total_by_sup = df_use_f.groupby("資材名")["数量"].sum().reset_index().sort_values("数量", ascending=True)
+                        fig_ts = px.bar(total_by_sup, x="数量", y="資材名", orientation="h", text="数量", title="合計消費数量")
+                        fig_ts.update_traces(texttemplate="%{text:,.0f}", textposition="outside", marker_color="#0f766e")
+                        fig_ts.update_layout(plot_bgcolor="#ffffff", height=max(300, 34 * len(total_by_sup)), yaxis_title="")
+                        st.plotly_chart(fig_ts, use_container_width=True)
+                        card_end()
+                    with c2:
+                        card_start()
+                        sec_title("📊 消費実績サマリー")
+                        days_span_s = max(1, (s_end - s_start).days + 1)
+                        summary_s = df_use_f.groupby("資材名").agg(合計消費量=("数量", "sum"), 使用回数=("数量", "count"), 直近使用日=("登録日", "max")).reset_index()
+                        summary_s["1日あたり平均"] = (summary_s["合計消費量"] / days_span_s).round(2)
+                        summary_s = summary_s.sort_values("合計消費量", ascending=False)
+                        st.dataframe(fmt_df_numeric(summary_s, ["合計消費量", "1日あたり平均"]), use_container_width=True, hide_index=True)
+                        card_end()
+
+                    card_start()
+                    sec_title("🕒 消費履歴（詳細）")
+                    detail_s = df_use_f[["登録日", "資材名", "数量", "作業者", "備考"]].sort_values("登録日", ascending=False).rename(columns={"数量": "消費数量"})
+                    st.dataframe(fmt_df_numeric(detail_s.head(300), ["消費数量"]), use_container_width=True, hide_index=True)
+                    card_end()
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1215,11 +1458,21 @@ elif page == "⚙️ マスタ設定":
     
     with t1:
         card_start()
-        sec_title("🥦 原料名の登録・編集")
-        ed_m = st.data_editor(pd.DataFrame({"原料名": pd.array([m for m in materials if not m.startswith("__")], dtype="string")}), num_rows="dynamic", use_container_width=True)
+        sec_title("🥦 原料名の登録・編集・表示順")
+        st.caption("💡「表示順」を書き換えて並べ替えられます（小さい数字が先に表示されます）。行を追加すれば新規登録、行を削除すれば削除できます。")
+        m_names_only = [m for m in materials if not m.startswith("__")]
+        df_m = pd.DataFrame({"表示順": list(range(1, len(m_names_only) + 1)), "原料名": pd.array(m_names_only, dtype="string")})
+        ed_m = st.data_editor(df_m, num_rows="dynamic", use_container_width=True, hide_index=True,
+                               column_config={"表示順": st.column_config.NumberColumn("表示順", step=1, min_value=0),
+                                              "原料名": st.column_config.TextColumn("原料名(必須)", required=True)})
         if st.button("💾 原料マスタ保存", type="primary"):
             if hasattr(sheets, "save_materials"):
-                sheets.save_materials([str(x).strip() for x in ed_m["原料名"].tolist() if x is not None and str(x).strip() and str(x).strip().lower() != "nan"])
+                clean = ed_m.copy()
+                clean["原料名"] = clean["原料名"].astype(str).str.strip()
+                clean = clean[(clean["原料名"] != "") & (clean["原料名"].str.lower() != "nan")]
+                clean["表示順"] = pd.to_numeric(clean["表示順"], errors="coerce").fillna(9999)
+                clean = clean.sort_values(["表示順", "原料名"], kind="stable")
+                sheets.save_materials(clean["原料名"].tolist())
                 st.success("保存しました。"); time.sleep(1); refresh()
         card_end()
 
@@ -1439,21 +1692,65 @@ elif page == "⚙️ マスタ設定":
 
     with t4:
         card_start()
-        with st.form("new_sup_form"):
-            new_s_name = st.text_input("資材名称 ＊")
-            new_s_cat = st.text_input("カテゴリ (例: 包材)")
-            uploaded_file = st.file_uploader("📷 画像 (任意)", type=["jpg", "png", "jpeg"])
-            if st.form_submit_button("💾 資材を登録"):
-                if not new_s_name: st.error("名称は必須です。")
-                else:
-                    img_str = ""
-                    if uploaded_file and HAS_PIL:
-                        img = Image.open(uploaded_file); img.thumbnail((150, 150)); buffered = BytesIO(); img.save(buffered, format="PNG")
-                        img_str = f"data:image/png;base64,{base64.b64encode(buffered.getvalue()).decode('utf-8')}"
-                    cur_sup = supplies.copy()
-                    cur_sup.append({"資材ID": f"SUP-{datetime.now().strftime('%Y%m%d%H%M%S')}", "資材名": new_s_name, "カテゴリ": new_s_cat, "画像URL": img_str, "初期在庫": 0, "発注点": 10, "登録日": str(date.today())})
-                    if hasattr(sheets, "save_supplies"): sheets.save_supplies(cur_sup); st.success("登録しました。"); time.sleep(1); refresh()
+        sec_title("📦 資材マスタの編集・並び替え")
+        st.caption("💡 セルを直接編集できます。「表示順」の数字が小さいほど先に表示されます。行を追加すれば新規登録、チェックして削除すれば資材そのものを削除できます（資材IDは自動発行され、変更できません）。")
+        sup_rows = []
+        for s in sorted_supplies():
+            sup_rows.append({
+                "資材ID": s.get("資材ID", ""), "表示順": to_float(s.get("表示順", ""), default=None) if str(s.get("表示順", "")).strip() != "" else None,
+                "資材名": s.get("資材名", ""), "カテゴリ": s.get("カテゴリ", ""),
+                "発注点": to_float(s.get("発注点", 10)), "初期在庫": to_float(s.get("初期在庫", 0)),
+            })
+        df_sup = pd.DataFrame(sup_rows, columns=["資材ID", "表示順", "資材名", "カテゴリ", "発注点", "初期在庫"])
+        ed_sup = st.data_editor(
+            df_sup, num_rows="dynamic", use_container_width=True, hide_index=True, key="supply_master_editor",
+            column_config={
+                "資材ID": st.column_config.TextColumn("資材ID", disabled=True, help="空欄のまま行を追加すると新規登録されます"),
+                "表示順": st.column_config.NumberColumn("表示順", step=1, min_value=0),
+                "資材名": st.column_config.TextColumn("資材名(必須)", required=True),
+                "カテゴリ": st.column_config.TextColumn("カテゴリ(例: 包材)"),
+                "発注点": st.column_config.NumberColumn("発注点", min_value=0.0, step=1.0),
+                "初期在庫": st.column_config.NumberColumn("初期在庫", min_value=0.0, step=1.0),
+            })
+
+        if st.button("💾 資材マスタを保存", type="primary", use_container_width=True, key="save_supply_master"):
+            id_to_orig = {s.get("資材ID"): s for s in supplies}
+            new_supplies = []
+            for _, row in ed_sup.iterrows():
+                name = str(row.get("資材名", "")).strip()
+                if not name or name.lower() == "nan": continue
+                sid = str(row.get("資材ID", "")).strip()
+                orig = id_to_orig.get(sid) if sid and sid.lower() != "nan" else None
+                rec = dict(orig) if orig else {"資材ID": f"SUP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}", "画像URL": "", "登録日": str(date.today())}
+                rec["資材名"] = name
+                rec["カテゴリ"] = str(row.get("カテゴリ", "") or "").strip()
+                rec["発注点"] = to_float(row.get("発注点", 10))
+                rec["初期在庫"] = to_float(row.get("初期在庫", 0))
+                order_val = row.get("表示順", None)
+                rec["表示順"] = to_float(order_val) if str(order_val).strip() not in ("", "None", "nan") else ""
+                new_supplies.append(rec)
+            if hasattr(sheets, "save_supplies"):
+                sheets.save_supplies(new_supplies); st.success(f"{len(new_supplies)}件の資材マスタを保存しました。"); time.sleep(1.2); refresh()
         card_end()
+
+        if supplies:
+            card_start()
+            sec_title("🖼️ 資材の画像を更新")
+            sup_by_name = {s.get("資材名"): s for s in sorted_supplies()}
+            sel_sup_name = st.selectbox("画像を設定する資材", list(sup_by_name.keys()))
+            up_img = st.file_uploader("📷 新しい画像", type=["jpg", "png", "jpeg"], key="sup_img_upl")
+            if st.button("💾 画像を保存", key="save_sup_img"):
+                if up_img and HAS_PIL:
+                    img = Image.open(up_img); img.thumbnail((150, 150)); buffered = BytesIO(); img.save(buffered, format="PNG")
+                    img_str = f"data:image/png;base64,{base64.b64encode(buffered.getvalue()).decode('utf-8')}"
+                    cur_sup = [dict(s) for s in supplies]
+                    for s in cur_sup:
+                        if s.get("資材名") == sel_sup_name: s["画像URL"] = img_str
+                    if hasattr(sheets, "save_supplies"):
+                        sheets.save_supplies(cur_sup); st.success("画像を更新しました。"); time.sleep(1); refresh()
+                else:
+                    st.error("画像ファイルを選択してください。")
+            card_end()
 
     with t5:
         card_start()
