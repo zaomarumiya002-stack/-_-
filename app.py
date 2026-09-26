@@ -1675,4 +1675,3 @@ elif page == "⚙️ マスタ設定":
             st.success("保存しました。"); time.sleep(1); refresh()
         card_end()
 
---- END OF FILE app.py ---
