@@ -11,7 +11,7 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapi
 COLS_ARR = ["入荷No", "入荷日", "メーカー", "ロットNo", "原料種別", "袋数", "1袋重量(kg)", "総量(kg)", "搬入温度", "外観", "臭い", "包装", "色調", "異物", "水分", "賞味期限", "異常内容", "担当者", "備考", "登録日時", "品名・規格確認", "グレード"]
 COLS_BRW = ["仕込No", "仕込日", "品名", "メーカー", "主原料ロット", "仕込量(kg)", "こんにゃく精粉(kg)", "海藻粉(kg)", "海藻粉ロット", "デンプン(kg)", "デンプンロット", "デンプン種別", "石灰(kg)", "石灰水(L)", "その他添加物", "備考", "登録日時"]
 COLS_ADJ = ["調整ID", "入荷No", "調整日", "調整袋数", "理由", "担当者", "登録日時"]
-COLS_SUP = ["資材ID", "資材名", "カテゴリ", "画像URL", "初期在庫", "発注点", "登録日"]
+COLS_SUP = ["資材ID", "資材名", "カテゴリ", "画像URL", "初期在庫", "発注点", "登録日", "表示順"]
 COLS_LOG = ["ログID", "登録日", "資材ID", "処理", "数量", "作業者", "備考", "登録日時"]
 COLS_REC_LOG = ["ログID", "変更日時", "品名", "処理", "変更内容", "作業者"]
 COLS_PO = ["発注ID", "発注日", "原料名", "メーカー", "個数", "納品予定日", "ステータス", "紐づく入荷No", "備考", "登録日時"] # 発注管理用（新規）
@@ -232,7 +232,11 @@ def next_brewing_no(brw):
 @st.cache_data(ttl=20)
 def load_adjustments():
     rows = _read("在庫調整", COLS_ADJ)
-    for r in rows: r["調整袋数"] = _i(r.get("調整袋数"))
+    for r in rows:
+        # 【重要】以前はint変換(_i)していたため、棚卸で0にする際に書き込む
+        # 小数の調整量(例: -37.6543袋)が -37 に切り捨てられ、在庫が永久に
+        # ピッタリ0にならない不具合の原因になっていた。float(_f)に修正。
+        r["調整袋数"] = _f(r.get("調整袋数"))
     return rows
 def append_adjustment(r): _append("在庫調整", COLS_ADJ, r)
 
@@ -242,15 +246,17 @@ def append_adjustment(r): _append("在庫調整", COLS_ADJ, r)
 def load_supplies():
     rows = _read("資材マスター", COLS_SUP)
     for r in rows: 
-        r["初期在庫"] = _i(r.get("初期在庫"))
-        r["発注点"] = _i(r.get("発注点"))
+        r["初期在庫"] = _f(r.get("初期在庫"))
+        r["発注点"] = _f(r.get("発注点"))
+        # 表示順は未設定(空欄)と0を区別したいので、数値変換せず文字列のまま保持する
+        r["表示順"] = str(r.get("表示順", "")).strip()
     return rows
 def save_supplies(rs): _over("資材マスター", COLS_SUP, rs)
 
 @st.cache_data(ttl=20)
 def load_supply_logs():
     rows = _read("資材入出庫", COLS_LOG)
-    for r in rows: r["数量"] = _i(r.get("数量"))
+    for r in rows: r["数量"] = _f(r.get("数量"))  # 実地数量の小数入力を切り捨てないようfloatに変更
     return rows
 def append_supply_log(r): _append("資材入出庫", COLS_LOG, r)
 def delete_supply_log(log_id):
@@ -280,10 +286,17 @@ def save_grades(v): _scol("グレードマスター", v)
 
 @st.cache_data(ttl=30)
 def load_order_points():
-    try: 
+    try:
         rows = _ws("発注点マスター", ["material", "order_point"]).get_all_values()[1:]
-        return {r[0]: str(r[1]) for r in rows if r and r[0]}
-    except: return {}
+    except Exception:
+        return {}
+    d = {}
+    for r in rows:
+        # 1行だけ列数が足りない/壊れていても、他の設定(グレード・除外ロット・
+        # 石灰ルール・画像など)を丸ごと失わないよう、行単位でスキップする
+        if not r or not r[0]: continue
+        d[r[0]] = str(r[1]) if len(r) > 1 else ""
+    return d
 def save_order_points(d):
     w = _ws("発注点マスター", ["material","order_point"])
     w.clear()
