@@ -191,6 +191,21 @@ def parse_brewing_ingredients(r_val):
             if m: items.append({"原料名": m.group(1).strip(), "kg": float(m.group(2)), "lot": m.group(3).strip()})
     return items
 
+def format_ingredient_breakdown(r_val):
+    """製造記録の「その他添加物」欄から、原料ごとの投入量を人が読みやすい形式に整形する。
+    例: 「こんにゃく精粉 5kg(L100) / 海藻粉 1kg(L300) / 水 94kg」"""
+    items = parse_brewing_ingredients(r_val)
+    if not items: return ""
+    parts = []
+    for it in items:
+        n = str(it.get("原料名", "")).strip()
+        kg = it.get("kg", 0)
+        lot = str(it.get("lot", "")).strip()
+        if not n: continue
+        lot_txt = f"({lot})" if lot and lot != "─" else ""
+        parts.append(f"{n} {fmt_kg(kg)}kg{lot_txt}")
+    return " / ".join(parts)
+
 def is_lime_boost_active(cfg, t_date=None):
     if t_date is None: t_date = date.today()
     m, s, e = t_date.month, int(cfg.get("start_month", 6)), int(cfg.get("end_month", 9))
@@ -352,20 +367,13 @@ def get_supply_inventory():
 #  カスタムUIコンポーネント
 # ════════════════════════════════════════════════════════════════
 def render_amount_adjuster(title, calc_val, p_key):
-    st.markdown(f"<div style='font-size:1.05rem; font-weight:800; color:#475569; margin-bottom:4px;'>{title}</div>", unsafe_allow_html=True)
     lst_key = f"last_calc_{p_key}"
     last_calc, calc_val = st.session_state.get(lst_key, None), round(calc_val, 2)
     if (last_calc is None) or (abs(float(last_calc) - float(calc_val)) > 1e-6):
         st.session_state[p_key] = st.session_state[lst_key] = calc_val
     if p_key not in st.session_state: st.session_state[p_key] = calc_val
 
-    st.markdown(f"""
-    <div style="background-color:#f0f9ff; border:2px solid #38bdf8; border-radius:8px; padding:10px; margin-bottom:8px; text-align:center; box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);">
-        <span style="font-size:2.0rem; font-weight:900; color:#0284c7;">{fmt_kg(st.session_state[p_key])}</span>
-        <span style="font-size:1.0rem; color:#0369a1; font-weight:700; margin-left:4px;">kg</span>
-    </div>
-    """, unsafe_allow_html=True)
-    return st.number_input("微調整", min_value=0.0, step=0.1, key=p_key, label_visibility="collapsed")
+    return st.number_input(f"{title}（自動計算値・必要なら変更可）", min_value=0.0, step=0.1, key=p_key, format="%.2f")
 
 
 def _lot_date_sort_key(d_str):
@@ -598,30 +606,12 @@ if page == "🏭 製造仕込み":
         card_start()
         sec_title("⚖️ 希望仕込量と石灰水量")
 
-        if "t_size" not in st.session_state: st.session_state["t_size"] = 100.0
-        if "l_size" not in st.session_state: st.session_state["l_size"] = 0.0
-        def add_t_size(v): st.session_state["t_size"] = max(0.0, st.session_state["t_size"] + v)
-        def add_l_size(v): st.session_state["l_size"] = max(0.0, st.session_state["l_size"] + v)
-
         col_in1, col_in2 = st.columns(2)
         with col_in1:
-            st.markdown("<div style='font-weight:800; color:#475569; margin-bottom:6px;'>🏭 希望仕込製品量 (kg)</div>", unsafe_allow_html=True)
-            c1, c2, c3, c4 = st.columns(4)
-            c1.button("+1000", key="btn_t_1000", on_click=add_t_size, args=(1000,), use_container_width=True)
-            c2.button("+100",  key="btn_t_100",  on_click=add_t_size, args=(100,),  use_container_width=True)
-            c3.button("+10",   key="btn_t_10",   on_click=add_t_size, args=(10,),   use_container_width=True)
-            c4.button("✖0",    key="btn_t_0",    on_click=lambda: st.session_state.update({"t_size": 0.0}), use_container_width=True)
-            target_size = st.number_input("仕込量", min_value=0.0, step=10.0, key="t_size", label_visibility="collapsed", format="%.0f")
-
+            target_size = st.number_input("🏭 希望仕込製品量 (kg)", min_value=0.0, value=100.0, step=10.0, key="t_size", format="%.0f")
         with col_in2:
-            st.markdown("<div style='font-weight:800; color:#475569; margin-bottom:6px;'>💧 石灰水作成量 (kg)</div>", unsafe_allow_html=True)
-            c1, c2, c3, c4 = st.columns(4)
-            c1.button("+100", key="btn_l_100", on_click=add_l_size, args=(100,), use_container_width=True)
-            c2.button("+10",  key="btn_l_10",  on_click=add_l_size, args=(10,),  use_container_width=True)
-            c3.button("+1",   key="btn_l_1",   on_click=add_l_size, args=(1,),   use_container_width=True)
-            c4.button("✖0",   key="btn_l_0",   on_click=lambda: st.session_state.update({"l_size": 0.0}), use_container_width=True)
-            lime_water_size = st.number_input("石灰水量", min_value=0.0, step=1.0, key="l_size", label_visibility="collapsed")
-        
+            lime_water_size = st.number_input("💧 石灰水作成量 (kg)", min_value=0.0, value=0.0, step=1.0, key="l_size", format="%.1f")
+
         st.markdown("<br>", unsafe_allow_html=True)
         c_op1, c_op2 = st.columns(2)
         with c_op1: operator = render_operator_selector("op_key")
@@ -843,18 +833,15 @@ elif page == "📊 ダッシュボード":
             """, unsafe_allow_html=True)
 
             mat_lots = get_lots_for_material(m)
-            with st.popover(f"🔧 {m} を増減・棚卸調整", use_container_width=True):
+            with st.popover(f"🔧 {m} の在庫を棚卸修正", use_container_width=True):
                 if not mat_lots: st.info("この原料の入荷記録がありません。")
                 else:
-                    st.markdown(f"**🔧 {m} の在庫調整**")
                     lot_opts = {f"{v['ロットNo']} (現在庫:{fmt_kg(v['現在庫(袋)'])}袋)": v["入荷No"] for v in mat_lots}
                     sel_lot = st.selectbox("対象ロット", list(lot_opts.keys()), key=f"dash_lot_{m}")
                     target_ano = lot_opts[sel_lot]
                     target_lot_data = next(v for v in mat_lots if v["入荷No"] == target_ano)
-                    
-                    adj_mode = st.radio("調整方法", ["➕➖ クイック増減", "📋 実地数量で確定"], horizontal=True, key=f"dash_mode_{m}")
                     op_q = render_operator_selector(f"dash_qop_{m}")
-                    
+
                     def _dash_adj(ano, delta_bags, reason_text):
                         if hasattr(sheets, "append_adjustment"):
                             sheets.append_adjustment({
@@ -862,23 +849,14 @@ elif page == "📊 ダッシュボード":
                                 "調整日": str(date.today()), "調整袋数": delta_bags, "理由": reason_text,
                                 "担当者": op_q, "登録日時": datetime.now().isoformat()
                             })
-                            
-                    if "クイック" in adj_mode:
-                        st.caption("任意の数量を入力し増減できます")
-                        c_amt, c_m_btn, c_p_btn = st.columns([2, 1, 1])
-                        q_val = c_amt.number_input("数量(袋)", min_value=1, value=1, step=1, key=f"dq_val_{m}", label_visibility="collapsed")
-                        if c_m_btn.button("➖ 減らす", key=f"dq_m_{m}", use_container_width=True):
-                            _dash_adj(target_ano, -q_val, f"【クイック減算:-{q_val}】"); st.toast(f"-{q_val}袋"); time.sleep(1); refresh()
-                        if c_p_btn.button("➕ 増やす", key=f"dq_p_{m}", use_container_width=True):
-                            _dash_adj(target_ano, q_val, f"【クイック加算:+{q_val}】"); st.toast(f"+{q_val}袋"); time.sleep(1); refresh()
-                    else:
-                        st.caption("実際に数えた袋数を入力してください。")
-                        actual = st.number_input("実在庫数量(袋)", min_value=0.0, value=float(round(target_lot_data["現在庫(袋)"], 2)), step=1.0, key=f"dash_act_{m}")
-                        if actual < EPS_BAGS: actual = 0.0
-                        diff = round(actual - target_lot_data["現在庫(袋)"], 4)
-                        if st.button("💾 この実地数量で確定", type="primary", key=f"dash_save_{m}", use_container_width=True):
-                            _dash_adj(target_ano, diff, f"【実地棚卸で {fmt_kg(actual)}袋 に更新】")
-                            st.success(f"{fmt_kg(actual)}袋で確定しました"); time.sleep(1.5); refresh()
+
+                    st.caption("実際に数えた袋数を入力してください。")
+                    actual = st.number_input("実在庫数量(袋)", min_value=0.0, value=float(round(target_lot_data["現在庫(袋)"], 2)), step=1.0, key=f"dash_act_{m}")
+                    if actual < EPS_BAGS: actual = 0.0
+                    diff = round(actual - target_lot_data["現在庫(袋)"], 4)
+                    if st.button("💾 この実地数量で確定", type="primary", key=f"dash_save_{m}", use_container_width=True):
+                        _dash_adj(target_ano, diff, f"【実地棚卸で {fmt_kg(actual)}袋 に更新】")
+                        st.success(f"{fmt_kg(actual)}袋で確定しました"); time.sleep(1.5); refresh()
 
             if is_konjac_material(m) and mat_lots:
                 breakdown = {}
@@ -1186,16 +1164,18 @@ elif page == "📋 履歴・帳票":
         filter_end_date = c2.date_input("終了日", value=date.today())
         
         filtered_df = df_brw[(df_brw["仕込日_dt"].dt.date >= s_date) & (df_brw["仕込日_dt"].dt.date <= filter_end_date)].copy().sort_values("仕込日", ascending=False)
+        filtered_df["原料内訳（全原料の投入量）"] = filtered_df.get("その他添加物", "").apply(format_ingredient_breakdown)
+
         if HAS_OPENPYXL and not filtered_df.empty:
             wb = Workbook(); ws = wb.active; ws.title = "製造記録"
-            for col_idx, h in enumerate(["製造日", "仕込No", "製品名", "担当者", "製造量(kg)", "石灰水(L)", "備考"], 1): ws.cell(row=1, column=col_idx, value=h)
+            for col_idx, h in enumerate(["製造日", "仕込No", "製品名", "担当者", "製造量(kg)", "石灰水(L)", "原料内訳（全原料の投入量）", "備考"], 1): ws.cell(row=1, column=col_idx, value=h)
             for r_idx, (_, row) in enumerate(filtered_df.iterrows(), 2):
-                for c_idx, val in enumerate([row.get("仕込日", ""), row.get("仕込No", ""), row.get("品名", ""), row.get("メーカー", ""), float(row.get("仕込量(kg)", 0) or 0), float(row.get("石灰水(L)", 0) or 0), row.get("備考", "")], 1):
+                for c_idx, val in enumerate([row.get("仕込日", ""), row.get("仕込No", ""), row.get("品名", ""), row.get("メーカー", ""), float(row.get("仕込量(kg)", 0) or 0), float(row.get("石灰水(L)", 0) or 0), row.get("原料内訳（全原料の投入量）", ""), row.get("備考", "")], 1):
                     ws.cell(row=r_idx, column=c_idx, value=val)
             excel_buffer = BytesIO(); wb.save(excel_buffer)
             st.download_button("🖨️ Excel帳票をダウンロード", data=excel_buffer.getvalue(), file_name=f"製造記録_{s_date}_{filter_end_date}.xlsx", type="primary")
         
-        st.dataframe(fmt_df_numeric(filtered_df[["仕込日", "仕込No", "品名", "仕込量(kg)", "主原料ロット", "備考"]], ["仕込量(kg)"]), use_container_width=True, hide_index=True)
+        st.dataframe(fmt_df_numeric(filtered_df[["仕込日", "仕込No", "品名", "仕込量(kg)", "原料内訳（全原料の投入量）", "備考"]], ["仕込量(kg)"]), use_container_width=True, hide_index=True)
         card_end()
         
         card_start()
@@ -1696,5 +1676,3 @@ elif page == "⚙️ マスタ設定":
             save_grade_list(order_points, [str(x).strip() for x in ed_grade["グレード名"].tolist() if x is not None and str(x).strip() and str(x).strip().lower() != "nan"])
             st.success("保存しました。"); time.sleep(1); refresh()
         card_end()
-
-
