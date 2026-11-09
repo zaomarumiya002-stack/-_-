@@ -348,6 +348,15 @@ def sanitize_lot(s):
     s = s.replace("(", "（").replace(")", "）")
     return s
 
+_ING_LOOSE = re.compile(r"(?:^|[,、，/／\n])\s*([^,、，/／:：()\n]+?)\s*[:：]\s*([\d\.]+)\s*kg\s*(?:\(((?:[^()]|\([^()]*\))*)\))?")
+
+def _parse_ingredients_loose(r_val):
+    out = []
+    for m in _ING_LOOSE.finditer(str(r_val)):
+        try: out.append({"原料名": m.group(1).strip(), "kg": float(m.group(2)), "lot": (m.group(3) or "").strip() or "─"})
+        except Exception: pass
+    return out
+
 def parse_brewing_ingredients(r_val):
     if not r_val: return []
     if isinstance(r_val, str) and r_val.strip().startswith("["):
@@ -358,6 +367,8 @@ def parse_brewing_ingredients(r_val):
         for p in _ING_SPLIT.split(r_val.strip()):
             m = _ING_ITEM.match(p.strip())
             if m: items.append({"原料名": m.group(1).strip(), "kg": float(m.group(2)), "lot": m.group(3).strip()})
+        loose = _parse_ingredients_loose(r_val)
+        if len(loose) > len(items): items = loose
     return items
 
 def format_ingredient_breakdown(r_val):
@@ -535,9 +546,15 @@ for _v in inventory_data.values():
     type_totals_kg[_m] = type_totals_kg.get(_m, 0.0) + _v["現在庫(kg)"]
     type_totals_bag[_m] = type_totals_bag.get(_m, 0.0) + _v["現在庫(袋)"]
 
-def negative_stock_lots():
-    """記録上マイナス(入荷より使用が多い)のロット = 入荷登録漏れ・ロット誤入力の疑い"""
-    return [v for v in inventory_data.values() if v["理論残(袋)"] < -EPS_BAGS]
+def negative_stock_lots(include_ignored=False):
+    """記録上マイナス(入荷より使用が多い)のロット = 入荷登録漏れ・ロット誤入力の疑い（「表示しない」にしたロットは除く）"""
+    ig = set()
+    if not include_ignored:
+        try:
+            v0 = order_points.get("__NEG_IGNORED__", "")
+            ig = set(json.loads(v0)) if v0 else set()
+        except Exception: ig = set()
+    return [v for v in inventory_data.values() if v["理論残(袋)"] < -EPS_BAGS and f"{v['原料種別']}|{v['ロットNo']}" not in ig]
 
 def _get_active_lots(mat):
     """完全に在庫が0になったものは除外する"""
@@ -959,12 +976,23 @@ def _lot_blend_pct(lot):
     m = re.search(r"\(\s*([\d\.]+)\s*%\s*\)?\s*$", str(lot or ""))
     return float(m.group(1)) if m else None
 
+def _items_of(b):
+    """製造記録の原料リスト。内訳が読めない古い記録は、旧来の列（精粉・海藻粉・デンプン・石灰）から復元する"""
+    items = parse_brewing_ingredients(b.get("その他添加物", ""))
+    if items: return items
+    out = []
+    for kgc, lotc, nm in [("こんにゃく精粉(kg)", "主原料ロット", "こんにゃく精粉"), ("海藻粉(kg)", "海藻粉ロット", "海藻粉"),
+                          ("デンプン(kg)", "デンプンロット", "デンプン"), ("石灰(kg)", None, "石灰")]:
+        kg = to_float(b.get(kgc))
+        if kg > 0: out.append({"原料名": nm, "kg": kg, "lot": (str(b.get(lotc, "") or "─") if lotc else "─")})
+    return out
+
 def brew_ingredient_ratio_rows(b):
     """1件の製造記録 → 原料ごとの {原料名, kg, ratio(配合比%), basis, blend(ブレンド比%), lot, 水}"""
     total = to_float(b.get("仕込量(kg)"))
     lime_l = to_float(b.get("石灰水(L)"))
     rows = []
-    for it in parse_brewing_ingredients(b.get("その他添加物", "")):
+    for it in _items_of(b):
         name = str(it.get("原料名", "")).strip()
         if not name: continue
         kg = to_float(it.get("kg"))
@@ -1096,7 +1124,7 @@ def brew_diff_lines(old, new):
         for it in items:
             n = str(it.get("原料名", "")).strip(); c[n] = c.get(n, 0) + 1; d[(n, c[n])] = it
         return d
-    oi, ni = _keyed(parse_brewing_ingredients(old.get("その他添加物", ""))), _keyed(parse_brewing_ingredients(new.get("その他添加物", "")))
+    oi, ni = _keyed(_items_of(old)), _keyed(_items_of(new))
     for k, b in ni.items():
         if k not in oi: lines.append(f"原料追加: {_ing_str(b)}")
     for k, a in oi.items():
@@ -1498,11 +1526,61 @@ def render_flour_reconcile():
                 _save_recon(ch, "ロット誤入力・取り違え", "マイナス在庫の一括リセット", nop)
                 done(f"{len(ch)}件のマイナス在庫を0にリセットしました。")
 
+# ── マイナス在庫（使用量＞入荷量）の警告：リセット／表示しない ───────────────
+def _neg_ignored_set():
+    v = order_points.get("__NEG_IGNORED__", "")
+    try: return set(json.loads(v)) if v else set()
+    except Exception: return set()
+
+def save_neg_ignored(keys):
+    d = dict(sheets.load_order_points() or {})
+    d["__NEG_IGNORED__"] = json.dumps(sorted(set(keys)), ensure_ascii=False)
+    sheets.save_order_points(d)
+
+def render_negative_panel():
+    neg = negative_stock_lots()
+    ig = _neg_ignored_set()
+    if neg:
+        alert_box("❓ 入荷量より使用量が多いロットがあります（入荷登録漏れ・ロット誤入力・テスト運用データの疑い）：<br>" +
+                  "<br>".join(f"・{v['原料種別']} / {v['ロットNo']}（入荷{fmt_kg(v['入荷袋数'])}袋 ＜ 使用{fmt_kg(round(v['使用袋数'], 2))}袋）" for v in neg), "warn")
+        st.caption("現場の実数と合わないときは、0にリセット（履歴に残ります）するか、警告を表示しないようにできます。")
+        op = render_operator_selector("neg_panel_op")
+        c1, c2 = st.columns(2)
+        if c1.button("🧹 すべて0にリセット（調整として記録）", key="neg_panel_reset", use_container_width=True):
+            _save_recon([{"入荷No": v["入荷No"], "計算": v["理論残(袋)"], "実": 0.0, "差分": round(-v["理論残(袋)"], 4)} for v in neg],
+                        "ロット誤入力・取り違え", "マイナス在庫の一括リセット", op)
+            done(f"{len(neg)}件のマイナス在庫を0にリセットしました。")
+        if c2.button("🙈 これらの警告を表示しない", key="neg_panel_hide", use_container_width=True):
+            save_neg_ignored(ig | {f"{v['原料種別']}|{v['ロットNo']}" for v in neg})
+            done(f"{len(neg)}件の警告を非表示にしました（在庫の計算は変わりません）。")
+    if ig:
+        with st.expander(f"🙈 警告を非表示にしているロット（{len(ig)}件）"):
+            for k in sorted(ig): st.write("・" + k.replace("|", " ／ "))
+            if st.button("👁️ 非表示をすべて解除", key="neg_panel_unhide"):
+                save_neg_ignored(set()); done("非表示を解除しました。")
+
+
 # ── 粉の消費量分析 ──────────────────────────────────────────────
 CONS_DIMS = {"原料別": ["原料名"], "メーカー別": ["メーカー"], "グレード別": ["グレード"], "メーカー×グレード": ["メーカー", "グレード"],
              "原料×メーカー": ["原料名", "メーカー"], "原料×グレード": ["原料名", "グレード"], "原料×メーカー×グレード": ["原料名", "メーカー", "グレード"],
              "製品別": ["品名"], "ライン別": ["ライン"], "ロット別": ["原料名", "ロットNo"], "担当者別": ["担当者"]}
 CONS_AXES = ["原料名", "メーカー", "グレード", "品名", "ライン", "担当者", "ロットNo"]
+
+def period_select(key, default="直近30日"):
+    """期間をプルダウン1つで選ぶ（「期間を指定」のときだけ日付入力）→ (開始日, 終了日)。全期間は (None, None)"""
+    sel = st.selectbox("📅 期間", PERIOD_CHOICES, index=PERIOD_CHOICES.index(default), key=f"{key}_psel")
+    t = today_jst()
+    if sel == "今日": return t, t
+    if sel == "昨日": y = t - timedelta(days=1); return y, y
+    if sel == "今週": return t - timedelta(days=t.weekday()), t
+    if sel == "今月": return t.replace(day=1), t
+    if sel == "先月":
+        le = t.replace(day=1) - timedelta(days=1); return le.replace(day=1), le
+    if sel == "直近30日": return t - timedelta(days=29), t
+    if sel == "全期間": return None, None
+    a, b = st.columns(2)
+    s0 = a.date_input("開始", value=t.replace(day=1), key=f"{key}_ps2"); e0 = b.date_input("終了", value=t, key=f"{key}_pe2")
+    return (e0, s0) if s0 > e0 else (s0, e0)
 
 def build_consumption_df():
     u = build_usage_df(brewing)
@@ -1530,21 +1608,24 @@ def render_flour_analysis():
         st.info("製造記録がまだありません。"); return
 
     card_start()
-    s_d, e_d = period_picker("cons", default="直近30日")
-    focus = st.radio("対象", ["🌾 こんにゃく粉のみ", "📦 すべての原料（水を除く）"], horizontal=True, key="cons_focus")
+    c_p, c_f = st.columns([1, 2])
+    with c_p: s_d, e_d = period_select("cons", default="直近30日")
+    with c_f: focus = st.radio("📦 対象", ["🌾 こんにゃく粉のみ", "すべての原料（水を除く）"], horizontal=True, key="cons_focus")
     base = u0[u0["原料名"].map(is_konjac_material)] if "こんにゃく粉" in focus else u0
     base = base[in_period(base["仕込日"], s_d, e_d)]
     if base.empty:
         st.info("対象期間内の消費実績がありません。"); card_end(); return
-    f1, f2, f3, f4, f5 = st.columns(5)
-    sel = {"原料名": f1.multiselect("原料", sorted(base["原料名"].unique()), key="cons_f_mat"),
-           "メーカー": f2.multiselect("メーカー", sorted(base["メーカー"].unique()), key="cons_f_mk"),
-           "グレード": f3.multiselect("グレード", sorted(base["グレード"].unique()), key="cons_f_gr"),
-           "品名": f4.multiselect("製品", sorted(base["品名"].astype(str).unique()), key="cons_f_prod"),
-           "ライン": f5.multiselect("ライン", sorted(base["ライン"].astype(str).unique()), key="cons_f_line")}
+    with st.expander("🔎 絞り込み（原料・メーカー・グレード・製品・ライン）※ 必要なときだけ"):
+        f1, f2, f3, f4, f5 = st.columns(5)
+        sel = {"原料名": f1.multiselect("原料", sorted(base["原料名"].unique()), key="cons_f_mat"),
+               "メーカー": f2.multiselect("メーカー", sorted(base["メーカー"].unique()), key="cons_f_mk"),
+               "グレード": f3.multiselect("グレード", sorted(base["グレード"].unique()), key="cons_f_gr"),
+               "品名": f4.multiselect("製品", sorted(base["品名"].astype(str).unique()), key="cons_f_prod"),
+               "ライン": f5.multiselect("ライン", sorted(base["ライン"].astype(str).unique()), key="cons_f_line")}
     u = base
     for col, vals in sel.items():
         if vals: u = u[u[col].isin(vals)]
+    if any(sel.values()): st.caption("🔎 絞り込み中：" + " ／ ".join(f"{k}={'・'.join(v)}" for k, v in sel.items() if v))
     card_end()
     if u.empty:
         st.info("絞り込み条件に合う消費実績がありません。"); return
@@ -1553,15 +1634,14 @@ def render_flour_analysis():
     d_to = e_d or u["日付_dt"].max().date()
     days = max(1, (d_to - d_from).days + 1)
     tot = u["投入量(kg)"].sum()
-    k1, k2, k3, k4, k5 = st.columns(5)
+    k1, k2, k3, k4 = st.columns(4)
     k1.metric("総消費量", f"{fmt_kg(round(tot, 1))} kg")
     k2.metric("袋換算", f"{fmt_kg(round(u['袋換算'].sum(), 1))} 袋")
     k3.metric("仕込回数", f"{u['仕込No'].nunique()} 回")
     k4.metric("1日あたり平均", f"{fmt_kg(round(tot / days, 2))} kg")
-    k5.metric("原料／メーカー／グレード", f"{u['原料名'].nunique()}／{u['メーカー'].nunique()}／{u['グレード'].nunique()}")
 
-    t_trend, t_dim, t_cross, t_lot, t_diff, t_unit, t_det = st.tabs(
-        ["📅 推移", "🔀 切り口別", "🧮 クロス集計", "🧾 ロット別（消費と残）", "⚖️ 理論と現場の差異", "🍥 製品別 原単位", "🕒 明細・出力"])
+    t_trend, t_dim, t_lot, t_diff, t_unit, t_det = st.tabs(
+        ["📅 推移", "🔀 切り口別", "🧾 ロット別", "⚖️ 現場との差異", "🍥 原単位", "🕒 明細・出力"])
 
     with t_trend:
         card_start()
@@ -1604,27 +1684,6 @@ def render_flour_analysis():
         shown = g[cols + ["消費量kg", "袋換算", "構成比%", "仕込回数", "1日平均kg", "直近使用日"]]
         st.dataframe(fmt_df_numeric(shown, ["消費量kg", "袋換算", "構成比%", "1日平均kg"]), use_container_width=True, hide_index=True)
         download_buttons({f"消費量_{dim_label}": shown}, f"粉消費量_{dim_label}_{today_jst()}", "cons_dim_dl")
-        card_end()
-
-    with t_cross:
-        card_start()
-        cx1, cx2, cx3 = st.columns(3)
-        r_ax = cx1.selectbox("行", CONS_AXES, index=0, key="cons_x_r")
-        c_ax = cx2.selectbox("列", CONS_AXES, index=1, key="cons_x_c")
-        val = cx3.radio("単位", ["kg", "袋"], horizontal=True, key="cons_x_v")
-        if r_ax == c_ax:
-            st.warning("行と列には別の項目を選んでください。")
-        else:
-            vcol = "投入量(kg)" if val == "kg" else "袋換算"
-            pv = u.pivot_table(index=r_ax, columns=c_ax, values=vcol, aggfunc="sum", fill_value=0).round(2)
-            if pv.shape[0] <= 40 and pv.shape[1] <= 25:
-                figx = px.imshow(pv, text_auto=".1f", aspect="auto", color_continuous_scale=["#ffffff", "#0f766e"], labels=dict(color=val))
-                figx.update_layout(height=max(300, 34 * pv.shape[0] + 120))
-                st.plotly_chart(figx, use_container_width=True)
-            pv2 = pv.copy(); pv2["合計"] = pv2.sum(axis=1)
-            pv2.loc["合計"] = pv2.sum(axis=0)
-            pv2 = pv2.reset_index()
-            st.dataframe(fmt_df_numeric(pv2, [c for c in pv2.columns if c != r_ax]), use_container_width=True, hide_index=True)
         card_end()
 
     with t_lot:
@@ -1802,288 +1861,292 @@ def next_arrival_no_fresh():
 
 if page == "🏭 製造仕込み":
     page_header("🏭 製造仕込み記録", "投入量は完全自動計算されます。微調整も可能です。保存前に在庫とロットを自動チェックします。")
-    card_start()
-    brew_date = st.date_input("📅 仕込日", value=today_jst())
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    p_recipes = {r.get("品名", "未定義"): {"大カテゴリ": r.get("大カテゴリ", "その他"), "中カテゴリ": r.get("中カテゴリ", "その他"), "成分": safe_parse_recipe(r.get("配合JSON"))} for r in recipes_raw if r.get("大カテゴリ") != "調味料"}
-    seasoning_recipes_all = [r for r in recipes_raw if r.get("大カテゴリ") == "調味料"]
-
-    sec_title("🏭 ライン・製品選択")
-    step_label("① ラインを選択")
-    BASE_BIG_CAT_ORDER = ["プラント", "OKM", "手詰め"]
-    dynamic_cats = {v["大カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ")}
-    big_cats = list(BASE_BIG_CAT_ORDER) + sorted(dynamic_cats - set(BASE_BIG_CAT_ORDER))
-    big_cat_labels = [f"{big_cat_icon(c)} {c}" for c in big_cats]
-    sel_big_label = st.radio("ライン", big_cat_labels, horizontal=True, label_visibility="collapsed") if big_cats else None
-    big_cat = big_cats[big_cat_labels.index(sel_big_label)] if sel_big_label else None
-
-    SUB_CAT_ORDER = ["黒", "白", "耐冷", "ショクカイ", "めん", "その他"]
-    sub_cats_set = {v["中カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ") == big_cat and v.get("中カテゴリ")} if big_cat else set()
-    sub_cats = sorted(sub_cats_set, key=lambda c: (SUB_CAT_ORDER.index(c) if c in SUB_CAT_ORDER else len(SUB_CAT_ORDER), c))
-    sub_str = None
-    if big_cat and len(sub_cats) > 1:
-        step_label("② 種別を選択")
-        sub_cat_labels = [f"{sub_cat_icon(c)} {c}" for c in sub_cats]
-        sel_sub_label = st.radio("種別", sub_cat_labels, horizontal=True, label_visibility="collapsed")
-        sub_str = sub_cats[sub_cat_labels.index(sel_sub_label)]
-    elif sub_cats: sub_str = sub_cats[0]
-
-    step_label("③ 製品品番を選択")
-    filtered_opts = [k for k, v in p_recipes.items() if v.get("大カテゴリ") == big_cat and v.get("中カテゴリ") == sub_str] if big_cat and sub_str else []
-    selected_p = None
-    active_recipe = []
-    if filtered_opts:
-        opt_labels = [f"{product_icon(k)} {k}" for k in filtered_opts]
-        sel_label = st.radio("製品", opt_labels, horizontal=True, label_visibility="collapsed")
-        selected_p = filtered_opts[opt_labels.index(sel_label)]
-        active_recipe = p_recipes.get(selected_p, {}).get("成分", [])
-    card_end()
-
-    if not active_recipe: st.info("👆 製品を選択してください。（レシピ未登録の場合は「マスタ設定 → レシピ」で登録）")
-    else:
+    _tab_reg, _tab_hist = st.tabs(["📝 新規登録", "🧾 直近の履歴・修正"])
+    with _tab_reg:
         card_start()
-        sec_title(f"⚖️ 希望仕込量と石灰水量　― {selected_p}")
-
-        col_in1, col_in2 = st.columns(2)
-        with col_in1:
-            target_size = st.number_input("🏭 希望仕込製品量 (kg)", min_value=0.0, value=100.0, step=10.0, key="t_size", format="%.0f")
-        with col_in2:
-            lime_water_size = st.number_input("💧 石灰水作成量 (kg)", min_value=0.0, value=0.0, step=1.0, key="l_size", format="%.1f")
-
+        brew_date = st.date_input("📅 仕込日", value=today_jst())
         st.markdown("<br>", unsafe_allow_html=True)
-        c_op1, c_op2 = st.columns(2)
-        with c_op1: operator = render_operator_selector("op_key")
-        with c_op2: brew_remarks = st.text_input("📝 備考（任意）", placeholder="特記事項があれば入力", key="brew_remarks")
+
+        p_recipes = {r.get("品名", "未定義"): {"大カテゴリ": r.get("大カテゴリ", "その他"), "中カテゴリ": r.get("中カテゴリ", "その他"), "成分": safe_parse_recipe(r.get("配合JSON"))} for r in recipes_raw if r.get("大カテゴリ") != "調味料"}
+        seasoning_recipes_all = [r for r in recipes_raw if r.get("大カテゴリ") == "調味料"]
+
+        sec_title("🏭 ライン・製品選択")
+        step_label("① ラインを選択")
+        BASE_BIG_CAT_ORDER = ["プラント", "OKM", "手詰め"]
+        dynamic_cats = {v["大カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ")}
+        big_cats = list(BASE_BIG_CAT_ORDER) + sorted(dynamic_cats - set(BASE_BIG_CAT_ORDER))
+        big_cat_labels = [f"{big_cat_icon(c)} {c}" for c in big_cats]
+        sel_big_label = st.radio("ライン", big_cat_labels, horizontal=True, label_visibility="collapsed") if big_cats else None
+        big_cat = big_cats[big_cat_labels.index(sel_big_label)] if sel_big_label else None
+
+        SUB_CAT_ORDER = ["黒", "白", "耐冷", "ショクカイ", "めん", "その他"]
+        sub_cats_set = {v["中カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ") == big_cat and v.get("中カテゴリ")} if big_cat else set()
+        sub_cats = sorted(sub_cats_set, key=lambda c: (SUB_CAT_ORDER.index(c) if c in SUB_CAT_ORDER else len(SUB_CAT_ORDER), c))
+        sub_str = None
+        if big_cat and len(sub_cats) > 1:
+            step_label("② 種別を選択")
+            sub_cat_labels = [f"{sub_cat_icon(c)} {c}" for c in sub_cats]
+            sel_sub_label = st.radio("種別", sub_cat_labels, horizontal=True, label_visibility="collapsed")
+            sub_str = sub_cats[sub_cat_labels.index(sel_sub_label)]
+        elif sub_cats: sub_str = sub_cats[0]
+
+        step_label("③ 製品品番を選択")
+        filtered_opts = [k for k, v in p_recipes.items() if v.get("大カテゴリ") == big_cat and v.get("中カテゴリ") == sub_str] if big_cat and sub_str else []
+        selected_p = None
+        active_recipe = []
+        if filtered_opts:
+            opt_labels = [f"{product_icon(k)} {k}" for k in filtered_opts]
+            sel_label = st.radio("製品", opt_labels, horizontal=True, label_visibility="collapsed")
+            selected_p = filtered_opts[opt_labels.index(sel_label)]
+            active_recipe = p_recipes.get(selected_p, {}).get("成分", [])
         card_end()
 
-        if target_size > 0:
-            st.markdown('<div class="section-title" style="margin-top:32px;">📦 準備する原料・ロット</div>', unsafe_allow_html=True)
-            submitted_ingredients, water_items = [], []
-            blend_errors = []
-            lime_cfg = parse_lime_config(order_points, product_name=selected_p)
-            lime_boost_active = is_lime_boost_active(lime_cfg, brew_date)
+        if not active_recipe: st.info("👆 製品を選択してください。（レシピ未登録の場合は「マスタ設定 → レシピ」で登録）")
+        else:
+            card_start()
+            sec_title(f"⚖️ 希望仕込量と石灰水量　― {selected_p}")
 
-            for i, item in enumerate(active_recipe[:15]):
-                r_name = str(item.get("原料名", "")).strip()
-                base_ratio = to_float(item.get("比率", 0.0))
-                is_water, is_lime, is_konjac = ("水" in r_name or "お湯" in r_name), ("石灰" in r_name or "カルシウム" in r_name), ("こんにゃく" in r_name)
-                icon = "🧂" if is_lime else ("📦" if is_konjac else "🔹")
+            col_in1, col_in2 = st.columns(2)
+            with col_in1:
+                target_size = st.number_input("🏭 希望仕込製品量 (kg)", min_value=0.0, value=100.0, step=10.0, key="t_size", format="%.0f")
+            with col_in2:
+                lime_water_size = st.number_input("💧 石灰水作成量 (kg)", min_value=0.0, value=0.0, step=1.0, key="l_size", format="%.1f")
 
-                lime_msg = ""
-                if is_water:
-                    calc_kg = max(0.0, target_size * (base_ratio / 100.0) - lime_water_size)
-                elif is_lime:
-                    eff_ratio = base_ratio
-                    if lime_boost_active:
-                        add_r = float(lime_cfg.get("add_ratio", 0.01))
-                        eff_ratio += add_r
-                        lime_msg = f"🌡️ 期間増量中 ({lime_cfg.get('start_month', 6)}月〜{lime_cfg.get('end_month', 9)}月: +{add_r}% / 理由: {lime_cfg.get('reason', '')})"
-                    calc_kg = lime_water_size * (eff_ratio / 10.0)
-                else: calc_kg = target_size * (base_ratio / 100.0)
+            st.markdown("<br>", unsafe_allow_html=True)
+            c_op1, c_op2 = st.columns(2)
+            with c_op1: operator = render_operator_selector("op_key")
+            with c_op2: brew_remarks = st.text_input("📝 備考（任意）", placeholder="特記事項があれば入力", key="brew_remarks")
+            card_end()
 
-                if is_water:
-                    water_items.append({"原料名": r_name, "kg": round(calc_kg, 2), "配合比": base_ratio})
-                    submitted_ingredients.append({"原料名": r_name, "kg": round(calc_kg, 2), "lot": "─", "水": True})
-                    continue
+            if target_size > 0:
+                st.markdown('<div class="section-title" style="margin-top:32px;">📦 準備する原料・ロット</div>', unsafe_allow_html=True)
+                submitted_ingredients, water_items = [], []
+                blend_errors = []
+                lime_cfg = parse_lime_config(order_points, product_name=selected_p)
+                lime_boost_active = is_lime_boost_active(lime_cfg, brew_date)
 
-                with st.container(border=True):
-                    st.markdown(f"<div style='font-size:1.3rem; font-weight:900;'>{icon} {r_name}</div>", unsafe_allow_html=True)
-                    if is_lime and lime_msg: st.markdown(f"<div style='font-size:0.9rem; color:#b45309; font-weight:800; margin-top:4px;'>{lime_msg}</div>", unsafe_allow_html=True)
+                for i, item in enumerate(active_recipe[:15]):
+                    r_name = str(item.get("原料名", "")).strip()
+                    base_ratio = to_float(item.get("比率", 0.0))
+                    is_water, is_lime, is_konjac = ("水" in r_name or "お湯" in r_name), ("石灰" in r_name or "カルシウム" in r_name), ("こんにゃく" in r_name)
+                    icon = "🧂" if is_lime else ("📦" if is_konjac else "🔹")
 
-                    if is_konjac:
-                        blend_mode = st.radio("ブレンドモード", ["単一 (1種)", "2種ブレンド", "3種ブレンド"], key=f"kb_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
-                        konjac_mats = [m for m in sorted_materials() if "こんにゃく" in m] or [r_name]
+                    lime_msg = ""
+                    if is_water:
+                        calc_kg = max(0.0, target_size * (base_ratio / 100.0) - lime_water_size)
+                    elif is_lime:
+                        eff_ratio = base_ratio
+                        if lime_boost_active:
+                            add_r = float(lime_cfg.get("add_ratio", 0.01))
+                            eff_ratio += add_r
+                            lime_msg = f"🌡️ 期間増量中 ({lime_cfg.get('start_month', 6)}月〜{lime_cfg.get('end_month', 9)}月: +{add_r}% / 理由: {lime_cfg.get('reason', '')})"
+                        calc_kg = lime_water_size * (eff_ratio / 10.0)
+                    else: calc_kg = target_size * (base_ratio / 100.0)
 
-                        if blend_mode in ["2種ブレンド", "3種ブレンド"]:
-                            is_3 = (blend_mode == "3種ブレンド")
-                            k_a, k_b, k_c = f"kr_a_{selected_p}_{i}", f"kr_b_{selected_p}_{i}", f"kr_c_{selected_p}_{i}"
-                            if k_a not in st.session_state: st.session_state[k_a] = 50.0 if not is_3 else 34.0
-                            if k_b not in st.session_state: st.session_state[k_b] = 50.0 if not is_3 else 33.0
-                            if k_c not in st.session_state: st.session_state[k_c] = 33.0
+                    if is_water:
+                        water_items.append({"原料名": r_name, "kg": round(calc_kg, 2), "配合比": base_ratio})
+                        submitted_ingredients.append({"原料名": r_name, "kg": round(calc_kg, 2), "lot": "─", "水": True})
+                        continue
 
-                            st.markdown("<div style='font-size:0.9rem; font-weight:800; color:#475569; margin:8px 0;'>🎯 ワンタッチ比率入力パネル</div>", unsafe_allow_html=True)
+                    with st.container(border=True):
+                        st.markdown(f"<div style='font-size:1.3rem; font-weight:900;'>{icon} {r_name}</div>", unsafe_allow_html=True)
+                        if is_lime and lime_msg: st.markdown(f"<div style='font-size:0.9rem; color:#b45309; font-weight:800; margin-top:4px;'>{lime_msg}</div>", unsafe_allow_html=True)
 
-                            target_key = f"blend_tgt_{selected_p}_{i}"
-                            if target_key not in st.session_state: st.session_state[target_key] = "🅰️"
-                            st.radio("入力対象を選択", ["🅰️", "🅱️", "🅲"] if is_3 else ["🅰️", "🅱️"], horizontal=True, key=target_key, label_visibility="collapsed")
+                        if is_konjac:
+                            blend_mode = st.radio("ブレンドモード", ["単一 (1種)", "2種ブレンド", "3種ブレンド"], key=f"kb_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
+                            konjac_mats = [m for m in sorted_materials() if "こんにゃく" in m] or [r_name]
 
-                            st.markdown("<div class='ratio-btn-container' style='margin-top:8px;'>", unsafe_allow_html=True)
-                            btn_cols = st.columns(9)
-                            def update_ratio(v, tgt, ka, kb, kc, is_three):
-                                if tgt == "🅰️": st.session_state[ka] = float(v); st.session_state[kb] = 100.0 - float(v) if not is_three else st.session_state[kb]
-                                elif tgt == "🅱️": st.session_state[kb] = float(v); st.session_state[ka] = 100.0 - float(v) if not is_three else st.session_state[ka]
-                                elif tgt == "🅲" and is_three: st.session_state[kc] = float(v)
+                            if blend_mode in ["2種ブレンド", "3種ブレンド"]:
+                                is_3 = (blend_mode == "3種ブレンド")
+                                k_a, k_b, k_c = f"kr_a_{selected_p}_{i}", f"kr_b_{selected_p}_{i}", f"kr_c_{selected_p}_{i}"
+                                if k_a not in st.session_state: st.session_state[k_a] = 50.0 if not is_3 else 34.0
+                                if k_b not in st.session_state: st.session_state[k_b] = 50.0 if not is_3 else 33.0
+                                if k_c not in st.session_state: st.session_state[k_c] = 33.0
 
-                            for pidx, pv in enumerate(range(10, 100, 10)):
-                                curr_tgt = st.session_state[target_key]
-                                curr_val = st.session_state.get(k_a) if curr_tgt == "🅰️" else (st.session_state.get(k_b) if curr_tgt == "🅱️" else st.session_state.get(k_c))
-                                btn_cols[pidx].button(f"{pv}%", key=f"rbtn_{selected_p}_{i}_{pv}", on_click=update_ratio, args=(pv, curr_tgt, k_a, k_b, k_c, is_3), type="primary" if (curr_val == float(pv)) else "secondary", use_container_width=True)
-                            st.markdown("</div>", unsafe_allow_html=True)
+                                st.markdown("<div style='font-size:0.9rem; font-weight:800; color:#475569; margin:8px 0;'>🎯 ワンタッチ比率入力パネル</div>", unsafe_allow_html=True)
 
-                            cols_ratio = st.columns(3 if is_3 else 2)
-                            ratio_a = cols_ratio[0].number_input("🅰️ 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_a)
-                            ratio_b = cols_ratio[1].number_input("🅱️ 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_b)
-                            ratio_c = cols_ratio[2].number_input("🅲 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_c) if is_3 else 0.0
-                            ratio_sum = ratio_a + ratio_b + ratio_c
-                            if abs(ratio_sum - 100.0) > 0.01:
-                                alert_box(f"❌ ブレンド比率の合計が {fmt_kg(ratio_sum)}% です（100%にしてください）", "danger")
-                                blend_errors.append(f"{r_name}：ブレンド比率の合計が{fmt_kg(ratio_sum)}%")
-                            else:
-                                st.caption(f"✅ 比率合計 100%（{fmt_kg(ratio_a)} / {fmt_kg(ratio_b)}{' / ' + fmt_kg(ratio_c) if is_3 else ''}）")
+                                target_key = f"blend_tgt_{selected_p}_{i}"
+                                if target_key not in st.session_state: st.session_state[target_key] = "🅰️"
+                                st.radio("入力対象を選択", ["🅰️", "🅱️", "🅲"] if is_3 else ["🅰️", "🅱️"], horizontal=True, key=target_key, label_visibility="collapsed")
 
-                            mat_a = st.radio("🅰️ 原料種別", konjac_mats, key=f"kma_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
-                            act_a, lot_a = _ing_row("🅰️ 投入量", calc_kg * ratio_a / 100.0, f"adj_a_{selected_p}_{i}", mat_a, f"lot_a_{selected_p}_{i}_{mat_a}")
-                            st.markdown("<hr style='margin:16px 0; border-top:1px dashed #cbd5e1;'>", unsafe_allow_html=True)
+                                st.markdown("<div class='ratio-btn-container' style='margin-top:8px;'>", unsafe_allow_html=True)
+                                btn_cols = st.columns(9)
+                                def update_ratio(v, tgt, ka, kb, kc, is_three):
+                                    if tgt == "🅰️": st.session_state[ka] = float(v); st.session_state[kb] = 100.0 - float(v) if not is_three else st.session_state[kb]
+                                    elif tgt == "🅱️": st.session_state[kb] = float(v); st.session_state[ka] = 100.0 - float(v) if not is_three else st.session_state[ka]
+                                    elif tgt == "🅲" and is_three: st.session_state[kc] = float(v)
 
-                            mat_b = st.radio("🅱️ 原料種別", konjac_mats, index=1 if len(konjac_mats) > 1 else 0, key=f"kmb_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
-                            act_b, lot_b = _ing_row("🅱️ 投入量", calc_kg * ratio_b / 100.0, f"adj_b_{selected_p}_{i}", mat_b, f"lot_b_{selected_p}_{i}_{mat_b}")
+                                for pidx, pv in enumerate(range(10, 100, 10)):
+                                    curr_tgt = st.session_state[target_key]
+                                    curr_val = st.session_state.get(k_a) if curr_tgt == "🅰️" else (st.session_state.get(k_b) if curr_tgt == "🅱️" else st.session_state.get(k_c))
+                                    btn_cols[pidx].button(f"{pv}%", key=f"rbtn_{selected_p}_{i}_{pv}", on_click=update_ratio, args=(pv, curr_tgt, k_a, k_b, k_c, is_3), type="primary" if (curr_val == float(pv)) else "secondary", use_container_width=True)
+                                st.markdown("</div>", unsafe_allow_html=True)
 
-                            submitted_ingredients.extend([{"原料名": mat_a, "kg": act_a, "lot": f"{lot_a}({fmt_kg(ratio_a)}%)" if lot_a != "─" else "─"},
-                                                          {"原料名": mat_b, "kg": act_b, "lot": f"{lot_b}({fmt_kg(ratio_b)}%)" if lot_b != "─" else "─"}])
+                                cols_ratio = st.columns(3 if is_3 else 2)
+                                ratio_a = cols_ratio[0].number_input("🅰️ 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_a)
+                                ratio_b = cols_ratio[1].number_input("🅱️ 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_b)
+                                ratio_c = cols_ratio[2].number_input("🅲 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_c) if is_3 else 0.0
+                                ratio_sum = ratio_a + ratio_b + ratio_c
+                                if abs(ratio_sum - 100.0) > 0.01:
+                                    alert_box(f"❌ ブレンド比率の合計が {fmt_kg(ratio_sum)}% です（100%にしてください）", "danger")
+                                    blend_errors.append(f"{r_name}：ブレンド比率の合計が{fmt_kg(ratio_sum)}%")
+                                else:
+                                    st.caption(f"✅ 比率合計 100%（{fmt_kg(ratio_a)} / {fmt_kg(ratio_b)}{' / ' + fmt_kg(ratio_c) if is_3 else ''}）")
 
-                            if is_3:
+                                mat_a = st.radio("🅰️ 原料種別", konjac_mats, key=f"kma_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
+                                act_a, lot_a = _ing_row("🅰️ 投入量", calc_kg * ratio_a / 100.0, f"adj_a_{selected_p}_{i}", mat_a, f"lot_a_{selected_p}_{i}_{mat_a}")
                                 st.markdown("<hr style='margin:16px 0; border-top:1px dashed #cbd5e1;'>", unsafe_allow_html=True)
-                                mat_c = st.radio("🅲 原料種別", konjac_mats, index=2 if len(konjac_mats) > 2 else 0, key=f"kmc_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
-                                act_c, lot_c = _ing_row("🅲 投入量", calc_kg * ratio_c / 100.0, f"adj_c_{selected_p}_{i}", mat_c, f"lot_c_{selected_p}_{i}_{mat_c}")
-                                submitted_ingredients.append({"原料名": mat_c, "kg": act_c, "lot": f"{lot_c}({fmt_kg(ratio_c)}%)" if lot_c != "─" else "─"})
+
+                                mat_b = st.radio("🅱️ 原料種別", konjac_mats, index=1 if len(konjac_mats) > 1 else 0, key=f"kmb_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
+                                act_b, lot_b = _ing_row("🅱️ 投入量", calc_kg * ratio_b / 100.0, f"adj_b_{selected_p}_{i}", mat_b, f"lot_b_{selected_p}_{i}_{mat_b}")
+
+                                submitted_ingredients.extend([{"原料名": mat_a, "kg": act_a, "lot": f"{lot_a}({fmt_kg(ratio_a)}%)" if lot_a != "─" else "─"},
+                                                              {"原料名": mat_b, "kg": act_b, "lot": f"{lot_b}({fmt_kg(ratio_b)}%)" if lot_b != "─" else "─"}])
+
+                                if is_3:
+                                    st.markdown("<hr style='margin:16px 0; border-top:1px dashed #cbd5e1;'>", unsafe_allow_html=True)
+                                    mat_c = st.radio("🅲 原料種別", konjac_mats, index=2 if len(konjac_mats) > 2 else 0, key=f"kmc_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
+                                    act_c, lot_c = _ing_row("🅲 投入量", calc_kg * ratio_c / 100.0, f"adj_c_{selected_p}_{i}", mat_c, f"lot_c_{selected_p}_{i}_{mat_c}")
+                                    submitted_ingredients.append({"原料名": mat_c, "kg": act_c, "lot": f"{lot_c}({fmt_kg(ratio_c)}%)" if lot_c != "─" else "─"})
+                            else:
+                                act_kg, final_lot = _ing_row(f"投入量（配合比 {fmt_kg(base_ratio)}%）", calc_kg, f"adj_{selected_p}_{i}", r_name, f"lot_{selected_p}_{i}")
+                                submitted_ingredients.append({"原料名": r_name, "kg": act_kg, "lot": final_lot})
                         else:
                             act_kg, final_lot = _ing_row(f"投入量（配合比 {fmt_kg(base_ratio)}%）", calc_kg, f"adj_{selected_p}_{i}", r_name, f"lot_{selected_p}_{i}")
                             submitted_ingredients.append({"原料名": r_name, "kg": act_kg, "lot": final_lot})
-                    else:
-                        act_kg, final_lot = _ing_row(f"投入量（配合比 {fmt_kg(base_ratio)}%）", calc_kg, f"adj_{selected_p}_{i}", r_name, f"lot_{selected_p}_{i}")
-                        submitted_ingredients.append({"原料名": r_name, "kg": act_kg, "lot": final_lot})
 
-            if seasoning_recipes_all:
-                st.markdown('<div class="section-title" style="margin-top:32px;">🌶️ 調味料の希釈計算・投入記録</div>', unsafe_allow_html=True)
-                for sr_idx, sr in enumerate(seasoning_recipes_all):
-                    sr_items = safe_parse_seasoning_recipe(sr.get("配合JSON"))
-                    if not sr_items: continue
-                    with st.container(border=True):
-                        if st.checkbox(f"🌶️ {sr.get('品名')} を使用する", key=f"use_season_{selected_p}_{sr_idx}"):
-                            target_vol_key = f"season_vol_{selected_p}_{sr_idx}"
-                            target_vol = st.number_input("希釈対象量（できあがり量・kg）", min_value=0.0, value=st.session_state.get(target_vol_key, 0.0), step=0.1, key=target_vol_key)
-                            for si, sitem in enumerate(sr_items):
-                                s_mat, s_dil = sitem["原料名"], to_float(sitem["希釈倍率"])
-                                need_kg = target_vol / s_dil if s_dil > 0 else 0.0
-                                s_act_kg, s_lot = _ing_row(f"投入量（{s_mat}）", need_kg, f"adj_season_{selected_p}_{sr_idx}_{si}", s_mat, f"lot_season_{selected_p}_{sr_idx}_{si}")
-                                submitted_ingredients.append({"原料名": s_mat, "kg": s_act_kg, "lot": s_lot})
+                if seasoning_recipes_all:
+                    st.markdown('<div class="section-title" style="margin-top:32px;">🌶️ 調味料の希釈計算・投入記録</div>', unsafe_allow_html=True)
+                    for sr_idx, sr in enumerate(seasoning_recipes_all):
+                        sr_items = safe_parse_seasoning_recipe(sr.get("配合JSON"))
+                        if not sr_items: continue
+                        with st.container(border=True):
+                            if st.checkbox(f"🌶️ {sr.get('品名')} を使用する", key=f"use_season_{selected_p}_{sr_idx}"):
+                                target_vol_key = f"season_vol_{selected_p}_{sr_idx}"
+                                target_vol = st.number_input("希釈対象量（できあがり量・kg）", min_value=0.0, value=st.session_state.get(target_vol_key, 0.0), step=0.1, key=target_vol_key)
+                                for si, sitem in enumerate(sr_items):
+                                    s_mat, s_dil = sitem["原料名"], to_float(sitem["希釈倍率"])
+                                    need_kg = target_vol / s_dil if s_dil > 0 else 0.0
+                                    s_act_kg, s_lot = _ing_row(f"投入量（{s_mat}）", need_kg, f"adj_season_{selected_p}_{sr_idx}_{si}", s_mat, f"lot_season_{selected_p}_{sr_idx}_{si}")
+                                    submitted_ingredients.append({"原料名": s_mat, "kg": s_act_kg, "lot": s_lot})
 
-            # ── 保存前チェック ─────────────────────────────────────
-            errors, warns = list(blend_errors), []
-            if operator == "未登録": errors.append("担当者が未登録です（マスタ設定 → 担当者）")
-            agg_use = {}
-            for ing in submitted_ingredients:
-                if ing.get("水") or ing["kg"] <= 0: continue
-                lots = split_lots(ing["lot"])
-                if not lots:
-                    warns.append(f"ロット未指定：{ing['原料名']}（トレースできなくなります）")
-                    continue
-                for l in lots:
-                    agg_use[(ing["原料名"], l)] = agg_use.get((ing["原料名"], l), 0.0) + ing["kg"] / len(lots)
-            for (mname, l), kg_need in agg_use.items():
-                known = any(v["原料種別"] == mname and v["ロットNo"] == l for v in inventory_data.values())
-                _, skg = lot_stock(mname, l)
-                if not known: warns.append(f"入荷登録のないロット：{mname} / {l}（在庫は引かれません）")
-                elif kg_need > skg + 0.01: warns.append(f"在庫不足：{mname} / {l}（残{fmt_kg(round(skg, 2))}kg ＜ 投入{fmt_kg(round(kg_need, 2))}kg）")
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            with st.expander("📋 投入内容の最終確認（保存前にご確認ください）", expanded=True):
-                prev = []
+                # ── 保存前チェック ─────────────────────────────────────
+                errors, warns = list(blend_errors), []
+                if operator == "未登録": errors.append("担当者が未登録です（マスタ設定 → 担当者）")
+                agg_use = {}
                 for ing in submitted_ingredients:
+                    if ing.get("水") or ing["kg"] <= 0: continue
                     lots = split_lots(ing["lot"])
-                    stock_txt = "─"
-                    if lots and not ing.get("水"):
-                        stock_txt = " / ".join(f"{fmt_kg(round(lot_stock(ing['原料名'], l)[1], 2))}kg" for l in lots)
-                    prev.append({"原料": ing["原料名"], "投入量(kg)": fmt_kg(ing["kg"]), "ロット": ing["lot"], "ロット現在庫": stock_txt})
-                st.dataframe(pd.DataFrame(prev), use_container_width=True, hide_index=True)
+                    if not lots:
+                        warns.append(f"ロット未指定：{ing['原料名']}（トレースできなくなります）")
+                        continue
+                    for l in lots:
+                        agg_use[(ing["原料名"], l)] = agg_use.get((ing["原料名"], l), 0.0) + ing["kg"] / len(lots)
+                for (mname, l), kg_need in agg_use.items():
+                    known = any(v["原料種別"] == mname and v["ロットNo"] == l for v in inventory_data.values())
+                    _, skg = lot_stock(mname, l)
+                    if not known: warns.append(f"入荷登録のないロット：{mname} / {l}（在庫は引かれません）")
+                    elif kg_need > skg + 0.01: warns.append(f"在庫不足：{mname} / {l}（残{fmt_kg(round(skg, 2))}kg ＜ 投入{fmt_kg(round(kg_need, 2))}kg）")
 
-            total_in = sum(ing["kg"] for ing in submitted_ingredients)
-            st.markdown(f"""
-            <div style="background-color: var(--c-primary-soft); border: 2px solid var(--c-primary); border-radius: 12px; padding: 16px; margin-bottom: 16px; text-align: center;">
-                <div style="font-weight: 800; color: var(--c-muted); font-size: 1.1rem;">💡 合計投入予定量（全原料・水を含む）</div>
-                <div style="font-size: 2.2rem; font-weight: 900; color: var(--c-secondary);">{fmt_kg(round(total_in, 2))} <span style="font-size:1.2rem; color:var(--c-muted);">kg</span></div>
-            </div>
-            """, unsafe_allow_html=True)
+                st.markdown("<br>", unsafe_allow_html=True)
+                with st.expander("📋 投入内容の最終確認（保存前にご確認ください）", expanded=True):
+                    prev = []
+                    for ing in submitted_ingredients:
+                        lots = split_lots(ing["lot"])
+                        stock_txt = "─"
+                        if lots and not ing.get("水"):
+                            stock_txt = " / ".join(f"{fmt_kg(round(lot_stock(ing['原料名'], l)[1], 2))}kg" for l in lots)
+                        prev.append({"原料": ing["原料名"], "投入量(kg)": fmt_kg(ing["kg"]), "ロット": ing["lot"], "ロット現在庫": stock_txt})
+                    st.dataframe(pd.DataFrame(prev), use_container_width=True, hide_index=True)
 
-            for e_msg in errors: alert_box(f"❌ {e_msg}", "danger")
-            ack_ok = True
-            if warns:
-                alert_box("⚠️ 保存前の確認事項<br>" + "<br>".join(f"・{w}" for w in warns), "warn")
-                ack_ok = st.checkbox("上記を確認した上で保存する", key="brew_ack_warn")
+                total_in = sum(ing["kg"] for ing in submitted_ingredients)
+                st.markdown(f"""
+                <div style="background-color: var(--c-primary-soft); border: 2px solid var(--c-primary); border-radius: 12px; padding: 16px; margin-bottom: 16px; text-align: center;">
+                    <div style="font-weight: 800; color: var(--c-muted); font-size: 1.1rem;">💡 合計投入予定量（全原料・水を含む）</div>
+                    <div style="font-size: 2.2rem; font-weight: 900; color: var(--c-secondary);">{fmt_kg(round(total_in, 2))} <span style="font-size:1.2rem; color:var(--c-muted);">kg</span></div>
+                </div>
+                """, unsafe_allow_html=True)
 
-            if st.button("💾 この内容で製造記録を保存する", type="primary", use_container_width=True, disabled=bool(errors) or not ack_ok):
-                k_kg = s_kg = st_kg = lime_kg = 0.0
-                k_lot = s_lot = st_lot = "─"
-                for ing in submitted_ingredients:
-                    n, amt, lot = ing["原料名"], ing["kg"], ing["lot"]
-                    if "こんにゃく" in n: k_kg += amt; k_lot = lot if k_lot == "─" else (k_lot if lot in k_lot else f"{k_lot} / {lot}")
-                    elif "海藻" in n: s_kg += amt; s_lot = lot if s_lot == "─" else (s_lot if lot in s_lot else f"{s_lot} / {lot}")
-                    elif "デンプン" in n or "でんぷん" in n: st_kg += amt; st_lot = lot if st_lot == "─" else (st_lot if lot in st_lot else f"{st_lot} / {lot}")
-                    elif "石灰" in n or "カルシウム" in n: lime_kg += amt
+                for e_msg in errors: alert_box(f"❌ {e_msg}", "danger")
+                ack_ok = True
+                if warns:
+                    alert_box("⚠️ 保存前の確認事項<br>" + "<br>".join(f"・{w}" for w in warns), "warn")
+                    ack_ok = st.checkbox("上記を確認した上で保存する", key="brew_ack_warn")
 
-                if not hasattr(sheets, "append_brewing"):
-                    st.error("sheets.append_brewing が見つからないため保存できません。")
-                    st.stop()
+                if st.button("💾 この内容で製造記録を保存する", type="primary", use_container_width=True, disabled=bool(errors) or not ack_ok):
+                    k_kg = s_kg = st_kg = lime_kg = 0.0
+                    k_lot = s_lot = st_lot = "─"
+                    for ing in submitted_ingredients:
+                        n, amt, lot = ing["原料名"], ing["kg"], ing["lot"]
+                        if "こんにゃく" in n: k_kg += amt; k_lot = lot if k_lot == "─" else (k_lot if lot in k_lot else f"{k_lot} / {lot}")
+                        elif "海藻" in n: s_kg += amt; s_lot = lot if s_lot == "─" else (s_lot if lot in s_lot else f"{s_lot} / {lot}")
+                        elif "デンプン" in n or "でんぷん" in n: st_kg += amt; st_lot = lot if st_lot == "─" else (st_lot if lot in st_lot else f"{st_lot} / {lot}")
+                        elif "石灰" in n or "カルシウム" in n: lime_kg += amt
 
-                next_no = next_brewing_no_fresh()
-                text_ing = ", ".join([f"{ing['原料名']}:{round(ing['kg'], 3)}kg({ing['lot']})" for ing in submitted_ingredients])
+                    if not hasattr(sheets, "append_brewing"):
+                        st.error("sheets.append_brewing が見つからないため保存できません。")
+                        st.stop()
 
-                sheets.append_brewing({
-                    "仕込No": next_no, "仕込日": str(brew_date), "品名": selected_p,
-                    "メーカー": operator, "主原料ロット": k_lot, "仕込量(kg)": round(target_size, 2),
-                    "こんにゃく精粉(kg)": round(k_kg, 2), "海藻粉(kg)": round(s_kg, 2), "海藻粉ロット": s_lot,
-                    "デンプン(kg)": round(st_kg, 2), "デンプンロット": st_lot, "デンプン種別": "-",
-                    "石灰(kg)": round(lime_kg, 2), "石灰水(L)": round(lime_water_size, 2),
-                    "その他添加物": text_ing, "備考": f"{brew_remarks}", "登録日時": now_jst().isoformat()
-                })
+                    next_no = next_brewing_no_fresh()
+                    text_ing = ", ".join([f"{ing['原料名']}:{round(ing['kg'], 3)}kg({ing['lot']})" for ing in submitted_ingredients])
 
-                for key in list(st.session_state.keys()):
-                    if any(key.startswith(p) for p in ["adj_", "last_calc_", "lot_", "btn_", "kb_", "kr_", "km", "blend_tgt_", "use_season_", "season_vol_", "rbtn_", "brew_ack", "brew_remarks"]):
-                        del st.session_state[key]
+                    sheets.append_brewing({
+                        "仕込No": next_no, "仕込日": str(brew_date), "品名": selected_p,
+                        "メーカー": operator, "主原料ロット": k_lot, "仕込量(kg)": round(target_size, 2),
+                        "こんにゃく精粉(kg)": round(k_kg, 2), "海藻粉(kg)": round(s_kg, 2), "海藻粉ロット": s_lot,
+                        "デンプン(kg)": round(st_kg, 2), "デンプンロット": st_lot, "デンプン種別": "-",
+                        "石灰(kg)": round(lime_kg, 2), "石灰水(L)": round(lime_water_size, 2),
+                        "その他添加物": text_ing, "備考": f"{brew_remarks}", "登録日時": now_jst().isoformat()
+                    })
 
-                done(f"✅ 製造記録を登録しました（仕込No. {next_no} ／ {selected_p} {fmt_kg(target_size)}kg ／ 担当 {operator}）")
+                    for key in list(st.session_state.keys()):
+                        if any(key.startswith(p) for p in ["adj_", "last_calc_", "lot_", "btn_", "kb_", "kr_", "km", "blend_tgt_", "use_season_", "season_vol_", "rbtn_", "brew_ack", "brew_remarks"]):
+                            del st.session_state[key]
 
-    # ── 直近5件の製造履歴（配合帳票・Excel風に直接修正） ──────────────
-    card_start()
-    sec_title("🧾 直近5件の製造履歴（配合帳票）")
-    _mode = st.radio("表示", ["🍥 製品ごとの最新5件", "🕒 新しい順に5件"], horizontal=True, key="recent_mode")
-    _sorted_b = sorted(brewing, key=lambda b: (str(b.get("仕込日", "")), str(b.get("登録日時", "")), str(b.get("仕込No", ""))), reverse=True)
-    if "製品ごと" in _mode:
-        _seen, recent5 = set(), []
-        for _b in _sorted_b:
-            _p = str(_b.get("品名", ""))
-            if _p in _seen: continue
-            _seen.add(_p); recent5.append(_b)
-            if len(recent5) >= 5: break
-    else:
-        recent5 = _sorted_b[:5]
-    render_brew_grid(recent5, "recent_grid")
-    render_correction_log(brew_corrections, "recent_corr_log", limit=10)
-    card_end()
+                    done(f"✅ 製造記録を登録しました（仕込No. {next_no} ／ {selected_p} {fmt_kg(target_size)}kg ／ 担当 {operator}）")
 
-    # ── 本日の製造記録（登録できたかをその場で確認） ──────────────
-    card_start()
-    sec_title(f"📅 本日の製造記録（{today_jst()}）")
-    if brewing:
-        df_today = pd.DataFrame(brewing)
-        df_today = df_today[in_period(df_today.get("仕込日", pd.Series(dtype=str)), today_jst(), today_jst())] if "仕込日" in df_today.columns else df_today.iloc[0:0]
-        if df_today.empty:
-            st.caption("本日の製造記録はまだありません。")
+    with _tab_hist:
+        # ── 直近5件の製造履歴（配合帳票・Excel風に直接修正） ──────────────
+        card_start()
+        sec_title("🧾 直近5件の製造履歴（配合帳票）")
+        _mode = st.radio("表示", ["🍥 製品ごとの最新5件", "🕒 新しい順に5件"], horizontal=True, key="recent_mode")
+        _sorted_b = sorted(brewing, key=lambda b: (str(b.get("仕込日", "")), str(b.get("登録日時", "")), str(b.get("仕込No", ""))), reverse=True)
+        if "製品ごと" in _mode:
+            _seen, recent5 = set(), []
+            for _b in _sorted_b:
+                _p = str(_b.get("品名", ""))
+                if _p in _seen: continue
+                _seen.add(_p); recent5.append(_b)
+                if len(recent5) >= 5: break
         else:
-            v_today = brewing_view_df(df_today)
-            c_m1, c_m2 = st.columns(2)
-            c_m1.metric("本日の製造件数", f"{len(v_today)} 件")
-            c_m2.metric("本日の製造量", f"{fmt_kg(round(v_today['仕込量(kg)'].sum(), 2))} kg")
-            v_today = v_today.sort_values("登録日時", ascending=False)
-            st.dataframe(fmt_df_numeric(v_today[["仕込No", "品名", "担当者", "仕込量(kg)", "原料内訳（全原料の投入量）", "備考"]], ["仕込量(kg)"]), use_container_width=True, hide_index=True)
-    else:
-        st.caption("製造記録はまだありません。")
-    card_end()
+            recent5 = _sorted_b[:5]
+        render_brew_grid(recent5, "recent_grid")
+        render_correction_log(brew_corrections, "recent_corr_log", limit=10)
+        card_end()
+
+        # ── 本日の製造記録（登録できたかをその場で確認） ──────────────
+        card_start()
+        sec_title(f"📅 本日の製造記録（{today_jst()}）")
+        if brewing:
+            df_today = pd.DataFrame(brewing)
+            df_today = df_today[in_period(df_today.get("仕込日", pd.Series(dtype=str)), today_jst(), today_jst())] if "仕込日" in df_today.columns else df_today.iloc[0:0]
+            if df_today.empty:
+                st.caption("本日の製造記録はまだありません。")
+            else:
+                v_today = brewing_view_df(df_today)
+                c_m1, c_m2 = st.columns(2)
+                c_m1.metric("本日の製造件数", f"{len(v_today)} 件")
+                c_m2.metric("本日の製造量", f"{fmt_kg(round(v_today['仕込量(kg)'].sum(), 2))} kg")
+                v_today = v_today.sort_values("登録日時", ascending=False)
+                st.dataframe(fmt_df_numeric(v_today[["仕込No", "品名", "担当者", "仕込量(kg)", "原料内訳（全原料の投入量）", "備考"]], ["仕込量(kg)"]), use_container_width=True, hide_index=True)
+        else:
+            st.caption("製造記録はまだありません。")
+        card_end()
 
 
-# ═══════════════════════════════════════════════════════════════
-#  📊 ダッシュボード
+    # ═══════════════════════════════════════════════════════════════
+    #  📊 ダッシュボード
+
 # ═══════════════════════════════════════════════════════════════
 elif page == "📊 ダッシュボード":
     page_header("📊 サマリーと在庫モニター", f"{today_jst():%Y年%m月%d日}（日本時間）")
@@ -2442,10 +2505,7 @@ elif page == "📥 入荷登録":
 # ═══════════════════════════════════════════════════════════════
 elif page == "📦 在庫・棚卸":
     page_header("📦 在庫・棚卸管理", "ロット別の現在庫を確認し、実数に合わせて調整できます。調整はすべて履歴に残ります。")
-    neg = negative_stock_lots()
-    if neg:
-        alert_box("❓ 入荷量より使用量が多いロットがあります（入荷登録漏れ・ロット誤入力の疑い）：<br>" +
-                  "<br>".join(f"・{v['原料種別']} / {v['ロットNo']}（入荷{fmt_kg(v['入荷袋数'])}袋 ＜ 使用{fmt_kg(round(v['使用袋数'], 2))}袋）" for v in neg), "warn")
+    render_negative_panel()
     t_inv, t_rec, t_sum, t_hist = st.tabs(["📋 在庫一覧・棚卸し", "⚖️ 粉の突合・リセット", "🧮 原料別サマリー", "🕒 変更履歴"])
 
     with t_inv:
