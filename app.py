@@ -1290,7 +1290,7 @@ def _norm_cell(v):
     if isinstance(v, (int, float)): return round(float(v), 4)
     return str(v).strip()
 
-def render_brew_grid(records, kp):
+def render_brew_grid(records, kp, readonly=False):
     """製造記録を「1行=1仕込、原料ごとに kg／配合比%／ロット の列」で表示し、そのままExcelのように編集できる。
     確定時は必ず修正記録（理由・修正者・変更内容）を残す。行を削除すると「取消」として記録される。"""
     recs = [dict(r) for r in records]
@@ -1307,9 +1307,13 @@ def render_brew_grid(records, kp):
     for m in per:
         for cn in m:
             if cn not in order: order.append(cn)
-    c_a, c_b = st.columns([3, 1])
-    extra = c_a.multiselect("➕ 記録に無い原料を入力したいときは、ここで列を追加", [x for x in sorted_materials() if x not in order], key=f"{kp}_extra")
-    show_ratio = c_b.checkbox("配合比(%)を表示", value=True, key=f"{kp}_ratio")
+    if readonly:
+        extra = []
+        show_ratio = st.checkbox("配合比(%)を表示", value=True, key=f"{kp}_ratio")
+    else:
+        c_a, c_b = st.columns([3, 1])
+        extra = c_a.multiselect("➕ 記録に無い原料を入力したいときは、ここで列を追加", [x for x in sorted_materials() if x not in order], key=f"{kp}_extra")
+        show_ratio = c_b.checkbox("配合比(%)を表示", value=True, key=f"{kp}_ratio")
     order += extra
 
     rows = []
@@ -1327,14 +1331,19 @@ def render_brew_grid(records, kp):
     prods = sorted({str(r.get("品名", "")) for r in recipes_raw if r.get("品名")} | {d["品名"] for d in rows if d["品名"]})
     ops = sorted(set(inspectors) | {d["担当者"] for d in rows if d["担当者"]})
     cfg = {"仕込No": st.column_config.TextColumn("仕込No", disabled=True), "修正": st.column_config.TextColumn("修正", disabled=True),
-           "仕込日": st.column_config.TextColumn("仕込日", help="例 2026-11-06"), "品名": st.column_config.SelectboxColumn("品名", options=prods),
-           "担当者": st.column_config.SelectboxColumn("担当者", options=ops),
+           "仕込日": st.column_config.TextColumn("仕込日", help="例 2026-11-06"),
+           "品名": st.column_config.TextColumn("品名") if readonly else st.column_config.SelectboxColumn("品名", options=prods),
+           "担当者": st.column_config.TextColumn("担当者") if readonly else st.column_config.SelectboxColumn("担当者", options=ops),
            "仕込量(kg)": st.column_config.NumberColumn("仕込量(kg)", format="%.2f", min_value=0.0),
            "石灰水(L)": st.column_config.NumberColumn("石灰水(L)", format="%.2f", min_value=0.0)}
     for cn in order:
         cfg[f"{cn} kg"] = st.column_config.NumberColumn(f"{cn} kg", format="%.2f", min_value=0.0)
         if show_ratio: cfg[f"{cn} %"] = st.column_config.NumberColumn(f"{cn} %", format="%.2f", disabled=True)
         cfg[f"{cn} ロット"] = st.column_config.TextColumn(f"{cn} ロット")
+    if readonly:
+        st.caption("原料ごとに「kg／配合比％／ロット」をセルに分けて表示しています（Excelの「配合比(セル別)」シートと同じ形式）。修正は「🧾 配合帳票（Excel風・修正）」で行えます。")
+        st.dataframe(df, use_container_width=True, hide_index=True, column_config=cfg)
+        return
     st.caption("💡 セルをダブルタップして直接直せます（％は自動計算）。直したら下で理由を書いて「確認」→「確定」。行を選んで🗑で取消。修正は必ず記録に残ります。")
     sig0 = hashlib.md5(df.to_json().encode()).hexdigest()[:10]
     edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, hide_index=True, column_config=cfg, key=f"{kp}_ed_{sig0}")
@@ -1861,8 +1870,8 @@ def next_arrival_no_fresh():
 
 if page == "🏭 製造仕込み":
     page_header("🏭 製造仕込み記録", "投入量は完全自動計算されます。微調整も可能です。保存前に在庫とロットを自動チェックします。")
-    _tab_reg, _tab_hist = st.tabs(["📝 新規登録", "🧾 直近の履歴・修正"])
-    with _tab_reg:
+    _bv = st.radio("表示", ["📝 新規登録", "🧾 直近の履歴・修正"], horizontal=True, key="brew_page_view", label_visibility="collapsed")
+    if _bv == "📝 新規登録":
         card_start()
         brew_date = st.date_input("📅 仕込日", value=today_jst())
         st.markdown("<br>", unsafe_allow_html=True)
@@ -2105,7 +2114,7 @@ if page == "🏭 製造仕込み":
 
                     done(f"✅ 製造記録を登録しました（仕込No. {next_no} ／ {selected_p} {fmt_kg(target_size)}kg ／ 担当 {operator}）")
 
-    with _tab_hist:
+    else:
         # ── 直近5件の製造履歴（配合帳票・Excel風に直接修正） ──────────────
         card_start()
         sec_title("🧾 直近5件の製造履歴（配合帳票）")
@@ -2750,9 +2759,9 @@ elif page == "📋 履歴・帳票":
         c_m3.metric("製造日数", f"{view['仕込日'].nunique()} 日")
         card_end()
 
-        t_list, t_grid, t_detail, t_daily, t_corr = st.tabs(["📄 一覧・帳票出力", "🧾 配合帳票（Excel風・修正）", "🔬 1件ずつ詳細確認", "📆 日別・製品別集計", "📝 修正履歴"])
+        _hv = st.radio("表示", ['📄 一覧・帳票出力', '🧾 配合帳票（Excel風・修正）', '🔬 1件ずつ詳細確認', '📆 日別・製品別集計', '📝 修正履歴'], horizontal=True, key="brw_hist_view", label_visibility="collapsed")
 
-        with t_list:
+        if _hv == "📄 一覧・帳票出力":
             card_start()
             list_cols = ["仕込日", "仕込No", "品名", "担当者", "仕込量(kg)", "石灰水(L)", "原料内訳（全原料の投入量）", "修正", "備考"]
             if view.empty:
@@ -2765,11 +2774,11 @@ elif page == "📋 履歴・帳票":
                 _cl = [c for c in brew_corrections if str(c.get("仕込No", "")) in _nos]
                 if _cl: xl_sheets["修正履歴"] = corr_log_df(_cl)
                 download_buttons(xl_sheets, f"製造記録_{s_date or '全期間'}_{e_date or ''}".rstrip("_"), "brw_dl")
-                st.dataframe(fmt_df_numeric(view[list_cols], ["仕込量(kg)", "石灰水(L)"]), use_container_width=True, hide_index=True)
+                render_brew_grid(df_f.to_dict("records"), "brw_hist_list", readonly=True)
                 st.caption("※ Excelには「製造記録」「配合比(セル別)」「原料使用明細（ロット・入荷日・メーカー付き）」「日別集計」（修正があれば「修正履歴」）が入ります。")
             card_end()
 
-        with t_grid:
+        if _hv == "🧾 配合帳票（Excel風・修正）":
             card_start()
             if view.empty:
                 st.info("条件に合う製造記録がありません。")
@@ -2778,7 +2787,7 @@ elif page == "📋 履歴・帳票":
                 render_brew_grid(df_f.head(200).to_dict("records"), "brw_hist_grid")
             card_end()
 
-        with t_detail:
+        if _hv == "🔬 1件ずつ詳細確認":
             card_start()
             if view.empty:
                 st.info("条件に合う製造記録がありません。")
@@ -2797,7 +2806,7 @@ elif page == "📋 履歴・帳票":
                 st.caption(f"登録日時: {r.get('登録日時', '')}")
             card_end()
 
-        with t_daily:
+        if _hv == "📆 日別・製品別集計":
             card_start()
             if view.empty:
                 st.info("条件に合う製造記録がありません。")
@@ -2810,7 +2819,7 @@ elif page == "📋 履歴・帳票":
                 st.dataframe(fmt_df_numeric(pp, ["製造量kg"]), use_container_width=True, hide_index=True)
             card_end()
 
-        with t_corr:
+        if _hv == "📝 修正履歴":
             card_start()
             kw_c = st.text_input("🔎 キーワード（仕込No・理由・修正者・内容）", key="brw_corr_kw")
             cdf = corr_log_df(brew_corrections)
