@@ -142,6 +142,9 @@ def _write_signature(name, args, kwargs):
     except Exception:
         return None
 
+_WRITE_GUARD = {"save_recipes": "recipes", "save_brewing": "brewing", "save_arrivals": "arrivals", "save_materials": "materials",
+                "save_supplies": "supplies", "save_inspectors": "inspectors", "save_order_points": "order_points", "save_vendors": "vendors"}
+
 class _SafeSheets:
     DEDUP_WRITES = ("append_brewing", "append_arrival")
     DEDUP_SECONDS = 10
@@ -168,6 +171,26 @@ class _SafeSheets:
                     st.stop()
                 if sig:
                     st.session_state["_last_write"] = (sig, time.time())
+            if name == "save_recipes" and a:
+                try:
+                    a = (recipes_to_sheet_format(a[0]),) + tuple(a[1:])
+                    _new_ing = sum(len(_recipe_items(r.get("配合JSON"))) for r in a[0])
+                    _cur_ing = sum(len(_recipe_items(r.get("配合JSON"))) for r in ((globals().get("dataset") or {}).get("recipes") or []))
+                except Exception:
+                    _new_ing = _cur_ing = 0
+                if _cur_ing and not _new_ing and not st.session_state.get("_allow_shrink_write"):
+                    st.error("🛑 保存を中止しました：すべての配合の原料・比率が空になる内容です。誤操作・データ消失を防ぐため止めています。")
+                    st.stop()
+            if is_write and name in _WRITE_GUARD and a:
+                try:
+                    _cur = (globals().get("dataset") or {}).get(_WRITE_GUARD[name]) or []
+                    _n_cur, _n_new = len(_cur), len(a[0])
+                except Exception:
+                    _n_cur = _n_new = 0
+                if _n_cur and (_n_new == 0 or (_n_cur >= 4 and _n_new < _n_cur * 0.5)) and not st.session_state.get("_allow_shrink_write"):
+                    st.error(f"🛑 保存を中止しました（{name}）：現在 {_n_cur} 件あるデータが {_n_new} 件になる内容です。誤操作・データ消失を防ぐため止めています。"
+                             "意図した操作の場合は「🛟 バックアップ・復旧」→「詳細設定」で許可してから、もう一度保存してください。")
+                    st.stop()
             last_err = None
             for attempt in range(3):
                 try:
@@ -237,8 +260,22 @@ except Exception as _load_err:
         st.code("".join(traceback.format_exception(type(_load_err), _load_err, _load_err.__traceback__)))
     st.stop()
 
+def parse_any_date(s):
+    """「2026-11-06」「2026/4/14」「2026年4月14日」など → date（読めなければ None）"""
+    m = re.match(r"^\s*(\d{4})\s*[/\-.年]\s*(\d{1,2})\s*[/\-.月]\s*(\d{1,2})", str(s or ""))
+    if not m: return None
+    try: return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3))).date()
+    except Exception: return None
+
+def norm_date_str(s):
+    d = parse_any_date(s)
+    return d.isoformat() if d else str(s or "").strip()
+
 arrivals = dataset.get("arrivals") or []
-brewing = dataset.get("brewing") or []
+brewing = [{**_b, "仕込日": norm_date_str(_b.get("仕込日"))} for _b in (dataset.get("brewing") or [])]
+try: vendors = list(sheets.load_vendors() or []) if hasattr(sheets, "load_vendors") else []
+except Exception: vendors = []
+dataset["vendors"] = vendors
 adjustments = dataset.get("adjustments") or []
 supplies = dataset.get("supplies") or []
 supply_logs = dataset.get("supply_logs") or []
@@ -313,7 +350,7 @@ def safe_parse_recipe(r_val):
 def safe_parse_seasoning_recipe(r_val):
     if not r_val: return []
     if isinstance(r_val, str) and r_val.strip().startswith("["):
-        try: return json.loads(r_val)
+        try: return [{**it, "希釈倍率": it.get("希釈倍率", it.get("比率", 0))} for it in json.loads(r_val)]
         except Exception: pass
     items = []
     if isinstance(r_val, str):
@@ -548,19 +585,18 @@ for _v in inventory_data.values():
 
 def negative_stock_lots(include_ignored=False):
     """記録上マイナス(入荷より使用が多い)のロット = 入荷登録漏れ・ロット誤入力の疑い（「表示しない」にしたロットは除く）"""
-    ig = set()
-    if not include_ignored:
-        try:
-            v0 = order_points.get("__NEG_IGNORED__", "")
-            ig = set(json.loads(v0)) if v0 else set()
-        except Exception: ig = set()
+    ig = set() if include_ignored else _neg_ignored_set()
     return [v for v in inventory_data.values() if v["理論残(袋)"] < -EPS_BAGS and f"{v['原料種別']}|{v['ロットNo']}" not in ig]
 
+def _lot_remaining(mat, lot):
+    """(原料, ロット) の計算上の残（袋）。同じロットの複数入荷を合算した値（マイナスもそのまま）"""
+    return sum(v["理論残(袋)"] for v in inventory_data.values() if v["原料種別"] == mat and v["ロットNo"] == lot)
+
 def _get_active_lots(mat):
-    """完全に在庫が0になったものは除外する"""
+    """在庫が0・マイナスのロットは候補から除外する"""
     o = []
     for v in inventory_data.values():
-        if v["原料種別"] == mat and v["現在庫(袋)"] > 0 and v["ロットNo"] not in o:
+        if v["原料種別"] == mat and v["現在庫(袋)"] > 0 and v["ロットNo"] not in o and round(_lot_remaining(mat, v["ロットNo"]), 2) > 0:
             o.append(v["ロットNo"])
     return o
 
@@ -584,7 +620,7 @@ def sorted_materials():
     return [m for m in materials if not str(m).startswith("__")]
 
 def get_lots_for_material(mat):
-    l = [v for v in inventory_data.values() if v["原料種別"] == mat and v["現在庫(袋)"] > 0]
+    l = [v for v in inventory_data.values() if v["原料種別"] == mat and v["現在庫(袋)"] > 0 and round(_lot_remaining(mat, v["ロットNo"]), 2) > 0]
     l.sort(key=lambda v: v["現在庫(袋)"], reverse=True)
     return l
 
@@ -651,7 +687,7 @@ def render_lot_selector(mat_name, lot_key):
     MANUAL_OPT = "✏️ 手入力する"
     label_of = {}
     for l in ordered_lots:
-        bags, _kg = lot_stock(mat_name, l)
+        bags = max(_lot_remaining(mat_name, l), 0.0)
         label_of[l] = f"{'📌 ' if l in master_lots else ''}{l} (入荷:{d_map.get(l, '不明')} / 残{fmt_kg(round(bags, 2))}袋)"
     options = [label_of[l] for l in ordered_lots] + [MANUAL_OPT]
     rev_label = {v: k for k, v in label_of.items()}
@@ -952,16 +988,16 @@ def brewing_view_df(df):
     d["石灰水(L)"] = d["石灰水(L)"].apply(to_float)
     d["原料内訳（全原料の投入量）"] = d["その他添加物"].apply(format_ingredient_breakdown)
     d["修正"] = d["仕込No"].map(lambda n: corr_badge_text(n))
+    for _c in ("仕込量(kg)", "石灰水(L)"):
+        if _c in d.columns: d[_c] = d[_c].apply(lambda x: int(round(to_float(x))))
     d = d.rename(columns={"メーカー": "担当者"})
     return d
 
 # ════════════════════════════════════════════════════════════════
 #  製造記録：配合比のセル別表示 ／ 修正記録（監査ログ） ／ 粉の突合 ／ 粉の消費分析
 #   * 修正記録は sheets.append_brewing_correction / load_brewing_corrections があればそれを使用し、
-#     無ければ マスタ(order_points)の「__BREW_CORR_YYYYMM_n__」キーにJSONで保存（月ごと・容量超過時は自動分割）
+#     無ければ配合履歴シート(recipe_logs)に「【製造修正】{JSON}」として追記（マスタ系シートには書き込まない）
 # ════════════════════════════════════════════════════════════════
-CORR_PREFIX = "__BREW_CORR_"
-CORR_CELL_LIMIT = 40000   # スプレッドシート1セルの上限(5万字)に余裕を持たせる
 
 def _is_water_name(n):
     n = str(n)
@@ -1060,37 +1096,47 @@ def brew_ratio_wide_df(records):
     return pd.DataFrame(out)
 
 # ── 修正記録（監査ログ） ────────────────────────────────────────
-def load_brew_corrections(op_dict=None):
+CORR_KINDS = ("製造修正", "製造取消")
+
+def _log_text(l):
+    return str(l.get("変更内容") or l.get("内容") or "")
+
+def load_brew_corrections(logs=None):
     if hasattr(sheets, "load_brewing_corrections"):
         try: return list(sheets.load_brewing_corrections() or [])
         except Exception: pass
-    d = order_points if op_dict is None else op_dict
     out = []
-    for k, v in (d or {}).items():
-        if str(k).startswith(CORR_PREFIX) and v:
-            try: out.extend(json.loads(v))
+    for l in (recipe_logs if logs is None else logs):
+        if str(l.get("処理", "")) in CORR_KINDS:
+            try: out.append(json.loads(_log_text(l)))
             except Exception: pass
     out.sort(key=lambda x: str(x.get("修正日時", "")), reverse=True)
     return out
 
+def _append_log_rows(rows):
+    """配合履歴シート（レシピ変更履歴）に1行ずつ追記する。既存データは書き換えない。"""
+    if not hasattr(sheets, "append_recipe_log"):
+        st.error("sheets.append_recipe_log が見つからないため、履歴を保存できません。"); st.stop()
+    for r in rows: sheets.append_recipe_log(r)
+
+def append_recipe_changes(changes, operator):
+    """配合マスタ画面の変更内容（【新規追加】【変更】【削除】）を配合履歴に追記"""
+    rows = []
+    for i, c in enumerate(changes):
+        m = re.match(r"【(.+?)】(.*)$", str(c))
+        kind, rest = (m.group(1), m.group(2)) if m else ("変更", str(c))
+        rows.append({"ログID": f"RLOG-{now_jst().strftime('%Y%m%d%H%M%S%f')}-{i}", "変更日時": now_jst().isoformat(timespec="seconds"),
+                     "品名": rest.split(" (")[0].strip(), "処理": kind, "変更内容": str(c), "作業者": operator or ""})
+    _append_log_rows(rows)
+
 def append_brew_corrections(entries):
-    """修正記録を追記（最新のマスタを取り直して書き込み。複数端末の同時操作で消さないため）"""
+    """製造記録の修正記録を追記（他のマスタには一切書き込まない）"""
     if not entries: return
     if hasattr(sheets, "append_brewing_correction"):
         for en in entries: sheets.append_brewing_correction(en)
         return
-    d = dict(sheets.load_order_points() or {})
-    ym = str(entries[0]["修正日時"])[:7].replace("-", "")
-    for en in entries:
-        n = 1
-        while True:
-            key = f"{CORR_PREFIX}{ym}_{n}__"
-            try: cur = json.loads(d.get(key) or "[]")
-            except Exception: cur = []
-            if len(json.dumps(cur + [en], ensure_ascii=False)) <= CORR_CELL_LIMIT:
-                cur.append(en); d[key] = json.dumps(cur, ensure_ascii=False); break
-            n += 1
-    sheets.save_order_points(d)
+    _append_log_rows([{"ログID": f"CLOG-{now_jst().strftime('%Y%m%d%H%M%S%f')}-{i}", "変更日時": en["修正日時"], "品名": f"仕込No.{en['仕込No']}",
+                       "処理": "製造" + en["種別"], "変更内容": json.dumps(en, ensure_ascii=False), "作業者": en.get("修正者", "")} for i, en in enumerate(entries)])
 
 brew_corrections = load_brew_corrections()
 corr_by_no = {}
@@ -1142,7 +1188,7 @@ def brew_edit_fields(items, b_date, prod, size, lime_l, remarks):
         elif "海藻" in n: s_kg += amt; s_lot = lot if s_lot == "─" else (s_lot if lot in s_lot else f"{s_lot} / {lot}")
         elif "デンプン" in n or "でんぷん" in n: st_kg += amt; st_lot = lot if st_lot == "─" else (st_lot if lot in st_lot else f"{st_lot} / {lot}")
         elif "石灰" in n or "カルシウム" in n: lime_kg += amt
-    return {"仕込日": str(b_date), "品名": prod, "仕込量(kg)": round(size, 2), "石灰水(L)": round(lime_l, 2), "備考": remarks,
+    return {"仕込日": str(b_date), "品名": prod, "仕込量(kg)": int(round(size)), "石灰水(L)": int(round(lime_l)), "備考": remarks,
             "その他添加物": ", ".join(f"{i['原料名']}:{round(i['kg'], 3)}kg({i['lot']})" for i in items),
             "主原料ロット": k_lot, "こんにゃく精粉(kg)": round(k_kg, 2), "海藻粉(kg)": round(s_kg, 2), "海藻粉ロット": s_lot,
             "デンプン(kg)": round(st_kg, 2), "デンプンロット": st_lot, "石灰(kg)": round(lime_kg, 2)}
@@ -1163,7 +1209,7 @@ def make_corr_entry(kind, no, operator, reason, lines, snapshot=None, idx=0):
     return en
 
 def brew_audit_save(old_map, new_map, reason, operator):
-    """一括編集（Excel風）用：変更・削除された仕込Noごとに修正記録を残す"""
+    """一括編集用：変更・削除された仕込Noごとに修正記録を残す"""
     entries, i = [], 0
     for no, new in new_map.items():
         old = old_map.get(no)
@@ -1290,6 +1336,11 @@ def _norm_cell(v):
     if isinstance(v, (int, float)): return round(float(v), 4)
     return str(v).strip()
 
+def _ing_prio(n):
+    for i, kw in enumerate(["こんにゃく", "海藻", "デンプン", "でんぷん", "でん粉", "石灰", "カルシウム", "食塩"]):
+        if kw in n: return (i, n)
+    return (9 if _is_water_name(n) else 8, n)
+
 def render_brew_grid(records, kp, readonly=False):
     """製造記録を「1行=1仕込、原料ごとに kg／配合比%／ロット の列」で表示し、そのままExcelのように編集できる。
     確定時は必ず修正記録（理由・修正者・変更内容）を残す。行を削除すると「取消」として記録される。"""
@@ -1307,9 +1358,14 @@ def render_brew_grid(records, kp, readonly=False):
     for m in per:
         for cn in m:
             if cn not in order: order.append(cn)
+    freq = {cn: sum(1 for m in per if cn in m and m[cn]["kg"] > 0) for cn in order}
+    order = sorted(order, key=lambda cn: (-freq[cn], order.index(cn)))
+    layout = "col"
     if readonly:
         extra = []
-        show_ratio = st.checkbox("配合比(%)を表示", value=True, key=f"{kp}_ratio")
+        c_r1, c_r2 = st.columns([1, 2])
+        show_ratio = c_r1.checkbox("配合比(%)を表示", value=True, key=f"{kp}_ratio")
+        layout = "pack" if c_r2.radio("列の並び", ["🧪 原料ごとの列", "⬅️ 左詰め（記録ごとに原料を左から順に）"], horizontal=True, key=f"{kp}_layout").startswith("⬅️") else "col"
     else:
         c_a, c_b = st.columns([3, 1])
         extra = c_a.multiselect("➕ 記録に無い原料を入力したいときは、ここで列を追加", [x for x in sorted_materials() if x not in order], key=f"{kp}_extra")
@@ -1320,7 +1376,7 @@ def render_brew_grid(records, kp, readonly=False):
     for b, m in zip(recs, per):
         no = str(b.get("仕込No", ""))
         d = {"仕込No": no, "修正": corr_badge_text(no), "仕込日": str(b.get("仕込日", "")).strip()[:10], "品名": str(b.get("品名", "")),
-             "担当者": str(b.get("メーカー", "")), "仕込量(kg)": to_float(b.get("仕込量(kg)")), "石灰水(L)": to_float(b.get("石灰水(L)")), "備考": str(b.get("備考", "") or "")}
+             "担当者": str(b.get("メーカー", "")), "仕込量(kg)": int(round(to_float(b.get("仕込量(kg)")))), "石灰水(L)": int(round(to_float(b.get("石灰水(L)")))), "備考": str(b.get("備考", "") or "")}
         for cn in order:
             r = m.get(cn)
             d[f"{cn} kg"] = round(r["kg"], 3) if r else None
@@ -1334,14 +1390,38 @@ def render_brew_grid(records, kp, readonly=False):
            "仕込日": st.column_config.TextColumn("仕込日", help="例 2026-11-06"),
            "品名": st.column_config.TextColumn("品名") if readonly else st.column_config.SelectboxColumn("品名", options=prods),
            "担当者": st.column_config.TextColumn("担当者") if readonly else st.column_config.SelectboxColumn("担当者", options=ops),
-           "仕込量(kg)": st.column_config.NumberColumn("仕込量(kg)", format="%.2f", min_value=0.0),
-           "石灰水(L)": st.column_config.NumberColumn("石灰水(L)", format="%.2f", min_value=0.0)}
+           "仕込量(kg)": st.column_config.NumberColumn("仕込量(kg)", format="%d", min_value=0, step=1),
+           "石灰水(L)": st.column_config.NumberColumn("石灰水(L)", format="%d", min_value=0, step=1)}
     for cn in order:
         cfg[f"{cn} kg"] = st.column_config.NumberColumn(f"{cn} kg", format="%.2f", min_value=0.0)
         if show_ratio: cfg[f"{cn} %"] = st.column_config.NumberColumn(f"{cn} %", format="%.2f", disabled=True)
         cfg[f"{cn} ロット"] = st.column_config.TextColumn(f"{cn} ロット")
+    if readonly and layout == "pack":
+        maxn = max((len(m) for m in per), default=0)
+        prow = []
+        for b, m in zip(recs, per):
+            d = {k: rows[len(prow)][k] for k in ("仕込No", "修正", "仕込日", "品名", "担当者", "仕込量(kg)", "石灰水(L)", "備考")}
+            its = sorted(m.items(), key=lambda kv: _ing_prio(kv[0].split("#")[0]))
+            for i in range(maxn):
+                if i < len(its):
+                    cn, r = its[i]
+                    d[f"原料{i + 1}"] = cn.split("#")[0]; d[f"原料{i + 1} kg"] = round(r["kg"], 3)
+                    if show_ratio: d[f"原料{i + 1} %"] = round(r["ratio"], 2) if r["ratio"] is not None else None
+                    d[f"原料{i + 1} ロット"] = "" if r["lot_raw"] in ("─", "") else r["lot_raw"]
+                else:
+                    d[f"原料{i + 1}"] = ""; d[f"原料{i + 1} kg"] = None
+                    if show_ratio: d[f"原料{i + 1} %"] = None
+                    d[f"原料{i + 1} ロット"] = ""
+            prow.append(d)
+        pcfg = {k: v for k, v in cfg.items() if k in ("仕込No", "修正", "仕込日", "品名", "担当者", "仕込量(kg)", "石灰水(L)")}
+        for i in range(maxn):
+            pcfg[f"原料{i + 1} kg"] = st.column_config.NumberColumn(f"原料{i + 1} kg", format="%.2f")
+            if show_ratio: pcfg[f"原料{i + 1} %"] = st.column_config.NumberColumn(f"原料{i + 1} %", format="%.2f")
+        st.caption("配合のある原料を、記録ごとに左から順（こんにゃく粉 → 海藻粉 → デンプン → 石灰 → その他 → 水）に詰めて表示しています。")
+        st.dataframe(pd.DataFrame(prow), use_container_width=True, hide_index=True, column_config=pcfg)
+        return
     if readonly:
-        st.caption("原料ごとに「kg／配合比％／ロット」をセルに分けて表示しています（Excelの「配合比(セル別)」シートと同じ形式）。修正は「🧾 配合帳票（Excel風・修正）」で行えます。")
+        st.caption("原料ごとに「kg／配合比％／ロット」を列に分けて表示しています（使われている原料だけ、よく使う順）。修正は「🧾 配合帳票・修正」で行えます。")
         st.dataframe(df, use_container_width=True, hide_index=True, column_config=cfg)
         return
     st.caption("💡 セルをダブルタップして直接直せます（％は自動計算）。直したら下で理由を書いて「確認」→「確定」。行を選んで🗑で取消。修正は必ず記録に残ります。")
@@ -1367,8 +1447,8 @@ def render_brew_grid(records, kp, readonly=False):
             if no not in orig.index: continue
             o = orig.loc[no]
             if all(_norm_cell(row[c]) == _norm_cell(o[c]) for c in edit_cols): continue
-            try: d = datetime.strptime(str(row["仕込日"]).strip()[:10], "%Y-%m-%d").date()
-            except Exception: errors.append(f"{no}：仕込日の形式が正しくありません（例 2026-11-06）"); continue
+            d = parse_any_date(row["仕込日"])
+            if d is None: errors.append(f"{no}：仕込日の形式が正しくありません（例 2026-11-06）"); continue
             items = []
             for cn in order:
                 kg = to_float(row[f"{cn} kg"])
@@ -1418,10 +1498,150 @@ def render_brew_grid(records, kp, readonly=False):
                     old = fresh.pop(no)
                     snap = {k: old.get(k, "") for k in ("仕込日", "品名", "仕込量(kg)", "メーカー", "石灰水(L)", "その他添加物", "備考")}
                     entries.append(make_corr_entry("取消", no, pend["op"], pend["reason"], ["記録を取消（削除）"], snapshot=snap, idx=i)); i += 1
+                _n_after = len(fresh)
+                if len(base) and (_n_after == 0 or (len(base) >= 4 and _n_after < len(base) * 0.5)) and not st.session_state.get("_allow_shrink_write"):
+                    st.error(f"🛑 保存を中止しました：{len(base)}件の製造記録が{_n_after}件になる内容です。誤操作・データ消失を防ぐため止めています。"
+                             "意図した操作の場合は「🛟 バックアップ・復旧」→「詳細設定」で許可してから、もう一度行ってください。")
+                    st.stop()
                 append_brew_corrections(entries)                                   # ① 先に修正記録
                 sheets.save_brewing([fresh[str(r.get("仕込No", ""))] for r in base if str(r.get("仕込No", "")) in fresh])   # ② 本体を更新
                 for k in [k for k in st.session_state.keys() if str(k).startswith(kp)]: del st.session_state[k]
                 done(f"{len(entries)}件を保存しました（修正記録に残しました）。")
+
+
+# ── 発注先マスタ（発注品目・メーカー(発注先)・担当者名・連絡先） ───────────────
+def _vendor_img(item):
+    """品目の画像（原料はマスタの画像、資材は資材マスタの画像）"""
+    try:
+        img = get_material_image(order_points, item)
+        if img: return img
+    except Exception: pass
+    for s_ in supplies:
+        if str(s_.get("資材名", "")).strip() == str(item).strip() and str(s_.get("画像URL", "")).startswith(("data:", "http")):
+            return s_.get("画像URL")
+    return ""
+
+def vendors_for_item(item):
+    return [v for v in vendors if str(v.get("発注品目", "")).strip() == str(item).strip()]
+
+def render_vendor_cards(rows, compact=False):
+    """発注先カード（品目画像・発注先・担当者・連絡先）。電話・メールはタップで発信/送信できる"""
+    if not rows:
+        if not compact: st.info("該当する発注先が登録されていません。「⚙️ マスタ設定 → 📇 発注先」で登録できます。")
+        return
+    e = _html.escape
+    cards = []
+    for v in rows:
+        tel = str(v.get("連絡先", "")).strip(); mail = str(v.get("メール", "")).strip()
+        tel_h = f'<a href="tel:{e(re.sub(r"[^0-9+]", "", tel))}" style="color:#0f766e;font-weight:800;text-decoration:none;">📞 {e(tel)}</a>' if tel else '<span style="color:#94a3b8;">📞 （未登録）</span>'
+        mail_h = f'<a href="mailto:{e(mail)}" style="color:#0f766e;text-decoration:none;">✉️ {e(mail)}</a>' if mail else ""
+        img = _vendor_img(v.get("発注品目", "")) if not compact else ""
+        img_h = f'<img src="{e(img)}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #cbd5e1;margin-right:12px;">' if img else ""
+        note = f'<div style="font-size:0.8rem;color:#64748b;margin-top:4px;">📝 {e(str(v.get("備考", "")))}</div>' if str(v.get("備考", "")).strip() else ""
+        cards.append(
+            f'<div style="display:flex;align-items:center;border:1px solid #cbd5e1;border-radius:12px;padding:10px 14px;background:#fff;margin:6px 0;">{img_h}'
+            f'<div style="flex:1;min-width:0;"><div style="font-weight:900;font-size:1.02rem;">{e(str(v.get("発注品目", "")))}</div>'
+            f'<div style="margin-top:2px;">🏢 <b>{e(str(v.get("メーカー(発注先)", "")))}</b>　👤 {e(str(v.get("担当者名", "")) or "（担当者未登録）")}</div>'
+            f'<div style="margin-top:2px;">{tel_h}　{mail_h}</div>{note}</div></div>')
+    st.markdown("".join(cards), unsafe_allow_html=True)
+
+def render_vendor_directory():
+    """発注先一覧（いつでも確認できる見やすい一覧）"""
+    if not hasattr(sheets, "load_vendors"):
+        st.warning("発注先マスタを使うには、新しい sheets.py に差し替えてください。"); return
+    c1, c2 = st.columns([2, 1])
+    kw = c1.text_input("🔎 検索（品目・発注先・担当者・連絡先）", key="vnd_kw")
+    view = c2.radio("表示", ["カード", "一覧表"], horizontal=True, key="vnd_view")
+    rows = [v for v in vendors if not kw.strip() or kw.strip().lower() in " ".join(str(x) for x in v.values()).lower()]
+    rows = sorted(rows, key=lambda v: (str(v.get("発注品目", "")), str(v.get("メーカー(発注先)", ""))))
+    if not vendors:
+        st.info("発注先がまだ登録されていません。「⚙️ マスタ設定 → 📇 発注先」で登録できます。"); return
+    if view == "一覧表":
+        st.dataframe(pd.DataFrame(rows, columns=["発注品目", "メーカー(発注先)", "担当者名", "連絡先", "メール", "備考"]), use_container_width=True, hide_index=True)
+    else:
+        render_vendor_cards(rows)
+    st.caption(f"{len(rows)}件")
+
+def render_vendor_master_editor():
+    """マスタ設定：発注先の登録・修正（品目ごとに発注先・担当者・連絡先）"""
+    if not hasattr(sheets, "save_vendors"):
+        st.warning("発注先マスタを使うには、新しい sheets.py に差し替えてください。"); return
+    st.caption("発注品目ごとに、発注先（メーカー）・担当者名・連絡先を登録します。発注管理の画面でいつでも確認でき、発注登録時にも自動で表示されます。品目の画像は「⚗️ 原料マスタ・詳細」「📦 資材」で登録したものが表示されます。")
+    items = sorted(set(sorted_materials()) | {str(s_.get("資材名", "")).strip() for s_ in supplies if s_.get("資材名")} | {str(v.get("発注品目", "")).strip() for v in vendors if v.get("発注品目")})
+    mk_opts = sorted(set(makers) | {str(v.get("メーカー(発注先)", "")).strip() for v in vendors if v.get("メーカー(発注先)")})
+    df = pd.DataFrame(vendors, columns=COLS_VND_UI) if vendors else pd.DataFrame(columns=COLS_VND_UI)
+    sig = hashlib.md5(df.to_json().encode()).hexdigest()[:8]
+    edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, hide_index=True, key=f"vnd_ed_{sig}",
+                            column_config={"発注品目": st.column_config.SelectboxColumn("発注品目", options=items, required=True),
+                                           "メーカー(発注先)": st.column_config.SelectboxColumn("メーカー(発注先)", options=mk_opts),
+                                           "担当者名": st.column_config.TextColumn("担当者名"), "連絡先": st.column_config.TextColumn("連絡先（電話）"),
+                                           "メール": st.column_config.TextColumn("メール"), "備考": st.column_config.TextColumn("備考")})
+    rows = []
+    for _, r in edited.iterrows():
+        d = {c: ("" if pd.isna(r[c]) else str(r[c]).strip()) for c in COLS_VND_UI}
+        if d["発注品目"]: rows.append(d)
+    n_del = max(0, len(vendors) - len(rows))
+    ok = True
+    if n_del >= 1:
+        st.warning(f"{n_del}件が削除されます。")
+        ok = st.checkbox("削除を確認しました", key="vnd_del_ok")
+    if st.button("💾 発注先マスタを保存", type="primary", key="vnd_save", disabled=not ok, use_container_width=True):
+        if not rows and vendors:
+            st.error("全件削除になるため保存を中止しました。"); st.stop()
+        sheets.save_vendors(rows)
+        done(f"発注先マスタを保存しました（{len(rows)}件）。")
+
+COLS_VND_UI = ["発注品目", "メーカー(発注先)", "担当者名", "連絡先", "メール", "備考"]
+
+# ── 入荷に紐づく書類（スキャンPDF・写真）の保管 ───────────────────────
+ATT_MAX_MB = 4
+ATT_TYPES = ["pdf", "jpg", "jpeg", "png"]
+
+def load_attachments_safe():
+    if not hasattr(sheets, "load_attachments"): return None
+    try: return list(sheets.load_attachments() or [])
+    except Exception: return []
+
+def save_arrival_files(arrival_no, files, operator):
+    """アップロードされた書類を入荷Noに紐づけて保管（スプレッドシート内。1ファイル4MBまで）"""
+    if not files: return 0
+    if not hasattr(sheets, "append_attachment"):
+        st.error("書類の保管には、新しい sheets.py への差し替えが必要です。"); st.stop()
+    n = 0
+    for f in files:
+        data = f.getvalue()
+        if len(data) > ATT_MAX_MB * 1024 * 1024:
+            st.error(f"「{f.name}」は {ATT_MAX_MB}MB を超えているため保管できません。圧縮・縮小してからもう一度お試しください。"); continue
+        sheets.append_attachment({"添付ID": f"ATT-{now_jst().strftime('%Y%m%d%H%M%S%f')}-{n}", "入荷No": str(arrival_no), "ファイル名": f.name,
+                                  "種別": f.type or "", "サイズ(KB)": round(len(data) / 1024, 1), "登録日時": now_jst().isoformat(timespec="seconds"),
+                                  "担当者": operator or ""}, base64.b64encode(data).decode("ascii"))
+        n += 1
+    return n
+
+def render_arrival_files(arrival_no, atts, key):
+    """入荷Noに紐づく書類の一覧（取り出し・削除）"""
+    mine = [a for a in (atts or []) if str(a.get("入荷No", "")) == str(arrival_no)]
+    if not mine:
+        st.caption("この入荷に紐づく書類はまだありません。"); return
+    for a in sorted(mine, key=lambda x: str(x.get("登録日時", "")), reverse=True):
+        aid = a.get("添付ID")
+        c1, c2, c3 = st.columns([4, 1.4, 1])
+        c1.markdown(f"📎 **{a.get('ファイル名')}**　<span style='color:#64748b;font-size:0.85rem;'>{a.get('サイズ(KB)')}KB ／ {str(a.get('登録日時', '')).replace('T', ' ')} ／ {a.get('担当者', '')}</span>", unsafe_allow_html=True)
+        dk = f"{key}_data_{aid}"
+        if dk not in st.session_state:
+            if c2.button("📥 開く", key=f"{key}_open_{aid}", use_container_width=True):
+                try: st.session_state[dk] = sheets.get_attachment_data(aid)
+                except Exception as ex: st.error(f"取り出せませんでした: {ex}")
+                st.rerun()
+        else:
+            raw = base64.b64decode(st.session_state[dk] or "")
+            c2.download_button("⬇️ 保存", raw, file_name=str(a.get("ファイル名", "file")), mime=str(a.get("種別") or "application/octet-stream"), key=f"{key}_dl_{aid}", use_container_width=True)
+        with c3.popover("🗑️", use_container_width=True):
+            st.warning("この書類を削除します。")
+            if st.button("削除する", key=f"{key}_del_{aid}", type="primary", use_container_width=True):
+                sheets.delete_attachment(aid); st.session_state.pop(dk, None); done("書類を削除しました。", "warn")
+        if dk in st.session_state and str(a.get("種別", "")).startswith("image/"):
+            st.image(base64.b64decode(st.session_state[dk] or ""), width=360)
 
 
 # ── 粉の突合・リセット（理論在庫と現場の実在庫のズレを直す） ───────────────
@@ -1537,14 +1757,18 @@ def render_flour_reconcile():
 
 # ── マイナス在庫（使用量＞入荷量）の警告：リセット／表示しない ───────────────
 def _neg_ignored_set():
-    v = order_points.get("__NEG_IGNORED__", "")
-    try: return set(json.loads(v)) if v else set()
+    best = None
+    for l in recipe_logs:
+        if str(l.get("処理", "")) == "設定" and str(l.get("品名", "")) == "マイナス警告非表示":
+            k = (str(l.get("変更日時", "")), str(l.get("ログID", "")))
+            if best is None or k > best[0]: best = (k, _log_text(l))
+    if not best: return set()
+    try: return set(json.loads(best[1]))
     except Exception: return set()
 
 def save_neg_ignored(keys):
-    d = dict(sheets.load_order_points() or {})
-    d["__NEG_IGNORED__"] = json.dumps(sorted(set(keys)), ensure_ascii=False)
-    sheets.save_order_points(d)
+    _append_log_rows([{"ログID": f"SLOG-{now_jst().strftime('%Y%m%d%H%M%S%f')}", "変更日時": now_jst().isoformat(timespec="seconds"), "品名": "マイナス警告非表示",
+                       "処理": "設定", "変更内容": json.dumps(sorted(set(keys)), ensure_ascii=False), "作業者": ""}])
 
 def render_negative_panel():
     neg = negative_stock_lots()
@@ -1567,6 +1791,208 @@ def render_negative_panel():
             for k in sorted(ig): st.write("・" + k.replace("|", " ／ "))
             if st.button("👁️ 非表示をすべて解除", key="neg_panel_unhide"):
                 save_neg_ignored(set()); done("非表示を解除しました。")
+
+
+# ── バックアップ・復旧 ──────────────────────────────────────────
+def _full_backup_dict():
+    return {"_作成日時": now_jst().isoformat(timespec="seconds"), "recipes": recipes_raw, "recipe_logs": recipe_logs, "brewing": brewing, "arrivals": arrivals,
+            "adjustments": adjustments, "materials": materials, "makers": makers, "inspectors": inspectors, "supplies": supplies,
+            "supply_logs": supply_logs, "order_points": order_points}
+
+def _backup_excel_bytes():
+    import io
+    d = _full_backup_dict(); bio = io.BytesIO()
+    with pd.ExcelWriter(bio, engine="openpyxl") as xw:
+        for k, nm in [("recipes", "配合マスタ"), ("recipe_logs", "配合履歴"), ("brewing", "製造記録"), ("arrivals", "入荷"), ("adjustments", "棚卸調整"),
+                      ("supplies", "資材マスタ"), ("supply_logs", "資材ログ")]:
+            pd.DataFrame(d[k]).to_excel(xw, sheet_name=nm, index=False)
+        pd.DataFrame({"原料名": list(materials)}).to_excel(xw, sheet_name="原料マスタ", index=False)
+        pd.DataFrame({"担当者名": list(inspectors)}).to_excel(xw, sheet_name="担当者", index=False)
+        pd.DataFrame([{"キー": k, "値": (str(v)[:30000] + "…(省略)") if len(str(v)) > 30000 else v} for k, v in order_points.items()]).to_excel(xw, sheet_name="発注点・設定", index=False)
+    return bio.getvalue()
+
+def _recipe_items(v):
+    """配合の値（JSON文字列／リスト／「原料:5.0%, 水:95.0%」の文字列）→ [(原料名, 数値)]"""
+    if isinstance(v, str) and v.strip().startswith("["):
+        try: v = json.loads(v)
+        except Exception: v = []
+    if isinstance(v, list):
+        out = []
+        for it in v:
+            if isinstance(it, dict) and str(it.get("原料名", "")).strip():
+                try: out.append((str(it["原料名"]).strip(), float(it.get("比率", it.get("希釈倍率", 0)) or 0)))
+                except Exception: pass
+        return out
+    out = []
+    for p in str(v or "").split(","):
+        if ":" in p:
+            n, r = p.split(":", 1)
+            try: out.append((n.strip(), float(r.replace("%", "").replace("倍", "").strip())))
+            except Exception: pass
+    return out
+
+def _recipe_text(v, unit="%"):
+    return ", ".join(f"{n}:{x}{unit}" for n, x in _recipe_items(v))
+
+def recipes_to_sheet_format(recs):
+    """配合マスタに保存する形（配合JSON＝[{原料名, 比率}]のJSON）へ統一。文字列形式のままだと原料が空で保存されてしまうため"""
+    out = []
+    for r in recs:
+        d = dict(r)
+        d["配合JSON"] = json.dumps([{"原料名": n, "比率": x} for n, x in _recipe_items(r.get("配合JSON"))], ensure_ascii=False)
+        out.append(d)
+    return out
+
+def recipes_from_logs(logs):
+    """配合履歴（【新規追加】【変更】【削除】）を時系列に再生して、最新の配合マスタを再構成する"""
+    cur = {}
+    for l in sorted(logs, key=lambda x: (str(x.get("変更日時", "")), str(x.get("ログID", "")))):
+        c = _log_text(l).strip()
+        try:
+            if c.startswith("【新規追加】") and c.endswith(")"):
+                name, js = c[len("【新規追加】"):-1].rsplit(" (", 1)
+            elif c.startswith("【変更】") and c.endswith(")"):
+                name, inner = c[len("【変更】"):-1].rsplit(" (", 1); js = inner.split(" → ")[-1]
+            elif c.startswith("【削除】"):
+                cur.pop(c[len("【削除】"):].strip(), None); continue
+            else:
+                continue
+        except Exception:
+            continue
+        name, js = name.strip(), js.strip()
+        old = cur.get(name, {})
+        seasoning = ("倍" in js) and ("%" not in js)
+        cur[name] = {"品名": name, "大カテゴリ": old.get("大カテゴリ") or ("調味料" if seasoning else "プラント"),
+                     "中カテゴリ": old.get("中カテゴリ") or ("希釈" if seasoning else "黒"), "配合JSON": js}
+    return [r for r in cur.values() if _recipe_items(r["配合JSON"])]
+
+def recipes_from_brewing(records, recipes, n_recent=5):
+    """製造記録（直近n回）の「原料投入量÷仕込量」から配合比を推定する（石灰は石灰水量に対する比率）。中央値で季節増量・微調整の影響を抑える"""
+    import statistics
+    cat = {str(r.get("品名", "")).strip(): (r.get("大カテゴリ") or "プラント", r.get("中カテゴリ") or "黒") for r in recipes}
+    by = {}
+    for b in sorted(records, key=lambda x: (str(x.get("仕込日", "")), str(x.get("登録日時", ""))), reverse=True):
+        nm = str(b.get("品名", "")).strip()
+        if nm: by.setdefault(nm, []).append(b)
+    def _prio(n):
+        for i, kw in enumerate(["こんにゃく", "海藻", "デンプン", "でんぷん", "石灰", "カルシウム", "食塩"]):
+            if kw in n: return (i, n)
+        return (9 if _is_water_name(n) else 8, n)
+    out = []
+    for nm, recs in by.items():
+        samples, used = {}, 0
+        for b in recs[:n_recent]:
+            size, lime_l = to_float(b.get("仕込量(kg)")), to_float(b.get("石灰水(L)"))
+            if size <= 0: continue
+            agg = {}
+            for it in _items_of(b):
+                n = str(it.get("原料名", "")).strip()
+                if n: agg[n] = agg.get(n, 0.0) + to_float(it.get("kg"))
+            if not agg: continue
+            used += 1
+            for n, kg in agg.items():
+                ratio = (kg / lime_l * 10.0) if (_is_lime_name(n) and not _is_water_name(n) and lime_l > 0) else (kg / size * 100.0)
+                samples.setdefault(n, []).append(ratio)
+        items = [(n, round(statistics.median(v), 2)) for n, v in samples.items() if len(v) * 2 >= used and statistics.median(v) > 0]
+        if not items: continue
+        items.sort(key=lambda x: _prio(x[0]))
+        c1, c2 = cat.get(nm, ("プラント", "黒"))
+        out.append({"品名": nm, "大カテゴリ": c1, "中カテゴリ": c2, "配合JSON": ", ".join(f"{n}:{x}%" for n, x in items), "推定元": f"直近{used}回の製造記録"})
+    return out
+
+def render_backup_restore():
+    st.markdown("### 📥 1. バックアップ（定期的に保存しておくと安心です）")
+    st.caption("配合マスタ・製造記録・入荷・在庫調整・各種マスタをまとめて保存します。JSONは「復旧」に使えます。Excelは中身の確認用です。")
+    b1, b2 = st.columns(2)
+    stamp = now_jst().strftime("%Y%m%d_%H%M")
+    b1.download_button("💾 全データ（JSON・復旧用）", json.dumps(_full_backup_dict(), ensure_ascii=False, default=str).encode("utf-8"),
+                       file_name=f"ERPバックアップ_{stamp}.json", mime="application/json", use_container_width=True)
+    try: b2.download_button("📊 全データ（Excel・確認用）", _backup_excel_bytes(), file_name=f"ERPバックアップ_{stamp}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+    except Exception as e: b2.warning(f"Excel作成に失敗しました: {e}")
+
+    st.markdown("---")
+    st.markdown("### 🔁 2. 配合マスタの復旧")
+    n_empty = len([r for r in recipes_raw if not _recipe_items(r.get("配合JSON"))])
+    if not recipes_raw:
+        st.error("配合マスタが空です。下のいずれかから復旧できます。")
+    elif n_empty:
+        st.warning(f"配合マスタ {len(recipes_raw)}件のうち、**原料・配合比が空の配合が {n_empty}件**あります。下の方法で補えます。")
+    else:
+        st.success(f"配合マスタ {len(recipes_raw)}件（すべて配合あり）")
+    st.caption("まず「3. Googleの版の履歴」で元に戻せるか確認するのが最も正確です。難しい場合に、下の方法を使ってください。")
+    src = st.radio("復旧元", ["🧾 製造記録から推定（おすすめ）", "📤 バックアップファイル（JSON / Excel）", "🕒 配合履歴から再構成"], key="rst_src")
+    cand = []
+    if src.startswith("🧾"):
+        cand = recipes_from_brewing(brewing, recipes_raw)
+        if cand: st.caption("直近5回の製造記録から、各原料の「投入量÷仕込量」の中央値で配合比を推定しました。夏場の石灰増量や微調整が混ざるため、**必ず内容を確認して直してください**（石灰は石灰水量に対する比率。水は不要なら行から削除）。")
+        else: st.warning("推定できる製造記録がありません。")
+    elif src.startswith("📤"):
+        up = st.file_uploader("バックアップファイル", type=["json", "xlsx"], key="rst_file")
+        if up is not None:
+            try:
+                if up.name.lower().endswith(".json"):
+                    cand = [dict(r) for r in (json.loads(up.getvalue().decode("utf-8")).get("recipes") or [])]
+                else:
+                    cand = pd.read_excel(up, sheet_name="配合マスタ").fillna("").to_dict("records")
+                for r in cand: r["配合JSON"] = ", ".join(f"{n}:{x}%" for n, x in _recipe_items(r.get("配合JSON")))
+                st.caption(f"{len(cand)}件の配合を読み込みました。")
+            except Exception as e:
+                st.error(f"ファイルを読み込めませんでした: {e}")
+    else:
+        logs = [l for l in recipe_logs if _log_text(l).startswith(("【新規追加】", "【変更】", "【削除】"))]
+        if not logs: st.warning("復元に使える配合履歴がありません。")
+        else:
+            cand = recipes_from_logs(logs)
+            st.caption(f"配合履歴 {len(logs)}件から {len(cand)}件を再構成しました。大カテゴリ・中カテゴリは履歴に無いため、必要に応じて直してください。")
+    if cand:
+        df = pd.DataFrame(cand)
+        for c in ["品名", "大カテゴリ", "中カテゴリ", "配合JSON"]:
+            if c not in df.columns: df[c] = ""
+        show_cols = ["品名", "大カテゴリ", "中カテゴリ", "配合JSON"] + (["推定元"] if "推定元" in df.columns else [])
+        df = df[show_cols]
+        edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, hide_index=True, key=f"rst_ed_{hashlib.md5(df.to_json().encode()).hexdigest()[:8]}",
+                                column_config={"大カテゴリ": st.column_config.SelectboxColumn("大カテゴリ", options=["プラント", "OKM", "手詰め", "調味料"]),
+                                               "中カテゴリ": st.column_config.SelectboxColumn("中カテゴリ", options=["白", "黒", "耐冷", "ショクカイ", "めん", "その他", "希釈"]),
+                                               "配合JSON": st.column_config.TextColumn("配合（原料:比率%, …）", width="large"),
+                                               **({"推定元": st.column_config.TextColumn("推定元", disabled=True)} if "推定元" in df.columns else {})})
+        mode = st.radio("復旧のしかた", ["🩹 空の配合・足りない配合だけ補う（今の配合は残す）", "♻️ すべてこの内容に置き換える"], key="rst_mode")
+        ok = st.checkbox("内容を確認しました", key="rst_ok")
+        if st.button("✅ 配合マスタを復旧する", type="primary", disabled=not ok, key="rst_go", use_container_width=True):
+            rows = [{"品名": str(r["品名"]).strip(), "大カテゴリ": r["大カテゴリ"] or "プラント", "中カテゴリ": r["中カテゴリ"] or "黒", "配合JSON": r["配合JSON"]}
+                    for _, r in edited.iterrows() if str(r["品名"]).strip() and str(r["品名"]).strip().lower() != "nan" and _recipe_items(r["配合JSON"])]
+            if not rows:
+                st.error("復旧する配合（原料と比率）がありません。"); st.stop()
+            if not hasattr(sheets, "save_recipes"):
+                st.error("sheets.save_recipes が見つかりません。"); st.stop()
+            if mode.startswith("🩹"):
+                new_by = {r["品名"]: r for r in rows}
+                final, seen = [], set()
+                for r in recipes_raw:
+                    nm = str(r.get("品名", "")).strip(); seen.add(nm)
+                    if nm in new_by and not _recipe_items(r.get("配合JSON")): final.append({**r, "配合JSON": new_by[nm]["配合JSON"]})
+                    else: final.append(r)
+                final += [r for r in rows if r["品名"] not in seen]
+            else:
+                final = rows
+            sheets.save_recipes(final)
+            _append_log_rows([{"ログID": f"RLOG-{now_jst().strftime('%Y%m%d%H%M%S%f')}", "変更日時": now_jst().isoformat(timespec="seconds"), "品名": "（配合マスタ全体）",
+                               "処理": "復元", "変更内容": f"【復元】{src} から {len(rows)}件の配合を復旧（{mode[:2]}）", "作業者": ""}])
+            done(f"配合マスタを復旧しました（{len(final)}件）。")
+
+    st.markdown("---")
+    with st.expander("🗂️ 3. スプレッドシートそのものを元に戻す（Googleの版の履歴）← 最も正確", expanded=True):
+        st.markdown(
+            "Googleスプレッドシートには、過去の編集内容が自動で残っています。\n\n"
+            "1. 対象のスプレッドシートを開く\n"
+            "2. メニュー **ファイル → 版の履歴 → 版の履歴を表示**\n"
+            "3. 右側の一覧から、**消える前の日時**を選んで内容を確認\n"
+            "4. スプレッドシート全体を戻すなら **「この版を復元」**\n"
+            "5. 一部のシートだけ戻したいときは、その版で該当シート（配合マスタなど）を全選択してコピーし、現在のシートに貼り付け\n\n"
+            "※ 復元する前に、現在の状態を「コピーを作成」で控えておくと安全です。")
+    with st.expander("⚙️ 詳細設定"):
+        st.caption("通常はオフのままにしてください。保存でデータが半分未満になる（または全件消える）操作は、誤操作防止のため自動で止めています。意図した操作のときだけ一時的にオンにします。")
+        st.checkbox("大量削除・全件削除の保存を許可する", key="_allow_shrink_write")
 
 
 # ── 粉の消費量分析 ──────────────────────────────────────────────
@@ -1803,7 +2229,7 @@ def render_flour_analysis():
 #  サイドバー
 # ════════════════════════════════════════════════════════════════
 PAGES = ["🏭 製造仕込み", "📊 ダッシュボード", "📝 発注管理", "📥 入荷登録", "📦 在庫・棚卸",
-         "🧹 資材管理", "🔍 トレース", "📋 履歴・帳票", "📈 分析", "⚙️ マスタ設定"]
+         "🧹 資材管理", "🔍 トレース", "📋 履歴・帳票", "📈 分析", "⚙️ マスタ設定", "🛟 バックアップ・復旧"]
 
 def _goto(p):
     st.session_state["page"] = p
@@ -1870,292 +2296,288 @@ def next_arrival_no_fresh():
 
 if page == "🏭 製造仕込み":
     page_header("🏭 製造仕込み記録", "投入量は完全自動計算されます。微調整も可能です。保存前に在庫とロットを自動チェックします。")
-    _bv = st.radio("表示", ["📝 新規登録", "🧾 直近の履歴・修正"], horizontal=True, key="brew_page_view", label_visibility="collapsed")
-    if _bv == "📝 新規登録":
+    card_start()
+    brew_date = st.date_input("📅 仕込日", value=today_jst())
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    p_recipes = {r.get("品名", "未定義"): {"大カテゴリ": r.get("大カテゴリ", "その他"), "中カテゴリ": r.get("中カテゴリ", "その他"), "成分": safe_parse_recipe(r.get("配合JSON"))} for r in recipes_raw if r.get("大カテゴリ") != "調味料"}
+    seasoning_recipes_all = [r for r in recipes_raw if r.get("大カテゴリ") == "調味料"]
+
+    sec_title("🏭 ライン・製品選択")
+    step_label("① ラインを選択")
+    BASE_BIG_CAT_ORDER = ["プラント", "OKM", "手詰め"]
+    dynamic_cats = {v["大カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ")}
+    big_cats = list(BASE_BIG_CAT_ORDER) + sorted(dynamic_cats - set(BASE_BIG_CAT_ORDER))
+    big_cat_labels = [f"{big_cat_icon(c)} {c}" for c in big_cats]
+    sel_big_label = st.radio("ライン", big_cat_labels, horizontal=True, label_visibility="collapsed") if big_cats else None
+    big_cat = big_cats[big_cat_labels.index(sel_big_label)] if sel_big_label else None
+
+    SUB_CAT_ORDER = ["黒", "白", "耐冷", "ショクカイ", "めん", "その他"]
+    sub_cats_set = {v["中カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ") == big_cat and v.get("中カテゴリ")} if big_cat else set()
+    sub_cats = sorted(sub_cats_set, key=lambda c: (SUB_CAT_ORDER.index(c) if c in SUB_CAT_ORDER else len(SUB_CAT_ORDER), c))
+    sub_str = None
+    if big_cat and len(sub_cats) > 1:
+        step_label("② 種別を選択")
+        sub_cat_labels = [f"{sub_cat_icon(c)} {c}" for c in sub_cats]
+        sel_sub_label = st.radio("種別", sub_cat_labels, horizontal=True, label_visibility="collapsed")
+        sub_str = sub_cats[sub_cat_labels.index(sel_sub_label)]
+    elif sub_cats: sub_str = sub_cats[0]
+
+    step_label("③ 製品品番を選択")
+    filtered_opts = [k for k, v in p_recipes.items() if v.get("大カテゴリ") == big_cat and v.get("中カテゴリ") == sub_str] if big_cat and sub_str else []
+    selected_p = None
+    active_recipe = []
+    if filtered_opts:
+        opt_labels = [f"{product_icon(k)} {k}" for k in filtered_opts]
+        sel_label = st.radio("製品", opt_labels, horizontal=True, label_visibility="collapsed")
+        selected_p = filtered_opts[opt_labels.index(sel_label)]
+        active_recipe = p_recipes.get(selected_p, {}).get("成分", [])
+    card_end()
+
+    if not active_recipe: st.info("👆 製品を選択してください。（レシピ未登録の場合は「マスタ設定 → レシピ」で登録）")
+    else:
         card_start()
-        brew_date = st.date_input("📅 仕込日", value=today_jst())
+        sec_title(f"⚖️ 希望仕込量と石灰水量　― {selected_p}")
+
+        col_in1, col_in2 = st.columns(2)
+        with col_in1:
+            target_size = st.number_input("🏭 希望仕込製品量 (kg)", min_value=0.0, value=100.0, step=10.0, key="t_size", format="%.0f")
+        with col_in2:
+            lime_water_size = st.number_input("💧 石灰水作成量 (kg)", min_value=0.0, value=0.0, step=1.0, key="l_size", format="%.1f")
+
         st.markdown("<br>", unsafe_allow_html=True)
-
-        p_recipes = {r.get("品名", "未定義"): {"大カテゴリ": r.get("大カテゴリ", "その他"), "中カテゴリ": r.get("中カテゴリ", "その他"), "成分": safe_parse_recipe(r.get("配合JSON"))} for r in recipes_raw if r.get("大カテゴリ") != "調味料"}
-        seasoning_recipes_all = [r for r in recipes_raw if r.get("大カテゴリ") == "調味料"]
-
-        sec_title("🏭 ライン・製品選択")
-        step_label("① ラインを選択")
-        BASE_BIG_CAT_ORDER = ["プラント", "OKM", "手詰め"]
-        dynamic_cats = {v["大カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ")}
-        big_cats = list(BASE_BIG_CAT_ORDER) + sorted(dynamic_cats - set(BASE_BIG_CAT_ORDER))
-        big_cat_labels = [f"{big_cat_icon(c)} {c}" for c in big_cats]
-        sel_big_label = st.radio("ライン", big_cat_labels, horizontal=True, label_visibility="collapsed") if big_cats else None
-        big_cat = big_cats[big_cat_labels.index(sel_big_label)] if sel_big_label else None
-
-        SUB_CAT_ORDER = ["黒", "白", "耐冷", "ショクカイ", "めん", "その他"]
-        sub_cats_set = {v["中カテゴリ"] for v in p_recipes.values() if v.get("大カテゴリ") == big_cat and v.get("中カテゴリ")} if big_cat else set()
-        sub_cats = sorted(sub_cats_set, key=lambda c: (SUB_CAT_ORDER.index(c) if c in SUB_CAT_ORDER else len(SUB_CAT_ORDER), c))
-        sub_str = None
-        if big_cat and len(sub_cats) > 1:
-            step_label("② 種別を選択")
-            sub_cat_labels = [f"{sub_cat_icon(c)} {c}" for c in sub_cats]
-            sel_sub_label = st.radio("種別", sub_cat_labels, horizontal=True, label_visibility="collapsed")
-            sub_str = sub_cats[sub_cat_labels.index(sel_sub_label)]
-        elif sub_cats: sub_str = sub_cats[0]
-
-        step_label("③ 製品品番を選択")
-        filtered_opts = [k for k, v in p_recipes.items() if v.get("大カテゴリ") == big_cat and v.get("中カテゴリ") == sub_str] if big_cat and sub_str else []
-        selected_p = None
-        active_recipe = []
-        if filtered_opts:
-            opt_labels = [f"{product_icon(k)} {k}" for k in filtered_opts]
-            sel_label = st.radio("製品", opt_labels, horizontal=True, label_visibility="collapsed")
-            selected_p = filtered_opts[opt_labels.index(sel_label)]
-            active_recipe = p_recipes.get(selected_p, {}).get("成分", [])
+        c_op1, c_op2 = st.columns(2)
+        with c_op1: operator = render_operator_selector("op_key")
+        with c_op2: brew_remarks = st.text_input("📝 備考（任意）", placeholder="特記事項があれば入力", key="brew_remarks")
         card_end()
 
-        if not active_recipe: st.info("👆 製品を選択してください。（レシピ未登録の場合は「マスタ設定 → レシピ」で登録）")
-        else:
-            card_start()
-            sec_title(f"⚖️ 希望仕込量と石灰水量　― {selected_p}")
+        if target_size > 0:
+            st.markdown('<div class="section-title" style="margin-top:32px;">📦 準備する原料・ロット</div>', unsafe_allow_html=True)
+            submitted_ingredients, water_items = [], []
+            blend_errors = []
+            lime_cfg = parse_lime_config(order_points, product_name=selected_p)
+            lime_boost_active = is_lime_boost_active(lime_cfg, brew_date)
 
-            col_in1, col_in2 = st.columns(2)
-            with col_in1:
-                target_size = st.number_input("🏭 希望仕込製品量 (kg)", min_value=0.0, value=100.0, step=10.0, key="t_size", format="%.0f")
-            with col_in2:
-                lime_water_size = st.number_input("💧 石灰水作成量 (kg)", min_value=0.0, value=0.0, step=1.0, key="l_size", format="%.1f")
+            for i, item in enumerate(active_recipe[:15]):
+                r_name = str(item.get("原料名", "")).strip()
+                base_ratio = to_float(item.get("比率", 0.0))
+                is_water, is_lime, is_konjac = ("水" in r_name or "お湯" in r_name), ("石灰" in r_name or "カルシウム" in r_name), ("こんにゃく" in r_name)
+                icon = "🧂" if is_lime else ("📦" if is_konjac else "🔹")
 
-            st.markdown("<br>", unsafe_allow_html=True)
-            c_op1, c_op2 = st.columns(2)
-            with c_op1: operator = render_operator_selector("op_key")
-            with c_op2: brew_remarks = st.text_input("📝 備考（任意）", placeholder="特記事項があれば入力", key="brew_remarks")
-            card_end()
+                lime_msg = ""
+                if is_water:
+                    calc_kg = max(0.0, target_size * (base_ratio / 100.0) - lime_water_size)
+                elif is_lime:
+                    eff_ratio = base_ratio
+                    if lime_boost_active:
+                        add_r = float(lime_cfg.get("add_ratio", 0.01))
+                        eff_ratio += add_r
+                        lime_msg = f"🌡️ 期間増量中 ({lime_cfg.get('start_month', 6)}月〜{lime_cfg.get('end_month', 9)}月: +{add_r}% / 理由: {lime_cfg.get('reason', '')})"
+                    calc_kg = lime_water_size * (eff_ratio / 10.0)
+                else: calc_kg = target_size * (base_ratio / 100.0)
 
-            if target_size > 0:
-                st.markdown('<div class="section-title" style="margin-top:32px;">📦 準備する原料・ロット</div>', unsafe_allow_html=True)
-                submitted_ingredients, water_items = [], []
-                blend_errors = []
-                lime_cfg = parse_lime_config(order_points, product_name=selected_p)
-                lime_boost_active = is_lime_boost_active(lime_cfg, brew_date)
+                if is_water:
+                    water_items.append({"原料名": r_name, "kg": round(calc_kg, 2), "配合比": base_ratio})
+                    submitted_ingredients.append({"原料名": r_name, "kg": round(calc_kg, 2), "lot": "─", "水": True})
+                    continue
 
-                for i, item in enumerate(active_recipe[:15]):
-                    r_name = str(item.get("原料名", "")).strip()
-                    base_ratio = to_float(item.get("比率", 0.0))
-                    is_water, is_lime, is_konjac = ("水" in r_name or "お湯" in r_name), ("石灰" in r_name or "カルシウム" in r_name), ("こんにゃく" in r_name)
-                    icon = "🧂" if is_lime else ("📦" if is_konjac else "🔹")
+                with st.container(border=True):
+                    st.markdown(f"<div style='font-size:1.3rem; font-weight:900;'>{icon} {r_name}</div>", unsafe_allow_html=True)
+                    if is_lime and lime_msg: st.markdown(f"<div style='font-size:0.9rem; color:#b45309; font-weight:800; margin-top:4px;'>{lime_msg}</div>", unsafe_allow_html=True)
 
-                    lime_msg = ""
-                    if is_water:
-                        calc_kg = max(0.0, target_size * (base_ratio / 100.0) - lime_water_size)
-                    elif is_lime:
-                        eff_ratio = base_ratio
-                        if lime_boost_active:
-                            add_r = float(lime_cfg.get("add_ratio", 0.01))
-                            eff_ratio += add_r
-                            lime_msg = f"🌡️ 期間増量中 ({lime_cfg.get('start_month', 6)}月〜{lime_cfg.get('end_month', 9)}月: +{add_r}% / 理由: {lime_cfg.get('reason', '')})"
-                        calc_kg = lime_water_size * (eff_ratio / 10.0)
-                    else: calc_kg = target_size * (base_ratio / 100.0)
+                    if is_konjac:
+                        blend_mode = st.radio("ブレンドモード", ["単一 (1種)", "2種ブレンド", "3種ブレンド"], key=f"kb_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
+                        konjac_mats = [m for m in sorted_materials() if "こんにゃく" in m] or [r_name]
 
-                    if is_water:
-                        water_items.append({"原料名": r_name, "kg": round(calc_kg, 2), "配合比": base_ratio})
-                        submitted_ingredients.append({"原料名": r_name, "kg": round(calc_kg, 2), "lot": "─", "水": True})
-                        continue
+                        if blend_mode in ["2種ブレンド", "3種ブレンド"]:
+                            is_3 = (blend_mode == "3種ブレンド")
+                            k_a, k_b, k_c = f"kr_a_{selected_p}_{i}", f"kr_b_{selected_p}_{i}", f"kr_c_{selected_p}_{i}"
+                            if k_a not in st.session_state: st.session_state[k_a] = 50.0 if not is_3 else 34.0
+                            if k_b not in st.session_state: st.session_state[k_b] = 50.0 if not is_3 else 33.0
+                            if k_c not in st.session_state: st.session_state[k_c] = 33.0
 
-                    with st.container(border=True):
-                        st.markdown(f"<div style='font-size:1.3rem; font-weight:900;'>{icon} {r_name}</div>", unsafe_allow_html=True)
-                        if is_lime and lime_msg: st.markdown(f"<div style='font-size:0.9rem; color:#b45309; font-weight:800; margin-top:4px;'>{lime_msg}</div>", unsafe_allow_html=True)
+                            st.markdown("<div style='font-size:0.9rem; font-weight:800; color:#475569; margin:8px 0;'>🎯 ワンタッチ比率入力パネル</div>", unsafe_allow_html=True)
 
-                        if is_konjac:
-                            blend_mode = st.radio("ブレンドモード", ["単一 (1種)", "2種ブレンド", "3種ブレンド"], key=f"kb_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
-                            konjac_mats = [m for m in sorted_materials() if "こんにゃく" in m] or [r_name]
+                            target_key = f"blend_tgt_{selected_p}_{i}"
+                            if target_key not in st.session_state: st.session_state[target_key] = "🅰️"
+                            st.radio("入力対象を選択", ["🅰️", "🅱️", "🅲"] if is_3 else ["🅰️", "🅱️"], horizontal=True, key=target_key, label_visibility="collapsed")
 
-                            if blend_mode in ["2種ブレンド", "3種ブレンド"]:
-                                is_3 = (blend_mode == "3種ブレンド")
-                                k_a, k_b, k_c = f"kr_a_{selected_p}_{i}", f"kr_b_{selected_p}_{i}", f"kr_c_{selected_p}_{i}"
-                                if k_a not in st.session_state: st.session_state[k_a] = 50.0 if not is_3 else 34.0
-                                if k_b not in st.session_state: st.session_state[k_b] = 50.0 if not is_3 else 33.0
-                                if k_c not in st.session_state: st.session_state[k_c] = 33.0
+                            st.markdown("<div class='ratio-btn-container' style='margin-top:8px;'>", unsafe_allow_html=True)
+                            btn_cols = st.columns(9)
+                            def update_ratio(v, tgt, ka, kb, kc, is_three):
+                                if tgt == "🅰️": st.session_state[ka] = float(v); st.session_state[kb] = 100.0 - float(v) if not is_three else st.session_state[kb]
+                                elif tgt == "🅱️": st.session_state[kb] = float(v); st.session_state[ka] = 100.0 - float(v) if not is_three else st.session_state[ka]
+                                elif tgt == "🅲" and is_three: st.session_state[kc] = float(v)
 
-                                st.markdown("<div style='font-size:0.9rem; font-weight:800; color:#475569; margin:8px 0;'>🎯 ワンタッチ比率入力パネル</div>", unsafe_allow_html=True)
+                            for pidx, pv in enumerate(range(10, 100, 10)):
+                                curr_tgt = st.session_state[target_key]
+                                curr_val = st.session_state.get(k_a) if curr_tgt == "🅰️" else (st.session_state.get(k_b) if curr_tgt == "🅱️" else st.session_state.get(k_c))
+                                btn_cols[pidx].button(f"{pv}%", key=f"rbtn_{selected_p}_{i}_{pv}", on_click=update_ratio, args=(pv, curr_tgt, k_a, k_b, k_c, is_3), type="primary" if (curr_val == float(pv)) else "secondary", use_container_width=True)
+                            st.markdown("</div>", unsafe_allow_html=True)
 
-                                target_key = f"blend_tgt_{selected_p}_{i}"
-                                if target_key not in st.session_state: st.session_state[target_key] = "🅰️"
-                                st.radio("入力対象を選択", ["🅰️", "🅱️", "🅲"] if is_3 else ["🅰️", "🅱️"], horizontal=True, key=target_key, label_visibility="collapsed")
-
-                                st.markdown("<div class='ratio-btn-container' style='margin-top:8px;'>", unsafe_allow_html=True)
-                                btn_cols = st.columns(9)
-                                def update_ratio(v, tgt, ka, kb, kc, is_three):
-                                    if tgt == "🅰️": st.session_state[ka] = float(v); st.session_state[kb] = 100.0 - float(v) if not is_three else st.session_state[kb]
-                                    elif tgt == "🅱️": st.session_state[kb] = float(v); st.session_state[ka] = 100.0 - float(v) if not is_three else st.session_state[ka]
-                                    elif tgt == "🅲" and is_three: st.session_state[kc] = float(v)
-
-                                for pidx, pv in enumerate(range(10, 100, 10)):
-                                    curr_tgt = st.session_state[target_key]
-                                    curr_val = st.session_state.get(k_a) if curr_tgt == "🅰️" else (st.session_state.get(k_b) if curr_tgt == "🅱️" else st.session_state.get(k_c))
-                                    btn_cols[pidx].button(f"{pv}%", key=f"rbtn_{selected_p}_{i}_{pv}", on_click=update_ratio, args=(pv, curr_tgt, k_a, k_b, k_c, is_3), type="primary" if (curr_val == float(pv)) else "secondary", use_container_width=True)
-                                st.markdown("</div>", unsafe_allow_html=True)
-
-                                cols_ratio = st.columns(3 if is_3 else 2)
-                                ratio_a = cols_ratio[0].number_input("🅰️ 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_a)
-                                ratio_b = cols_ratio[1].number_input("🅱️ 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_b)
-                                ratio_c = cols_ratio[2].number_input("🅲 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_c) if is_3 else 0.0
-                                ratio_sum = ratio_a + ratio_b + ratio_c
-                                if abs(ratio_sum - 100.0) > 0.01:
-                                    alert_box(f"❌ ブレンド比率の合計が {fmt_kg(ratio_sum)}% です（100%にしてください）", "danger")
-                                    blend_errors.append(f"{r_name}：ブレンド比率の合計が{fmt_kg(ratio_sum)}%")
-                                else:
-                                    st.caption(f"✅ 比率合計 100%（{fmt_kg(ratio_a)} / {fmt_kg(ratio_b)}{' / ' + fmt_kg(ratio_c) if is_3 else ''}）")
-
-                                mat_a = st.radio("🅰️ 原料種別", konjac_mats, key=f"kma_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
-                                act_a, lot_a = _ing_row("🅰️ 投入量", calc_kg * ratio_a / 100.0, f"adj_a_{selected_p}_{i}", mat_a, f"lot_a_{selected_p}_{i}_{mat_a}")
-                                st.markdown("<hr style='margin:16px 0; border-top:1px dashed #cbd5e1;'>", unsafe_allow_html=True)
-
-                                mat_b = st.radio("🅱️ 原料種別", konjac_mats, index=1 if len(konjac_mats) > 1 else 0, key=f"kmb_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
-                                act_b, lot_b = _ing_row("🅱️ 投入量", calc_kg * ratio_b / 100.0, f"adj_b_{selected_p}_{i}", mat_b, f"lot_b_{selected_p}_{i}_{mat_b}")
-
-                                submitted_ingredients.extend([{"原料名": mat_a, "kg": act_a, "lot": f"{lot_a}({fmt_kg(ratio_a)}%)" if lot_a != "─" else "─"},
-                                                              {"原料名": mat_b, "kg": act_b, "lot": f"{lot_b}({fmt_kg(ratio_b)}%)" if lot_b != "─" else "─"}])
-
-                                if is_3:
-                                    st.markdown("<hr style='margin:16px 0; border-top:1px dashed #cbd5e1;'>", unsafe_allow_html=True)
-                                    mat_c = st.radio("🅲 原料種別", konjac_mats, index=2 if len(konjac_mats) > 2 else 0, key=f"kmc_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
-                                    act_c, lot_c = _ing_row("🅲 投入量", calc_kg * ratio_c / 100.0, f"adj_c_{selected_p}_{i}", mat_c, f"lot_c_{selected_p}_{i}_{mat_c}")
-                                    submitted_ingredients.append({"原料名": mat_c, "kg": act_c, "lot": f"{lot_c}({fmt_kg(ratio_c)}%)" if lot_c != "─" else "─"})
+                            cols_ratio = st.columns(3 if is_3 else 2)
+                            ratio_a = cols_ratio[0].number_input("🅰️ 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_a)
+                            ratio_b = cols_ratio[1].number_input("🅱️ 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_b)
+                            ratio_c = cols_ratio[2].number_input("🅲 比率(%)", min_value=0.0, max_value=100.0, step=1.0, key=k_c) if is_3 else 0.0
+                            ratio_sum = ratio_a + ratio_b + ratio_c
+                            if abs(ratio_sum - 100.0) > 0.01:
+                                alert_box(f"❌ ブレンド比率の合計が {fmt_kg(ratio_sum)}% です（100%にしてください）", "danger")
+                                blend_errors.append(f"{r_name}：ブレンド比率の合計が{fmt_kg(ratio_sum)}%")
                             else:
-                                act_kg, final_lot = _ing_row(f"投入量（配合比 {fmt_kg(base_ratio)}%）", calc_kg, f"adj_{selected_p}_{i}", r_name, f"lot_{selected_p}_{i}")
-                                submitted_ingredients.append({"原料名": r_name, "kg": act_kg, "lot": final_lot})
+                                st.caption(f"✅ 比率合計 100%（{fmt_kg(ratio_a)} / {fmt_kg(ratio_b)}{' / ' + fmt_kg(ratio_c) if is_3 else ''}）")
+
+                            mat_a = st.radio("🅰️ 原料種別", konjac_mats, key=f"kma_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
+                            act_a, lot_a = _ing_row("🅰️ 投入量", calc_kg * ratio_a / 100.0, f"adj_a_{selected_p}_{i}", mat_a, f"lot_a_{selected_p}_{i}_{mat_a}")
+                            st.markdown("<hr style='margin:16px 0; border-top:1px dashed #cbd5e1;'>", unsafe_allow_html=True)
+
+                            mat_b = st.radio("🅱️ 原料種別", konjac_mats, index=1 if len(konjac_mats) > 1 else 0, key=f"kmb_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
+                            act_b, lot_b = _ing_row("🅱️ 投入量", calc_kg * ratio_b / 100.0, f"adj_b_{selected_p}_{i}", mat_b, f"lot_b_{selected_p}_{i}_{mat_b}")
+
+                            submitted_ingredients.extend([{"原料名": mat_a, "kg": act_a, "lot": f"{lot_a}({fmt_kg(ratio_a)}%)" if lot_a != "─" else "─"},
+                                                          {"原料名": mat_b, "kg": act_b, "lot": f"{lot_b}({fmt_kg(ratio_b)}%)" if lot_b != "─" else "─"}])
+
+                            if is_3:
+                                st.markdown("<hr style='margin:16px 0; border-top:1px dashed #cbd5e1;'>", unsafe_allow_html=True)
+                                mat_c = st.radio("🅲 原料種別", konjac_mats, index=2 if len(konjac_mats) > 2 else 0, key=f"kmc_{selected_p}_{i}", horizontal=True, label_visibility="collapsed")
+                                act_c, lot_c = _ing_row("🅲 投入量", calc_kg * ratio_c / 100.0, f"adj_c_{selected_p}_{i}", mat_c, f"lot_c_{selected_p}_{i}_{mat_c}")
+                                submitted_ingredients.append({"原料名": mat_c, "kg": act_c, "lot": f"{lot_c}({fmt_kg(ratio_c)}%)" if lot_c != "─" else "─"})
                         else:
                             act_kg, final_lot = _ing_row(f"投入量（配合比 {fmt_kg(base_ratio)}%）", calc_kg, f"adj_{selected_p}_{i}", r_name, f"lot_{selected_p}_{i}")
                             submitted_ingredients.append({"原料名": r_name, "kg": act_kg, "lot": final_lot})
+                    else:
+                        act_kg, final_lot = _ing_row(f"投入量（配合比 {fmt_kg(base_ratio)}%）", calc_kg, f"adj_{selected_p}_{i}", r_name, f"lot_{selected_p}_{i}")
+                        submitted_ingredients.append({"原料名": r_name, "kg": act_kg, "lot": final_lot})
 
-                if seasoning_recipes_all:
-                    st.markdown('<div class="section-title" style="margin-top:32px;">🌶️ 調味料の希釈計算・投入記録</div>', unsafe_allow_html=True)
-                    for sr_idx, sr in enumerate(seasoning_recipes_all):
-                        sr_items = safe_parse_seasoning_recipe(sr.get("配合JSON"))
-                        if not sr_items: continue
-                        with st.container(border=True):
-                            if st.checkbox(f"🌶️ {sr.get('品名')} を使用する", key=f"use_season_{selected_p}_{sr_idx}"):
-                                target_vol_key = f"season_vol_{selected_p}_{sr_idx}"
-                                target_vol = st.number_input("希釈対象量（できあがり量・kg）", min_value=0.0, value=st.session_state.get(target_vol_key, 0.0), step=0.1, key=target_vol_key)
-                                for si, sitem in enumerate(sr_items):
-                                    s_mat, s_dil = sitem["原料名"], to_float(sitem["希釈倍率"])
-                                    need_kg = target_vol / s_dil if s_dil > 0 else 0.0
-                                    s_act_kg, s_lot = _ing_row(f"投入量（{s_mat}）", need_kg, f"adj_season_{selected_p}_{sr_idx}_{si}", s_mat, f"lot_season_{selected_p}_{sr_idx}_{si}")
-                                    submitted_ingredients.append({"原料名": s_mat, "kg": s_act_kg, "lot": s_lot})
+            if seasoning_recipes_all:
+                st.markdown('<div class="section-title" style="margin-top:32px;">🌶️ 調味料の希釈計算・投入記録</div>', unsafe_allow_html=True)
+                for sr_idx, sr in enumerate(seasoning_recipes_all):
+                    sr_items = safe_parse_seasoning_recipe(sr.get("配合JSON"))
+                    if not sr_items: continue
+                    with st.container(border=True):
+                        if st.checkbox(f"🌶️ {sr.get('品名')} を使用する", key=f"use_season_{selected_p}_{sr_idx}"):
+                            target_vol_key = f"season_vol_{selected_p}_{sr_idx}"
+                            target_vol = st.number_input("希釈対象量（できあがり量・kg）", min_value=0.0, value=st.session_state.get(target_vol_key, 0.0), step=0.1, key=target_vol_key)
+                            for si, sitem in enumerate(sr_items):
+                                s_mat, s_dil = sitem["原料名"], to_float(sitem["希釈倍率"])
+                                need_kg = target_vol / s_dil if s_dil > 0 else 0.0
+                                s_act_kg, s_lot = _ing_row(f"投入量（{s_mat}）", need_kg, f"adj_season_{selected_p}_{sr_idx}_{si}", s_mat, f"lot_season_{selected_p}_{sr_idx}_{si}")
+                                submitted_ingredients.append({"原料名": s_mat, "kg": s_act_kg, "lot": s_lot})
 
-                # ── 保存前チェック ─────────────────────────────────────
-                errors, warns = list(blend_errors), []
-                if operator == "未登録": errors.append("担当者が未登録です（マスタ設定 → 担当者）")
-                agg_use = {}
+            # ── 保存前チェック ─────────────────────────────────────
+            errors, warns = list(blend_errors), []
+            if operator == "未登録": errors.append("担当者が未登録です（マスタ設定 → 担当者）")
+            agg_use = {}
+            for ing in submitted_ingredients:
+                if ing.get("水") or ing["kg"] <= 0: continue
+                lots = split_lots(ing["lot"])
+                if not lots:
+                    warns.append(f"ロット未指定：{ing['原料名']}（トレースできなくなります）")
+                    continue
+                for l in lots:
+                    agg_use[(ing["原料名"], l)] = agg_use.get((ing["原料名"], l), 0.0) + ing["kg"] / len(lots)
+            for (mname, l), kg_need in agg_use.items():
+                known = any(v["原料種別"] == mname and v["ロットNo"] == l for v in inventory_data.values())
+                _, skg = lot_stock(mname, l)
+                if not known: warns.append(f"入荷登録のないロット：{mname} / {l}（在庫は引かれません）")
+                elif kg_need > skg + 0.01: warns.append(f"在庫不足：{mname} / {l}（残{fmt_kg(round(skg, 2))}kg ＜ 投入{fmt_kg(round(kg_need, 2))}kg）")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            with st.expander("📋 投入内容の最終確認（保存前にご確認ください）", expanded=True):
+                prev = []
                 for ing in submitted_ingredients:
-                    if ing.get("水") or ing["kg"] <= 0: continue
                     lots = split_lots(ing["lot"])
-                    if not lots:
-                        warns.append(f"ロット未指定：{ing['原料名']}（トレースできなくなります）")
-                        continue
-                    for l in lots:
-                        agg_use[(ing["原料名"], l)] = agg_use.get((ing["原料名"], l), 0.0) + ing["kg"] / len(lots)
-                for (mname, l), kg_need in agg_use.items():
-                    known = any(v["原料種別"] == mname and v["ロットNo"] == l for v in inventory_data.values())
-                    _, skg = lot_stock(mname, l)
-                    if not known: warns.append(f"入荷登録のないロット：{mname} / {l}（在庫は引かれません）")
-                    elif kg_need > skg + 0.01: warns.append(f"在庫不足：{mname} / {l}（残{fmt_kg(round(skg, 2))}kg ＜ 投入{fmt_kg(round(kg_need, 2))}kg）")
+                    stock_txt = "─"
+                    if lots and not ing.get("水"):
+                        stock_txt = " / ".join(f"{fmt_kg(round(lot_stock(ing['原料名'], l)[1], 2))}kg" for l in lots)
+                    prev.append({"原料": ing["原料名"], "投入量(kg)": fmt_kg(ing["kg"]), "ロット": ing["lot"], "ロット現在庫": stock_txt})
+                st.dataframe(pd.DataFrame(prev), use_container_width=True, hide_index=True)
 
-                st.markdown("<br>", unsafe_allow_html=True)
-                with st.expander("📋 投入内容の最終確認（保存前にご確認ください）", expanded=True):
-                    prev = []
-                    for ing in submitted_ingredients:
-                        lots = split_lots(ing["lot"])
-                        stock_txt = "─"
-                        if lots and not ing.get("水"):
-                            stock_txt = " / ".join(f"{fmt_kg(round(lot_stock(ing['原料名'], l)[1], 2))}kg" for l in lots)
-                        prev.append({"原料": ing["原料名"], "投入量(kg)": fmt_kg(ing["kg"]), "ロット": ing["lot"], "ロット現在庫": stock_txt})
-                    st.dataframe(pd.DataFrame(prev), use_container_width=True, hide_index=True)
+            total_in = sum(ing["kg"] for ing in submitted_ingredients)
+            st.markdown(f"""
+            <div style="background-color: var(--c-primary-soft); border: 2px solid var(--c-primary); border-radius: 12px; padding: 16px; margin-bottom: 16px; text-align: center;">
+                <div style="font-weight: 800; color: var(--c-muted); font-size: 1.1rem;">💡 合計投入予定量（全原料・水を含む）</div>
+                <div style="font-size: 2.2rem; font-weight: 900; color: var(--c-secondary);">{fmt_kg(round(total_in, 2))} <span style="font-size:1.2rem; color:var(--c-muted);">kg</span></div>
+            </div>
+            """, unsafe_allow_html=True)
 
-                total_in = sum(ing["kg"] for ing in submitted_ingredients)
-                st.markdown(f"""
-                <div style="background-color: var(--c-primary-soft); border: 2px solid var(--c-primary); border-radius: 12px; padding: 16px; margin-bottom: 16px; text-align: center;">
-                    <div style="font-weight: 800; color: var(--c-muted); font-size: 1.1rem;">💡 合計投入予定量（全原料・水を含む）</div>
-                    <div style="font-size: 2.2rem; font-weight: 900; color: var(--c-secondary);">{fmt_kg(round(total_in, 2))} <span style="font-size:1.2rem; color:var(--c-muted);">kg</span></div>
-                </div>
-                """, unsafe_allow_html=True)
+            for e_msg in errors: alert_box(f"❌ {e_msg}", "danger")
+            ack_ok = True
+            if warns:
+                alert_box("⚠️ 保存前の確認事項<br>" + "<br>".join(f"・{w}" for w in warns), "warn")
+                ack_ok = st.checkbox("上記を確認した上で保存する", key="brew_ack_warn")
 
-                for e_msg in errors: alert_box(f"❌ {e_msg}", "danger")
-                ack_ok = True
-                if warns:
-                    alert_box("⚠️ 保存前の確認事項<br>" + "<br>".join(f"・{w}" for w in warns), "warn")
-                    ack_ok = st.checkbox("上記を確認した上で保存する", key="brew_ack_warn")
+            if st.button("💾 この内容で製造記録を保存する", type="primary", use_container_width=True, disabled=bool(errors) or not ack_ok):
+                k_kg = s_kg = st_kg = lime_kg = 0.0
+                k_lot = s_lot = st_lot = "─"
+                for ing in submitted_ingredients:
+                    n, amt, lot = ing["原料名"], ing["kg"], ing["lot"]
+                    if "こんにゃく" in n: k_kg += amt; k_lot = lot if k_lot == "─" else (k_lot if lot in k_lot else f"{k_lot} / {lot}")
+                    elif "海藻" in n: s_kg += amt; s_lot = lot if s_lot == "─" else (s_lot if lot in s_lot else f"{s_lot} / {lot}")
+                    elif "デンプン" in n or "でんぷん" in n: st_kg += amt; st_lot = lot if st_lot == "─" else (st_lot if lot in st_lot else f"{st_lot} / {lot}")
+                    elif "石灰" in n or "カルシウム" in n: lime_kg += amt
 
-                if st.button("💾 この内容で製造記録を保存する", type="primary", use_container_width=True, disabled=bool(errors) or not ack_ok):
-                    k_kg = s_kg = st_kg = lime_kg = 0.0
-                    k_lot = s_lot = st_lot = "─"
-                    for ing in submitted_ingredients:
-                        n, amt, lot = ing["原料名"], ing["kg"], ing["lot"]
-                        if "こんにゃく" in n: k_kg += amt; k_lot = lot if k_lot == "─" else (k_lot if lot in k_lot else f"{k_lot} / {lot}")
-                        elif "海藻" in n: s_kg += amt; s_lot = lot if s_lot == "─" else (s_lot if lot in s_lot else f"{s_lot} / {lot}")
-                        elif "デンプン" in n or "でんぷん" in n: st_kg += amt; st_lot = lot if st_lot == "─" else (st_lot if lot in st_lot else f"{st_lot} / {lot}")
-                        elif "石灰" in n or "カルシウム" in n: lime_kg += amt
+                if not hasattr(sheets, "append_brewing"):
+                    st.error("sheets.append_brewing が見つからないため保存できません。")
+                    st.stop()
 
-                    if not hasattr(sheets, "append_brewing"):
-                        st.error("sheets.append_brewing が見つからないため保存できません。")
-                        st.stop()
+                next_no = next_brewing_no_fresh()
+                text_ing = ", ".join([f"{ing['原料名']}:{round(ing['kg'], 3)}kg({ing['lot']})" for ing in submitted_ingredients])
 
-                    next_no = next_brewing_no_fresh()
-                    text_ing = ", ".join([f"{ing['原料名']}:{round(ing['kg'], 3)}kg({ing['lot']})" for ing in submitted_ingredients])
+                sheets.append_brewing({
+                    "仕込No": next_no, "仕込日": str(brew_date), "品名": selected_p,
+                    "メーカー": operator, "主原料ロット": k_lot, "仕込量(kg)": round(target_size, 2),
+                    "こんにゃく精粉(kg)": round(k_kg, 2), "海藻粉(kg)": round(s_kg, 2), "海藻粉ロット": s_lot,
+                    "デンプン(kg)": round(st_kg, 2), "デンプンロット": st_lot, "デンプン種別": "-",
+                    "石灰(kg)": round(lime_kg, 2), "石灰水(L)": round(lime_water_size, 2),
+                    "その他添加物": text_ing, "備考": f"{brew_remarks}", "登録日時": now_jst().isoformat()
+                })
 
-                    sheets.append_brewing({
-                        "仕込No": next_no, "仕込日": str(brew_date), "品名": selected_p,
-                        "メーカー": operator, "主原料ロット": k_lot, "仕込量(kg)": round(target_size, 2),
-                        "こんにゃく精粉(kg)": round(k_kg, 2), "海藻粉(kg)": round(s_kg, 2), "海藻粉ロット": s_lot,
-                        "デンプン(kg)": round(st_kg, 2), "デンプンロット": st_lot, "デンプン種別": "-",
-                        "石灰(kg)": round(lime_kg, 2), "石灰水(L)": round(lime_water_size, 2),
-                        "その他添加物": text_ing, "備考": f"{brew_remarks}", "登録日時": now_jst().isoformat()
-                    })
+                for key in list(st.session_state.keys()):
+                    if any(key.startswith(p) for p in ["adj_", "last_calc_", "lot_", "btn_", "kb_", "kr_", "km", "blend_tgt_", "use_season_", "season_vol_", "rbtn_", "brew_ack", "brew_remarks"]):
+                        del st.session_state[key]
 
-                    for key in list(st.session_state.keys()):
-                        if any(key.startswith(p) for p in ["adj_", "last_calc_", "lot_", "btn_", "kb_", "kr_", "km", "blend_tgt_", "use_season_", "season_vol_", "rbtn_", "brew_ack", "brew_remarks"]):
-                            del st.session_state[key]
+                done(f"✅ 製造記録を登録しました（仕込No. {next_no} ／ {selected_p} {fmt_kg(target_size)}kg ／ 担当 {operator}）")
 
-                    done(f"✅ 製造記録を登録しました（仕込No. {next_no} ／ {selected_p} {fmt_kg(target_size)}kg ／ 担当 {operator}）")
-
+    # ── 直近5件の製造履歴（配合帳票・直接修正） ──────────────
+    card_start()
+    sec_title("🧾 直近5件の製造履歴（配合帳票）")
+    _mode = st.radio("表示", ["🍥 製品ごとの最新5件", "🕒 新しい順に5件"], horizontal=True, key="recent_mode")
+    _sorted_b = sorted(brewing, key=lambda b: (str(b.get("仕込日", "")), str(b.get("登録日時", "")), to_float(b.get("仕込No"))), reverse=True)
+    if "製品ごと" in _mode:
+        _seen, recent5 = set(), []
+        for _b in _sorted_b:
+            _p = str(_b.get("品名", ""))
+            if _p in _seen: continue
+            _seen.add(_p); recent5.append(_b)
+            if len(recent5) >= 5: break
     else:
-        # ── 直近5件の製造履歴（配合帳票・Excel風に直接修正） ──────────────
-        card_start()
-        sec_title("🧾 直近5件の製造履歴（配合帳票）")
-        _mode = st.radio("表示", ["🍥 製品ごとの最新5件", "🕒 新しい順に5件"], horizontal=True, key="recent_mode")
-        _sorted_b = sorted(brewing, key=lambda b: (str(b.get("仕込日", "")), str(b.get("登録日時", "")), str(b.get("仕込No", ""))), reverse=True)
-        if "製品ごと" in _mode:
-            _seen, recent5 = set(), []
-            for _b in _sorted_b:
-                _p = str(_b.get("品名", ""))
-                if _p in _seen: continue
-                _seen.add(_p); recent5.append(_b)
-                if len(recent5) >= 5: break
+        recent5 = _sorted_b[:5]
+    render_brew_grid(recent5, "recent_grid")
+    render_correction_log(brew_corrections, "recent_corr_log", limit=10)
+    card_end()
+
+    # ── 本日の製造記録（登録できたかをその場で確認） ──────────────
+    card_start()
+    sec_title(f"📅 本日の製造記録（{today_jst()}）")
+    if brewing:
+        df_today = pd.DataFrame(brewing)
+        df_today = df_today[in_period(df_today.get("仕込日", pd.Series(dtype=str)), today_jst(), today_jst())] if "仕込日" in df_today.columns else df_today.iloc[0:0]
+        if df_today.empty:
+            st.caption("本日の製造記録はまだありません。")
         else:
-            recent5 = _sorted_b[:5]
-        render_brew_grid(recent5, "recent_grid")
-        render_correction_log(brew_corrections, "recent_corr_log", limit=10)
-        card_end()
-
-        # ── 本日の製造記録（登録できたかをその場で確認） ──────────────
-        card_start()
-        sec_title(f"📅 本日の製造記録（{today_jst()}）")
-        if brewing:
-            df_today = pd.DataFrame(brewing)
-            df_today = df_today[in_period(df_today.get("仕込日", pd.Series(dtype=str)), today_jst(), today_jst())] if "仕込日" in df_today.columns else df_today.iloc[0:0]
-            if df_today.empty:
-                st.caption("本日の製造記録はまだありません。")
-            else:
-                v_today = brewing_view_df(df_today)
-                c_m1, c_m2 = st.columns(2)
-                c_m1.metric("本日の製造件数", f"{len(v_today)} 件")
-                c_m2.metric("本日の製造量", f"{fmt_kg(round(v_today['仕込量(kg)'].sum(), 2))} kg")
-                v_today = v_today.sort_values("登録日時", ascending=False)
-                st.dataframe(fmt_df_numeric(v_today[["仕込No", "品名", "担当者", "仕込量(kg)", "原料内訳（全原料の投入量）", "備考"]], ["仕込量(kg)"]), use_container_width=True, hide_index=True)
-        else:
-            st.caption("製造記録はまだありません。")
-        card_end()
+            v_today = brewing_view_df(df_today)
+            c_m1, c_m2 = st.columns(2)
+            c_m1.metric("本日の製造件数", f"{len(v_today)} 件")
+            c_m2.metric("本日の製造量", f"{fmt_kg(round(v_today['仕込量(kg)'].sum(), 2))} kg")
+            v_today = v_today.sort_values("登録日時", ascending=False)
+            st.dataframe(fmt_df_numeric(v_today[["仕込No", "品名", "担当者", "仕込量(kg)", "原料内訳（全原料の投入量）", "備考"]], ["仕込量(kg)"]), use_container_width=True, hide_index=True)
+    else:
+        st.caption("製造記録はまだありません。")
+    card_end()
 
 
-    # ═══════════════════════════════════════════════════════════════
-    #  📊 ダッシュボード
-
+# ═══════════════════════════════════════════════════════════════
+#  📊 ダッシュボード
 # ═══════════════════════════════════════════════════════════════
 elif page == "📊 ダッシュボード":
     page_header("📊 サマリーと在庫モニター", f"{today_jst():%Y年%m月%d日}（日本時間）")
@@ -2288,15 +2710,20 @@ elif page == "📝 発注管理":
             if oo.get("発注ID") == oid: oo.update(upd)
         save_purchase_orders(order_points, orders)
 
-    t_new, t_list = st.tabs(["➕ 新規発注登録", f"📋 発注一覧・入荷処理（未入荷 {len(pending_orders)}件）"])
+    t_new, t_list, t_vnd = st.tabs(["➕ 新規発注登録", f"📋 発注一覧・入荷処理（未入荷 {len(pending_orders)}件）", "📇 発注先一覧（連絡先）"])
     with t_new:
         card_start()
         order_category = st.radio("🏷️ 発注区分", ["🥦 原材料", "🧻 衛生資材・消耗品"], horizontal=True)
         is_raw_mat = "原材料" in order_category
         item_opts = sorted_materials() if is_raw_mat else [s.get("資材名") for s in sorted_supplies() if s.get("資材名")]
+        o_mat = st.selectbox("発注品目", item_opts if item_opts else ["未登録"], key="new_order_item")
+        _vs = vendors_for_item(o_mat)
+        if _vs: render_vendor_cards(_vs, compact=True)
+        _mk_opts = list(makers) + [v.get("メーカー(発注先)") for v in _vs if v.get("メーカー(発注先)") and v.get("メーカー(発注先)") not in makers]
+        _mk_opts = _mk_opts or ["未登録"]
+        _def_mk = next((v.get("メーカー(発注先)") for v in _vs if v.get("メーカー(発注先)") in _mk_opts), None)
         with st.form("new_order_form"):
-            o_mat = st.selectbox("発注品目", item_opts if item_opts else ["未登録"])
-            o_maker = st.selectbox("メーカー/発注先", makers if makers else ["未登録"])
+            o_maker = st.selectbox("メーカー/発注先", _mk_opts, index=_mk_opts.index(_def_mk) if _def_mk else 0, key=f"new_order_maker_{o_mat}")
             c_a, c_b = st.columns(2)
             o_date = c_a.date_input("発注日", value=today_jst())
             o_due = c_b.date_input("納品予定日", value=today_jst() + timedelta(days=7))
@@ -2330,6 +2757,8 @@ elif page == "📝 発注管理":
                     st.markdown(f"**{'🥦' if is_raw_order else '🧻'} {o.get('原料名')}**　🏢 {o.get('メーカー')}　📦 {fmt_kg(o.get('個数'))}")
                     due_html = f"<span style='color:#b91c1c; font-weight:800;'>⏰ 納品予定日: {due}（超過）</span>" if is_over else f"納品予定日: {due}"
                     st.markdown(f"<div style='font-size:0.85rem; color:#64748b;'>発注日: {o.get('発注日')} ／ {due_html}{' ／ 備考: ' + str(o.get('備考')) if o.get('備考') else ''}</div>", unsafe_allow_html=True)
+                    _pv = [v for v in vendors_for_item(o.get("原料名")) if v.get("メーカー(発注先)") == o.get("メーカー")] or vendors_for_item(o.get("原料名"))
+                    if _pv: render_vendor_cards(_pv[:1], compact=True)
                 with c_b:
                     with st.popover("✅ 入荷処理", use_container_width=True):
                         oid = o.get("発注ID")
@@ -2393,6 +2822,13 @@ elif page == "📝 発注管理":
                 st.dataframe(df_c[[c for c in ["発注区分", "発注日", "原料名", "メーカー", "個数", "入荷処理日"] if c in df_c.columns]], use_container_width=True, hide_index=True)
 
 
+    with t_vnd:
+        card_start()
+        sec_title("📇 発注先一覧（品目・発注先・担当者・連絡先）")
+        render_vendor_directory()
+        card_end()
+
+
 # ═══════════════════════════════════════════════════════════════
 #  📥 入荷登録
 # ═══════════════════════════════════════════════════════════════
@@ -2448,6 +2884,8 @@ elif page == "📥 入荷登録":
         has_abnormal = any(v == "❌ 異常あり" for v in chk_results.values())
         if has_abnormal: alert_box("❌ 異常ありの項目があります。備考に状況と対応（返品・隔離など）を記入してください。", "danger")
 
+        _att_n = st.session_state.get("arr_files_n", 0)
+        arr_files = st.file_uploader(f"📎 書類を添付（スキャンPDF・写真／任意・1ファイル{ATT_MAX_MB}MBまで）", type=ATT_TYPES, accept_multiple_files=True, key=f"arr_files_{_att_n}") if hasattr(sheets, "append_attachment") else []
         if st.button("💾 入荷記録を登録する", type="primary", use_container_width=True, disabled=not dup_ok):
             if not lot_clean: st.error("ロットNoは必須項目です。")
             elif any(v == "未確認" for v in chk_results.values()): st.error("受入品質検査が未完了です。")
@@ -2462,9 +2900,11 @@ elif page == "📥 入荷登録":
                     "外観": chk_results["外観"], "品名・規格確認": chk_results["品名・規格確認"], "賞味期限": chk_results["賞味期限"], "異物": chk_results["異物"],
                     "担当者": operator, "備考": chk_note, "登録日時": now_jst().isoformat()
                 })
+                _n_att = save_arrival_files(new_no, arr_files, operator)
+                st.session_state["arr_files_n"] = _att_n + 1
                 for k in ["arr_lot_val", "arr_note", "arr_dup_ok"] + [f"chk_{k_n}" for k_n, _ in CHK_ITEMS]:
                     st.session_state.pop(k, None)
-                done(f"入荷記録を保存しました（入荷No. {new_no} ／ {m_type} ／ ロット {lot_clean} ／ {bags_qty}袋）")
+                done(f"入荷記録を保存しました（入荷No. {new_no} ／ {m_type} ／ ロット {lot_clean} ／ {bags_qty}袋）" + (f"　📎 書類{_n_att}件を保管" if _n_att else ""))
         card_end()
 
         if arrivals:
@@ -2494,16 +2934,39 @@ elif page == "📥 入荷登録":
             df_arr_all["検査判定"] = df_arr_all[chk_cols].apply(lambda r: "⚠️ 異常あり" if any("異常" in str(x) for x in r) else ("未確認あり" if any("未確認" in str(x) or str(x) == "" for x in r) else "✅ 正常"), axis=1)
             if only_ab: m &= (df_arr_all["検査判定"] == "⚠️ 異常あり")
             df_arr = df_arr_all[m].sort_values(["入荷日", "入荷No"], ascending=False).reset_index(drop=True)
+            _atts = load_attachments_safe()
+            _att_cnt = {}
+            for _a in (_atts or []): _att_cnt[str(_a.get("入荷No", ""))] = _att_cnt.get(str(_a.get("入荷No", "")), 0) + 1
+            df_arr["📎書類"] = df_arr["入荷No"].astype(str).map(lambda n: f"📎 {_att_cnt[n]}件" if n in _att_cnt else "─")
             c_k1, c_k2, c_k3 = st.columns(3)
             c_k1.metric("入荷件数", f"{len(df_arr)} 件")
             c_k2.metric("入荷総量", f"{fmt_kg(round(df_arr['総量(kg)'].apply(to_float).sum(), 1))} kg")
             c_k3.metric("検査 異常あり", f"{int((df_arr['検査判定'] == '⚠️ 異常あり').sum())} 件")
-            show_cols = ["入荷日", "入荷No", "原料種別", "グレード", "メーカー", "ロットNo", "袋数", "1袋重量(kg)", "総量(kg)", "検査判定", "外観", "品名・規格確認", "賞味期限", "異物", "担当者", "備考"]
+            show_cols = ["入荷日", "入荷No", "原料種別", "グレード", "メーカー", "ロットNo", "袋数", "1袋重量(kg)", "総量(kg)", "検査判定", "外観", "品名・規格確認", "賞味期限", "異物", "担当者", "📎書類", "備考"]
             st.dataframe(fmt_df_numeric(df_arr[show_cols], ["袋数", "1袋重量(kg)", "総量(kg)"]), use_container_width=True, hide_index=True)
             if not df_arr.empty: download_buttons({"入荷記録": df_arr[show_cols]}, f"入荷記録_{today_jst()}", "arr_dl")
             card_end()
 
-            with st.expander("✏️ 入荷記録の修正・削除（Excel風・管理者向け）"):
+            card_start()
+            sec_title("📎 書類の保管・紐づけ（スキャンPDF・写真）")
+            if _atts is None:
+                st.warning("書類の保管には、新しい sheets.py への差し替えが必要です。")
+            elif df_arr.empty:
+                st.caption("対象の入荷がありません。")
+            else:
+                _lab = {f"{r['入荷日']} ／ {r['入荷No']} ／ {r['原料種別']} ／ ロット {r['ロットNo']}": str(r["入荷No"]) for _, r in df_arr.head(200).iterrows()}
+                _sel_a = st.selectbox("書類を紐づける入荷", list(_lab.keys()), key="arr_att_sel")
+                _ano = _lab[_sel_a]
+                render_arrival_files(_ano, _atts, f"arr_att_{_ano}")
+                _up = st.file_uploader(f"📎 書類を追加（PDF・写真／1ファイル{ATT_MAX_MB}MBまで）", type=ATT_TYPES, accept_multiple_files=True, key=f"arr_att_up_{_ano}_{st.session_state.get('arr_att_n', 0)}")
+                _op_a = render_operator_selector("arr_att_op")
+                if _up and st.button("💾 この入荷に紐づけて保管", type="primary", key="arr_att_save", use_container_width=True):
+                    _n = save_arrival_files(_ano, _up, _op_a)
+                    st.session_state["arr_att_n"] = st.session_state.get("arr_att_n", 0) + 1
+                    done(f"書類を{_n}件保管しました（入荷No. {_ano}）。")
+            card_end()
+
+            with st.expander("✏️ 入荷記録の修正・削除（管理者向け）"):
                 arr_editable_cols = [c for c in ["入荷日", "原料種別", "メーカー", "ロットNo", "袋数", "1袋重量(kg)", "備考"] if c in df_arr.columns]
                 if "グレード" in df_arr.columns: arr_editable_cols.insert(2, "グレード")
                 render_excel_history_editor(full_records=arrivals, filtered_df=df_arr.head(200), id_col="入荷No", editable_cols=arr_editable_cols, numeric_cols=["袋数", "1袋重量(kg)"], save_func=_save_arrivals_recalc, key_prefix="arr_hist", reload_func=sheets.load_arrivals)
@@ -2759,7 +3222,7 @@ elif page == "📋 履歴・帳票":
         c_m3.metric("製造日数", f"{view['仕込日'].nunique()} 日")
         card_end()
 
-        _hv = st.radio("表示", ['📄 一覧・帳票出力', '🧾 配合帳票（Excel風・修正）', '🔬 1件ずつ詳細確認', '📆 日別・製品別集計', '📝 修正履歴'], horizontal=True, key="brw_hist_view", label_visibility="collapsed")
+        _hv = st.radio("表示", ['📄 一覧・帳票出力', '🧾 配合帳票・修正', '🔬 1件ずつ詳細確認', '📆 日別・製品別集計', '📝 修正履歴'], horizontal=True, key="brw_hist_view", label_visibility="collapsed")
 
         if _hv == "📄 一覧・帳票出力":
             card_start()
@@ -2778,7 +3241,7 @@ elif page == "📋 履歴・帳票":
                 st.caption("※ Excelには「製造記録」「配合比(セル別)」「原料使用明細（ロット・入荷日・メーカー付き）」「日別集計」（修正があれば「修正履歴」）が入ります。")
             card_end()
 
-        if _hv == "🧾 配合帳票（Excel風・修正）":
+        if _hv == "🧾 配合帳票・修正":
             card_start()
             if view.empty:
                 st.info("条件に合う製造記録がありません。")
@@ -2951,7 +3414,7 @@ elif page == "📈 分析":
 # ═══════════════════════════════════════════════════════════════
 elif page == "⚙️ マスタ設定":
     st.markdown('<div class="main-header"><h1>⚙️ マスターデータ管理</h1></div>', unsafe_allow_html=True)
-    t1, t2, t3, t4, t5 = st.tabs(["⚗️ 原料マスタ・詳細", "🏢 担当者", "🧪 レシピ・石灰", "📦 資材", "🏷️ グレード"])
+    t1, t2, t3, t4, t5, t6 = st.tabs(["⚗️ 原料マスタ・詳細", "🏢 担当者", "🧪 レシピ・石灰", "📦 資材", "🏷️ グレード", "📇 発注先"])
     
     with t1:
         card_start()
@@ -3038,7 +3501,7 @@ elif page == "⚙️ マスタ設定":
         st.markdown("### 🕒 レシピ変更履歴")
         with st.expander("📝 履歴を確認する"):
             if recipe_logs:
-                df_rlog = pd.DataFrame(recipe_logs)
+                df_rlog = pd.DataFrame([l for l in recipe_logs if str(l.get("処理", "")) not in ("製造修正", "製造取消", "設定")] or [{"変更内容": "（変更履歴はありません）"}])
                 if "変更日時" in df_rlog.columns: df_rlog = df_rlog.sort_values("変更日時", ascending=False)
                 st.dataframe(df_rlog, use_container_width=True, hide_index=True)
             else:
@@ -3049,7 +3512,7 @@ elif page == "⚙️ マスタ設定":
         
         if "通常" in recipe_kind:
             card_start()
-            sec_title("🍽️ 通常レシピのエクセルライク編集")
+            sec_title("🍽️ 通常レシピの編集")
             st.caption("Excelのように表を直接編集できます。行を追加して新しいレシピを作成することも可能です。")
             normal_recipes = [r for r in recipes_raw if r.get("大カテゴリ") != "調味料"]
             MAX_ING = 8
@@ -3096,7 +3559,7 @@ elif page == "⚙️ マスタ設定":
                     new_recipes.append({"品名": pname, "大カテゴリ": row.get("大カテゴリ", "プラント"), "中カテゴリ": row.get("中カテゴリ", "黒"), "配合JSON": new_json})
                     
                     if pname not in orig_dict: changes.append(f"【新規追加】{pname} ({new_json})")
-                    elif orig_dict[pname] != new_json: changes.append(f"【変更】{pname} ({orig_dict[pname]} → {new_json})")
+                    elif sorted(_recipe_items(orig_dict[pname])) != sorted(_recipe_items(new_json)): changes.append(f"【変更】{pname} ({_recipe_text(orig_dict[pname])} → {new_json})")
                 
                 new_names = [r["品名"] for r in new_recipes]
                 for old_name in orig_dict:
@@ -3112,14 +3575,14 @@ elif page == "⚙️ マスタ設定":
                     new_logs = recipe_logs.copy() if recipe_logs else []
                     for c in changes:
                         new_logs.append({"ログID": f"RLOG-{now_jst().strftime('%Y%m%d%H%M%S%f')}", "変更日時": now_jst().isoformat(), "担当者": op_recipe, "内容": c})
-                    if hasattr(sheets, "save_recipe_logs"): sheets.save_recipe_logs(new_logs)
+                    append_recipe_changes(changes, op_recipe)
                     
                     done(f"{len(changes)}件の変更を保存しました。")
             card_end()
             
         else:
             card_start()
-            sec_title("🌶️ 調味料レシピ（希釈）のエクセルライク編集")
+            sec_title("🌶️ 調味料レシピ（希釈）の編集")
             st.caption("希釈倍率を設定します。")
             seasoning_recipes = [r for r in recipes_raw if r.get("大カテゴリ") == "調味料"]
             MAX_S_ING = 5
@@ -3162,7 +3625,7 @@ elif page == "⚙️ マスタ設定":
                     new_s_recipes.append({"品名": pname, "大カテゴリ": "調味料", "中カテゴリ": "希釈", "配合JSON": new_json})
                     
                     if pname not in orig_s_dict: changes_s.append(f"【新規追加】{pname} ({new_json})")
-                    elif orig_s_dict[pname] != new_json: changes_s.append(f"【変更】{pname} ({orig_s_dict[pname]} → {new_json})")
+                    elif sorted(_recipe_items(orig_s_dict[pname])) != sorted(_recipe_items(new_json)): changes_s.append(f"【変更】{pname} ({_recipe_text(orig_s_dict[pname], '倍')} → {new_json})")
                 
                 new_names = [r["品名"] for r in new_s_recipes]
                 for old_name in orig_s_dict:
@@ -3178,7 +3641,7 @@ elif page == "⚙️ マスタ設定":
                     new_logs = recipe_logs.copy() if recipe_logs else []
                     for c in changes_s:
                         new_logs.append({"ログID": f"RLOG-{now_jst().strftime('%Y%m%d%H%M%S%f')}", "変更日時": now_jst().isoformat(), "担当者": op_recipe, "内容": c})
-                    if hasattr(sheets, "save_recipe_logs"): sheets.save_recipe_logs(new_logs)
+                    append_recipe_changes(changes_s, op_recipe)
                     
                     done(f"{len(changes_s)}件の変更を保存しました。")
             card_end()
@@ -3273,3 +3736,18 @@ elif page == "⚙️ マスタ設定":
             save_grade_list(order_points, [str(x).strip() for x in ed_grade["グレード名"].tolist() if x is not None and str(x).strip() and str(x).strip().lower() != "nan"])
             done("保存しました。")
         card_end()
+
+
+    with t6:
+        card_start()
+        sec_title("📇 発注先マスタ（発注品目・メーカー・担当者名・連絡先）")
+        render_vendor_master_editor()
+        card_end()
+
+
+# ═══════════════════════════════════════════════════════════════
+#  🛟 バックアップ・復旧
+# ═══════════════════════════════════════════════════════════════
+elif page == "🛟 バックアップ・復旧":
+    page_header("🛟 バックアップ・復旧", "データのバックアップと、配合マスタの復旧ができます。")
+    render_backup_restore()
