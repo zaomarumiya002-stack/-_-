@@ -14,6 +14,10 @@ COLS_ADJ = ["調整ID", "入荷No", "調整日", "調整袋数", "理由", "担�
 COLS_SUP = ["資材ID", "資材名", "カテゴリ", "画像URL", "初期在庫", "発注点", "登録日", "表示順"]
 COLS_LOG = ["ログID", "登録日", "資材ID", "処理", "数量", "作業者", "備考", "登録日時"]
 COLS_REC_LOG = ["ログID", "変更日時", "品名", "処理", "変更内容", "作業者"]
+COLS_VND = ["発注品目", "メーカー(発注先)", "担当者名", "連絡先", "メール", "備考"]   # 発注先マスタ
+COLS_ATT = ["添付ID", "入荷No", "ファイル名", "種別", "サイズ(KB)", "登録日時", "担当者", "分割数"]   # 入荷に紐づく書類(スキャンPDF・写真など)の台帳
+COLS_ATTDATA = ["添付ID", "連番", "データ"]   # 書類の中身（base64を分割して保存）
+ATT_CHUNK = 40000   # 1セルの上限(5万字)に収まるサイズ
 COLS_PO = ["発注ID", "発注日", "原料名", "メーカー", "個数", "納品予定日", "ステータス", "紐づく入荷No", "備考", "登録日時"] # 発注管理用（新規）
 
 # 配合マスタは横持ち形式(品名ごとに1行)で保存する。
@@ -339,3 +343,44 @@ def load_purchase_orders():
 
 def save_purchase_orders(recs):
     _over("発注管理", COLS_PO, recs)
+
+
+# ーーー 発注先マスタ（発注品目・メーカー(発注先)・担当者名・連絡先） ーーー
+@st.cache_data(ttl=20)
+def load_vendors(): return _read("発注先マスター", COLS_VND)
+def save_vendors(recs): _over("発注先マスター", COLS_VND, recs)
+
+
+# ーーー 入荷に紐づく書類（スキャンPDF・写真など）の保管 ーーー
+# 台帳(入荷添付)と中身(入荷添付データ：base64を40,000字ずつ分割)の2シートで保管する。
+@st.cache_data(ttl=20)
+def load_attachments(): return _read("入荷添付", COLS_ATT)
+
+def append_attachment(meta, b64):
+    """meta: 台帳の1行(dict)、b64: ファイル内容のbase64文字列。中身→台帳の順に書き込む"""
+    chunks = [b64[i:i + ATT_CHUNK] for i in range(0, len(b64), ATT_CHUNK)] or [""]
+    w = _ws("入荷添付データ", COLS_ATTDATA)
+    w.append_rows([[str(meta["添付ID"]), i, c] for i, c in enumerate(chunks)], value_input_option="RAW")
+    meta = dict(meta); meta["分割数"] = len(chunks)
+    _append("入荷添付", COLS_ATT, meta)
+
+def get_attachment_data(att_id):
+    """書類の中身(base64)を取り出す。必要なときだけ呼ぶ（キャッシュしない）"""
+    w = _ws("入荷添付データ", COLS_ATTDATA)
+    ids = w.col_values(1)
+    idx = [i + 1 for i, v in enumerate(ids) if v == str(att_id)]
+    if not idx: return ""
+    rows = w.get(f"A{idx[0]}:C{idx[-1]}")
+    rows = [r for r in rows if r and r[0] == str(att_id) and len(r) >= 3]
+    rows.sort(key=lambda r: _i(r[1]))
+    return "".join(r[2] for r in rows)
+
+def delete_attachment(att_id):
+    w = _ws("入荷添付データ", COLS_ATTDATA)
+    ids = w.col_values(1)
+    idx = [i + 1 for i, v in enumerate(ids) if v == str(att_id)]
+    if idx: w.delete_rows(idx[0], idx[-1])
+    m = _ws("入荷添付", COLS_ATT)
+    cvals = m.col_values(1)
+    if str(att_id) in cvals: m.delete_rows(cvals.index(str(att_id)) + 1)
+    st.cache_data.clear()
