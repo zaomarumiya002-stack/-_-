@@ -1538,10 +1538,12 @@ def render_vendor_cards(rows, compact=False):
         img = _vendor_img(v.get("発注品目", "")) if not compact else ""
         img_h = f'<img src="{e(img)}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #cbd5e1;margin-right:12px;">' if img else ""
         note = f'<div style="font-size:0.8rem;color:#64748b;margin-top:4px;">📝 {e(str(v.get("備考", "")))}</div>' if str(v.get("備考", "")).strip() else ""
+        pr = to_float(v.get("単価(円)"))
+        price_h = f'　💴 <b>{pr:,.0f}円</b>/{e(str(v.get("単位", "")).strip() or "袋")}' if pr > 0 else ""
         cards.append(
             f'<div style="display:flex;align-items:center;border:1px solid #cbd5e1;border-radius:12px;padding:10px 14px;background:#fff;margin:6px 0;">{img_h}'
             f'<div style="flex:1;min-width:0;"><div style="font-weight:900;font-size:1.02rem;">{e(str(v.get("発注品目", "")))}</div>'
-            f'<div style="margin-top:2px;">🏢 <b>{e(str(v.get("メーカー(発注先)", "")))}</b>　👤 {e(str(v.get("担当者名", "")) or "（担当者未登録）")}</div>'
+            f'<div style="margin-top:2px;">🏢 <b>{e(str(v.get("メーカー(発注先)", "")))}</b>　👤 {e(str(v.get("担当者名", "")) or "（担当者未登録）")}{price_h}</div>'
             f'<div style="margin-top:2px;">{tel_h}　{mail_h}</div>{note}</div></div>')
     st.markdown("".join(cards), unsafe_allow_html=True)
 
@@ -1557,7 +1559,7 @@ def render_vendor_directory():
     if not vendors:
         st.info("発注先がまだ登録されていません。「⚙️ マスタ設定 → 📇 発注先」で登録できます。"); return
     if view == "一覧表":
-        st.dataframe(pd.DataFrame(rows, columns=["発注品目", "メーカー(発注先)", "担当者名", "連絡先", "メール", "備考"]), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows, columns=["発注品目", "メーカー(発注先)", "担当者名", "連絡先", "メール", "単価(円)", "単位", "備考"]), use_container_width=True, hide_index=True)
     else:
         render_vendor_cards(rows)
     st.caption(f"{len(rows)}件")
@@ -1566,19 +1568,24 @@ def render_vendor_master_editor():
     """マスタ設定：発注先の登録・修正（品目ごとに発注先・担当者・連絡先）"""
     if not hasattr(sheets, "save_vendors"):
         st.warning("発注先マスタを使うには、新しい sheets.py に差し替えてください。"); return
-    st.caption("発注品目ごとに、発注先（メーカー）・担当者名・連絡先を登録します。発注管理の画面でいつでも確認でき、発注登録時にも自動で表示されます。品目の画像は「⚗️ 原料マスタ・詳細」「📦 資材」で登録したものが表示されます。")
+    st.caption("発注品目ごとに、発注先（メーカー）・担当者名・連絡先・単価を登録します。発注管理の画面でいつでも確認でき、発注登録時にも自動で表示されます。単価は、粉・原料は「1袋あたり」、資材は「使用数量1あたり」の金額です（分析の金額計算に使います）。品目の画像は「⚗️ 原料マスタ・詳細」「📦 資材」で登録したものが表示されます。")
     items = sorted(set(sorted_materials()) | {str(s_.get("資材名", "")).strip() for s_ in supplies if s_.get("資材名")} | {str(v.get("発注品目", "")).strip() for v in vendors if v.get("発注品目")})
     mk_opts = sorted(set(makers) | {str(v.get("メーカー(発注先)", "")).strip() for v in vendors if v.get("メーカー(発注先)")})
     df = pd.DataFrame(vendors, columns=COLS_VND_UI) if vendors else pd.DataFrame(columns=COLS_VND_UI)
+    df["単価(円)"] = df["単価(円)"].apply(to_float)
     sig = hashlib.md5(df.to_json().encode()).hexdigest()[:8]
     edited = st.data_editor(df, num_rows="dynamic", use_container_width=True, hide_index=True, key=f"vnd_ed_{sig}",
                             column_config={"発注品目": st.column_config.SelectboxColumn("発注品目", options=items, required=True),
                                            "メーカー(発注先)": st.column_config.SelectboxColumn("メーカー(発注先)", options=mk_opts),
                                            "担当者名": st.column_config.TextColumn("担当者名"), "連絡先": st.column_config.TextColumn("連絡先（電話）"),
-                                           "メール": st.column_config.TextColumn("メール"), "備考": st.column_config.TextColumn("備考")})
+                                           "メール": st.column_config.TextColumn("メール"), "備考": st.column_config.TextColumn("備考"),
+                                           "単価(円)": st.column_config.NumberColumn("💴 単価（円）", min_value=0.0, format="%.2f", help="粉・原料は1袋あたり、資材は使用数量1あたりの金額"),
+                                           "単位": st.column_config.SelectboxColumn("単位", options=PRICE_UNITS)})
     rows = []
     for _, r in edited.iterrows():
         d = {c: ("" if pd.isna(r[c]) else str(r[c]).strip()) for c in COLS_VND_UI}
+        _pr = to_float(r["単価(円)"])
+        d["単価(円)"] = "" if _pr <= 0 else (int(_pr) if _pr == int(_pr) else _pr)
         if d["発注品目"]: rows.append(d)
     n_del = max(0, len(vendors) - len(rows))
     ok = True
@@ -1591,7 +1598,7 @@ def render_vendor_master_editor():
         sheets.save_vendors(rows)
         done(f"発注先マスタを保存しました（{len(rows)}件）。")
 
-COLS_VND_UI = ["発注品目", "メーカー(発注先)", "担当者名", "連絡先", "メール", "備考"]
+COLS_VND_UI = ["発注品目", "メーカー(発注先)", "担当者名", "連絡先", "メール", "単価(円)", "単位", "備考"]
 
 # ── 入荷に紐づく書類（スキャンPDF・写真）の保管 ───────────────────────
 ATT_MAX_MB = 4
@@ -1642,6 +1649,272 @@ def render_arrival_files(arrival_no, atts, key):
                 sheets.delete_attachment(aid); st.session_state.pop(dk, None); done("書類を削除しました。", "warn")
         if dk in st.session_state and str(a.get("種別", "")).startswith("image/"):
             st.image(base64.b64decode(st.session_state[dk] or ""), width=360)
+
+
+# ── 金額（単価）の紐づけ：資材・粉・原料 ───────────────────────────────
+PRICE_UNITS = ["袋", "個", "箱", "kg", "L", "本", "枚", "巻"]
+
+def _bag_weight(mat):
+    _, wt = parse_op_data(order_points.get(mat, 0.0))
+    return wt if wt > 0 else 20.0
+
+def master_price(item):
+    """発注先・単価マスタの単価 → (単価, 単位)"""
+    for v in vendors_for_item(item):
+        p = to_float(v.get("単価(円)"))
+        if p > 0: return p, (str(v.get("単位", "")).strip() or "袋")
+    return 0.0, ""
+
+def order_price_points(item):
+    """発注（単価入力あり）の単価履歴 [(発注日, 単価, 単位, 根拠)] 古い順"""
+    pts = []
+    for o in parse_purchase_orders(order_points):
+        if str(o.get("原料名", "")).strip() == str(item).strip() and o.get("ステータス") != "取消":
+            p = to_float(o.get("単価"))
+            if p > 0:
+                d = norm_date_str(o.get("発注日"))
+                pts.append((d, p, str(o.get("単位", "")).strip() or "袋", f"発注 {d}"))
+    pts.sort()
+    return pts
+
+def default_price_for(item, maker=None):
+    """発注登録の初期値：同じ発注先のマスタ単価 → 直近の発注単価 → マスタ単価"""
+    for v in vendors_for_item(item):
+        if (maker is None or v.get("メーカー(発注先)") == maker) and to_float(v.get("単価(円)")) > 0:
+            return to_float(v.get("単価(円)")), (str(v.get("単位", "")).strip() or "袋")
+    pts = order_price_points(item)
+    if pts: return pts[-1][1], pts[-1][2]
+    p, u = master_price(item)
+    return p, (u or "袋")
+
+class _PriceBook:
+    """使用日ごとの単価を引く（使用日以前で最新の発注単価 → マスタ単価 → それ以降の発注単価）"""
+    def __init__(self): self.cache = {}
+    def get(self, item, date_s, is_supply):
+        pts = self.cache.get(item)
+        if pts is None: pts = self.cache[item] = order_price_points(item)
+        chosen = None
+        for d, p, u, src in pts:
+            if d <= date_s: chosen = (p, u, src)
+        if chosen is None:
+            mp, mu = master_price(item)
+            if mp > 0: chosen = (mp, mu or "袋", "マスタ単価")
+            elif pts: chosen = (pts[0][1], pts[0][2], pts[0][3] + "（以降の発注）")
+        if chosen is None: return None, "未設定"
+        p, u, src = chosen
+        if is_supply: return p, src                                  # 資材：使用数量1あたりの単価
+        return (p if u == "kg" else p / _bag_weight(item)), src      # 粉・原料：kgあたりに換算（袋単価 ÷ 1袋重量）
+
+def render_order_price_editor(orders, update_fn, key):
+    """発注の単価・金額を入力／修正する（請求書どおりに後から直せる）"""
+    cand = sorted([o for o in orders if o.get("ステータス") != "取消"], key=lambda o: str(o.get("発注日", "")), reverse=True)[:80]
+    if not cand:
+        st.caption("対象の発注がありません。"); return
+    lab = {f"{o.get('発注日', '')} ／ {o.get('原料名', '')} ／ {o.get('メーカー', '')} ／ {fmt_kg(o.get('個数'))}個 ／ "
+           + (f"{fmt_kg(to_float(o.get('金額')))}円" if to_float(o.get("金額")) > 0 else "金額未入力"): o for o in cand}
+    pick = st.selectbox("発注を選ぶ", list(lab.keys()), key=f"{key}_sel")
+    o = lab[pick]; oid = o.get("発注ID")
+    d_p, d_u = (to_float(o.get("単価")), str(o.get("単位", "")).strip()) if to_float(o.get("単価")) > 0 else default_price_for(o.get("原料名"), o.get("メーカー"))
+    c1, c2 = st.columns(2)
+    price = c1.number_input("💴 単価（円）", min_value=0.0, value=float(d_p), step=1.0, format="%.2f", key=f"{key}_p_{oid}")
+    unit = c2.selectbox("単位", PRICE_UNITS, index=PRICE_UNITS.index(d_u) if d_u in PRICE_UNITS else 0, key=f"{key}_u_{oid}")
+    qty = to_float(o.get("個数"))
+    st.caption(f"金額 ＝ {fmt_kg(qty)} × {fmt_kg(price)}円 ＝ **{price * qty:,.0f}円**")
+    if st.button("💾 単価・金額を保存", key=f"{key}_save_{oid}", type="primary", use_container_width=True):
+        update_fn(oid, **{"単価": price, "単位": unit, "金額": round(price * qty)})
+        done(f"単価・金額を保存しました（{o.get('原料名')}：{price * qty:,.0f}円）")
+
+# ── 使用量と金額（日・週・月）の分析 ────────────────────────────────
+def build_cost_df():
+    """日別の使用量（資材・粉・原料）に単価を当てて金額を出す"""
+    pb = _PriceBook()
+    rows = []
+    u = build_usage_df(brewing)
+    if not u.empty:
+        u = u[~u["原料名"].astype(str).map(_is_water_name)].copy()
+        u["日"] = u["仕込日"].map(norm_date_str)
+        for (d, n), kg in u.groupby(["日", "原料名"])["投入量(kg)"].apply(lambda s_: pd.to_numeric(s_, errors="coerce").fillna(0).sum()).items():
+            if kg <= 0: continue
+            price, src = pb.get(n, d, False)
+            rows.append({"日付": d, "区分": "こんにゃく粉" if is_konjac_material(n) else "原料", "品目": n, "数量": float(kg), "単位": "kg",
+                         "単価(円/単位)": price, "金額": (kg * price) if price is not None else None, "単価の根拠": src})
+    sup = {s_.get("資材ID"): s_.get("資材名") for s_ in supplies}
+    for l in supply_logs:
+        if l.get("処理") != "使用": continue
+        n, q = sup.get(l.get("資材ID")), to_float(l.get("数量"))
+        if not n or q <= 0: continue
+        d = norm_date_str(l.get("登録日"))
+        price, src = pb.get(n, d, True)
+        rows.append({"日付": d, "区分": "資材", "品目": n, "数量": q, "単位": "個", "単価(円/単位)": price, "金額": (q * price) if price is not None else None, "単価の根拠": src})
+    df = pd.DataFrame(rows, columns=["日付", "区分", "品目", "数量", "単位", "単価(円/単位)", "金額", "単価の根拠"])
+    df["日付_dt"] = pd.to_datetime(df["日付"], errors="coerce")
+    df = df[df["日付_dt"].notna()].copy()
+    for c in ("単価(円/単位)", "金額"): df[c] = pd.to_numeric(df[c], errors="coerce")
+    return df
+
+def _period_labels(dt, gran):
+    if gran == "日": return dt.dt.strftime("%Y-%m-%d")
+    if gran == "週": return (dt - pd.to_timedelta(dt.dt.weekday, unit="D")).dt.strftime("%Y-%m-%d") + "週"
+    return dt.dt.strftime("%Y-%m")
+
+def _period_index(d_from, d_to, gran):
+    idx = pd.date_range(pd.Timestamp(d_from), pd.Timestamp(d_to), freq="D")
+    return list(dict.fromkeys(_period_labels(pd.Series(idx), gran)))
+
+def _yen(x):
+    return "－" if x is None or (isinstance(x, float) and x != x) else f"{x:,.0f}"
+
+def render_cost_analysis():
+    df0 = build_cost_df()
+    if df0.empty:
+        st.info("使用実績（製造記録・資材の使用ログ）がまだありません。"); return
+
+    card_start()
+    c1, c2, c3 = st.columns([1.2, 2.2, 1.2])
+    with c1: s_d, e_d = period_select("cost", default="今月")
+    with c2: kind = st.radio("📦 対象", ["すべて", "🧻 資材", "🌾 こんにゃく粉", "📦 その他の原料"], horizontal=True, key="cost_kind")
+    base0 = df0
+    if "資材" in kind: base0 = df0[df0["区分"] == "資材"]
+    elif "こんにゃく粉" in kind: base0 = df0[df0["区分"] == "こんにゃく粉"]
+    elif "その他" in kind: base0 = df0[df0["区分"] == "原料"]
+    with st.expander("🔎 品目を絞り込む（必要なときだけ）"):
+        sel_items = st.multiselect("品目", sorted(base0["品目"].unique()), key="cost_items")
+    if sel_items: base0 = base0[base0["品目"].isin(sel_items)]
+    d_min, d_max = df0["日付_dt"].min().date(), df0["日付_dt"].max().date()
+    d_from, d_to = (s_d or d_min), (e_d or d_max)
+    days = max(1, (d_to - d_from).days + 1)
+    with c3: gran = st.radio("📅 集計", ["日", "週", "月"], horizontal=True, index=2 if days > 90 else (1 if days > 31 else 0), key="cost_gran")
+    card_end()
+
+    cur = base0[(base0["日付_dt"].dt.date >= d_from) & (base0["日付_dt"].dt.date <= d_to)].copy()
+    if cur.empty:
+        st.info("対象期間内の使用実績がありません。"); return
+    cur["期間"] = _period_labels(cur["日付_dt"], gran)
+    tot = cur["金額"].sum()
+    missing = sorted(cur[cur["金額"].isna()]["品目"].unique())
+    delta = None
+    prev = None
+    if s_d is not None:
+        p_to = d_from - timedelta(days=1); p_from = p_to - timedelta(days=days - 1)
+        prev = base0[(base0["日付_dt"].dt.date >= p_from) & (base0["日付_dt"].dt.date <= p_to)].copy()
+        if not prev.empty and prev["金額"].sum() > 0: delta = f"{(tot - prev['金額'].sum()) / prev['金額'].sum() * 100:+.1f}%（前の{days}日比）"
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("💴 総金額", f"{tot:,.0f} 円", delta=delta, delta_color="inverse")
+    k2.metric("1日あたり", f"{tot / days:,.0f} 円")
+    k3.metric("使用した品目", f"{cur['品目'].nunique()} 品目")
+    k4.metric("単価未設定", f"{len(missing)} 品目")
+    if missing:
+        st.warning("単価が未設定の品目は、金額に含まれていません：" + "、".join(missing[:12]) + ("…" if len(missing) > 12 else "")
+                   + "　→「⚙️ マスタ設定 → 📇 発注先」または「📝 発注管理」で単価を入れると反映されます。")
+
+    t_tr, t_cmp, t_rec = st.tabs(["📅 推移（日・週・月）", "🆚 比較・統計", "🧾 記録（日別の数量と金額）"])
+
+    with t_tr:
+        card_start()
+        a1, a2 = st.columns(2)
+        metric = a1.radio("見る項目", ["💴 金額", "📦 数量"], horizontal=True, key="cost_metric")
+        stack = a2.radio("内訳", ["品目別", "区分別", "合計のみ"], horizontal=True, key="cost_stack")
+        use_amt = metric.startswith("💴")
+        ycol = "金額" if use_amt else "数量"
+        if not use_amt and cur["単位"].nunique() > 1:
+            st.info("数量は「資材（個）」と「粉・原料（kg）」で単位が違います。上の「対象」を選ぶと数量で見られます。")
+        else:
+            work = cur.copy()
+            if stack == "品目別":
+                top = work.groupby("品目")[ycol].sum().sort_values(ascending=False).head(12).index
+                work["内訳"] = work["品目"].where(work["品目"].isin(top), "その他")
+            elif stack == "区分別": work["内訳"] = work["区分"]
+            else: work["内訳"] = "合計"
+            g = work.groupby(["期間", "内訳"])[ycol].sum().reset_index().sort_values("期間")
+            fig = px.bar(g, x="期間", y=ycol, color="内訳" if stack != "合計のみ" else None, barmode="stack", title=f"{gran}別 {'金額(円)' if use_amt else '数量'}")
+            fig.update_xaxes(type="category"); fig.update_layout(plot_bgcolor="#ffffff", yaxis_title="円" if use_amt else (cur["単位"].iloc[0]))
+            if stack == "合計のみ": fig.update_traces(marker_color="#0f766e")
+            st.plotly_chart(fig, use_container_width=True)
+            pv = work.pivot_table(index="期間", columns="品目", values=ycol, aggfunc="sum", fill_value=0)
+            pv["合計"] = pv.sum(axis=1)
+            pv = pv.sort_index().reset_index()
+            fmt = (lambda x: f"{x:,.0f}") if use_amt else (lambda x: fmt_kg(round(x, 2)))
+            st.dataframe(pv.assign(**{c: pv[c].map(fmt) for c in pv.columns if c != "期間"}), use_container_width=True, hide_index=True)
+            download_buttons({f"{gran}別_{'金額' if use_amt else '数量'}": pv}, f"使用量と金額_{gran}別_{today_jst()}", "cost_tr_dl")
+        card_end()
+
+    with t_cmp:
+        card_start()
+        mode = st.radio("比較のしかた", ["前の同じ長さの期間と比べる", "月ごとに並べる（直近6か月）"], horizontal=True, key="cost_cmp")
+        if mode.startswith("前"):
+            if prev is None:
+                st.info("「全期間」では比較できません。期間を選んでください。")
+            else:
+                gc = cur.groupby("品目").agg(今期_数量=("数量", "sum"), 今期_金額=("金額", "sum"), 単位=("単位", "first")).reset_index()
+                gp = prev.groupby("品目").agg(前期_数量=("数量", "sum"), 前期_金額=("金額", "sum")).reset_index()
+                m = gc.merge(gp, on="品目", how="outer").fillna({"今期_数量": 0, "今期_金額": 0, "前期_数量": 0, "前期_金額": 0, "単位": ""})
+                m["数量増減%"] = [round((a - b) / b * 100, 1) if b else None for a, b in zip(m["今期_数量"], m["前期_数量"])]
+                m["金額増減"] = m["今期_金額"] - m["前期_金額"]
+                m["金額増減%"] = [round((a - b) / b * 100, 1) if b else None for a, b in zip(m["今期_金額"], m["前期_金額"])]
+                m = m.sort_values("今期_金額", ascending=False)
+                st.caption(f"今期：{d_from}〜{d_to} ／ 前期：{d_from - timedelta(days=days)}〜{d_from - timedelta(days=1)}")
+                top = m.head(15)
+                figc = px.bar(top.melt(id_vars="品目", value_vars=["今期_金額", "前期_金額"], var_name="期間", value_name="金額"), x="品目", y="金額", color="期間", barmode="group", title="品目別 金額（今期 vs 前期）")
+                figc.update_layout(plot_bgcolor="#ffffff"); st.plotly_chart(figc, use_container_width=True)
+                shown = m[["品目", "単位", "今期_数量", "前期_数量", "数量増減%", "今期_金額", "前期_金額", "金額増減", "金額増減%"]]
+                st.dataframe(fmt_df_numeric(shown, ["今期_数量", "前期_数量", "今期_金額", "前期_金額", "金額増減"]), use_container_width=True, hide_index=True)
+                download_buttons({"前期比較": shown}, f"前期比較_{today_jst()}", "cost_cmp_dl")
+        else:
+            mm = base0.copy(); mm["月"] = mm["日付_dt"].dt.strftime("%Y-%m")
+            months = sorted(mm["月"].unique())[-6:]
+            mm = mm[mm["月"].isin(months)]
+            pvm = mm.pivot_table(index="品目", columns="月", values="金額", aggfunc="sum", fill_value=0)
+            pvm["合計"] = pvm.sum(axis=1); pvm = pvm.sort_values("合計", ascending=False).reset_index()
+            figm = px.bar(mm.groupby(["月", "区分"])["金額"].sum().reset_index(), x="月", y="金額", color="区分", barmode="stack", title="月別 金額（区分別）")
+            figm.update_xaxes(type="category"); figm.update_layout(plot_bgcolor="#ffffff"); st.plotly_chart(figm, use_container_width=True)
+            st.dataframe(pvm.assign(**{c: pvm[c].map(lambda x: f"{x:,.0f}") for c in pvm.columns if c != "品目"}), use_container_width=True, hide_index=True)
+            download_buttons({"月別比較": pvm}, f"月別比較_{today_jst()}", "cost_cmp2_dl")
+
+        st.markdown("---")
+        sec_title(f"📈 統計（{gran}ごとの使用量のばらつき）")
+        idx = _period_index(d_from, d_to, gran)
+        srows = []
+        for item, g in cur.groupby("品目"):
+            sq = g.groupby("期間")["数量"].sum().reindex(idx, fill_value=0)
+            sm = g.groupby("期間")["金額"].sum().reindex(idx, fill_value=0)
+            srows.append({"品目": item, "区分": g["区分"].iloc[0], "単位": g["単位"].iloc[0], f"{gran}の数": len(idx), "使用した期間": int((sq > 0).sum()),
+                          "平均数量": round(sq.mean(), 2), "最大": round(sq.max(), 2), "最小": round(sq.min(), 2), "標準偏差": round(sq.std(ddof=0), 2),
+                          "平均金額": round(sm.mean()), "最大金額": round(sm.max()), "合計金額": round(sm.sum())})
+        sdf = pd.DataFrame(srows).sort_values("合計金額", ascending=False)
+        st.dataframe(fmt_df_numeric(sdf, ["平均数量", "最大", "最小", "標準偏差", "平均金額", "最大金額", "合計金額"]), use_container_width=True, hide_index=True)
+        download_buttons({"統計": sdf}, f"使用量統計_{gran}_{today_jst()}", "cost_stat_dl")
+
+        st.markdown("---")
+        sec_title("🔍 検証：発注金額と使用金額（月別）")
+        st.caption("発注した金額と、使った分の金額を月ごとに並べます。大きく食い違う月は、入荷・使用の記録や単価の入力を確認してください。")
+        po = []
+        names_in_scope = set(base0["品目"].unique())
+        for o in parse_purchase_orders(order_points):
+            if o.get("ステータス") == "取消" or o.get("原料名") not in names_in_scope: continue
+            d = parse_any_date(o.get("発注日"))
+            amt = to_float(o.get("金額")) or (to_float(o.get("単価")) * to_float(o.get("個数")))
+            if d and amt > 0 and d_from <= d <= d_to: po.append({"月": d.strftime("%Y-%m"), "発注金額": amt})
+        used = cur.assign(月=cur["日付_dt"].dt.strftime("%Y-%m")).groupby("月")["金額"].sum().rename("使用金額")
+        ordd = pd.DataFrame(po, columns=["月", "発注金額"]).groupby("月")["発注金額"].sum() if po else pd.Series(dtype=float, name="発注金額")
+        vf = pd.concat([ordd, used], axis=1).fillna(0).reset_index().rename(columns={"index": "月"})
+        if vf.empty: st.caption("対象期間に発注金額の入力がありません。")
+        else:
+            vf["差（発注−使用）"] = vf["発注金額"] - vf["使用金額"]
+            st.dataframe(fmt_df_numeric(vf, ["発注金額", "使用金額", "差（発注−使用）"]), use_container_width=True, hide_index=True)
+        card_end()
+
+    with t_rec:
+        card_start()
+        only_missing = st.checkbox("単価が未設定の記録だけ表示", key="cost_only_missing")
+        rec = cur[["日付", "区分", "品目", "数量", "単位", "単価(円/単位)", "金額", "単価の根拠"]].copy()
+        if only_missing: rec = rec[rec["金額"].isna()]
+        rec = rec.sort_values(["日付", "区分", "品目"], ascending=[False, True, True])
+        rec["数量"] = rec["数量"].round(3); rec["単価(円/単位)"] = rec["単価(円/単位)"].round(2); rec["金額"] = rec["金額"].round(0)
+        st.caption(f"{len(rec)}件 ／ 金額合計 {rec['金額'].sum():,.0f} 円")
+        st.dataframe(fmt_df_numeric(rec.head(500), ["数量", "単価(円/単位)", "金額"]), use_container_width=True, hide_index=True)
+        if len(rec) > 500: st.caption("画面には新しい順に500件を表示。ダウンロードには全件が入ります。")
+        download_buttons({"使用量と金額（日別）": rec}, f"使用量と金額_日別_{today_jst()}", "cost_rec_dl")
+        card_end()
 
 
 # ── 粉の突合・リセット（理論在庫と現場の実在庫のズレを直す） ───────────────
@@ -2728,6 +3001,11 @@ elif page == "📝 発注管理":
             o_date = c_a.date_input("発注日", value=today_jst())
             o_due = c_b.date_input("納品予定日", value=today_jst() + timedelta(days=7))
             o_qty = st.number_input("発注個数 (袋/箱など)", min_value=1, value=10, step=1)
+            _pp, _pu = default_price_for(o_mat, _def_mk)
+            c_p1, c_p2 = st.columns(2)
+            o_price = c_p1.number_input("💴 単価（円）", min_value=0.0, value=float(_pp), step=1.0, format="%.2f", key=f"new_order_price_{o_mat}", help="分からなければ0のままでOK。あとから「単価・金額の入力・修正」で入れられます。")
+            o_unit = c_p2.selectbox("単位", PRICE_UNITS, index=PRICE_UNITS.index(_pu) if _pu in PRICE_UNITS else (0 if is_raw_mat else 1), key=f"new_order_unit_{o_mat}")
+            st.caption("金額 ＝ 発注個数 × 単価（自動計算）。" + ("" if is_raw_mat else "※ 資材は、発注の単位と使用記録の単位が同じ前提で金額を計算します。"))
             o_note = st.text_input("備考（任意）")
             if st.form_submit_button("💾 発注を登録する", type="primary", use_container_width=True):
                 if not item_opts: st.error("発注品目が登録されていません。マスタ設定で登録してください。")
@@ -2737,10 +3015,10 @@ elif page == "📝 発注管理":
                     orders.append({
                         "発注ID": f"PO-{now_jst().strftime('%Y%m%d%H%M%S%f')}", "発注区分": "原材料" if is_raw_mat else "衛生資材",
                         "発注日": str(o_date), "原料名": o_mat, "メーカー": o_maker, "個数": o_qty, "納品予定日": str(o_due), "ステータス": "未入荷",
-                        "紐づく入荷No": "", "備考": o_note, "登録日時": now_jst().isoformat()
+                        "紐づく入荷No": "", "備考": o_note, "登録日時": now_jst().isoformat(), "単価": o_price, "単位": o_unit, "金額": round(o_price * o_qty)
                     })
                     save_purchase_orders(order_points, orders)
-                    done(f"発注を登録しました（{o_mat} × {o_qty}）")
+                    done(f"発注を登録しました（{o_mat} × {o_qty}" + (f"　{o_price * o_qty:,.0f}円" if o_price > 0 else "") + "）")
         card_end()
 
     with t_list:
@@ -2757,6 +3035,8 @@ elif page == "📝 発注管理":
                     st.markdown(f"**{'🥦' if is_raw_order else '🧻'} {o.get('原料名')}**　🏢 {o.get('メーカー')}　📦 {fmt_kg(o.get('個数'))}")
                     due_html = f"<span style='color:#b91c1c; font-weight:800;'>⏰ 納品予定日: {due}（超過）</span>" if is_over else f"納品予定日: {due}"
                     st.markdown(f"<div style='font-size:0.85rem; color:#64748b;'>発注日: {o.get('発注日')} ／ {due_html}{' ／ 備考: ' + str(o.get('備考')) if o.get('備考') else ''}</div>", unsafe_allow_html=True)
+                    _amt = to_float(o.get("金額")) or (to_float(o.get("単価")) * to_float(o.get("個数")))
+                    st.caption(f"💴 単価 {to_float(o.get('単価')):,.0f}円/{o.get('単位') or '袋'} ／ 金額 {_amt:,.0f}円" if _amt > 0 else "💴 金額 未入力（下の「単価・金額の入力・修正」で入れられます）")
                     _pv = [v for v in vendors_for_item(o.get("原料名")) if v.get("メーカー(発注先)") == o.get("メーカー")] or vendors_for_item(o.get("原料名"))
                     if _pv: render_vendor_cards(_pv[:1], compact=True)
                 with c_b:
@@ -2812,10 +3092,13 @@ elif page == "📝 発注管理":
                             _update_order(o.get("発注ID"), **{"ステータス": "取消", "入荷処理日": str(today_jst())})
                             done("発注を取り消しました。", "warn")
 
+        with st.expander("💴 単価・金額の入力・修正（未入荷・入荷済みどちらも）"):
+            render_order_price_editor(all_orders, _update_order, "po_price")
+
         if done_orders:
             sec_title("✅ 入荷済みの発注（履歴）")
             df_done = pd.DataFrame(sorted(done_orders, key=lambda x: str(x.get("入荷処理日", "")), reverse=True))
-            st.dataframe(fmt_df_numeric(df_done[[c for c in ["発注区分", "発注日", "原料名", "メーカー", "個数", "入荷処理日", "紐づく入荷No"] if c in df_done.columns]].head(50), ["個数"]), use_container_width=True, hide_index=True)
+            st.dataframe(fmt_df_numeric(df_done[[c for c in ["発注区分", "発注日", "原料名", "メーカー", "個数", "単価", "単位", "金額", "入荷処理日", "紐づく入荷No"] if c in df_done.columns]].head(50), ["個数"]), use_container_width=True, hide_index=True)
         if cancelled_orders:
             with st.expander(f"🗑️ 取消した発注（{len(cancelled_orders)}件）"):
                 df_c = pd.DataFrame(cancelled_orders)
@@ -3309,12 +3592,12 @@ elif page == "📈 分析":
                 events.append({"日付": bdate, "原料名": n, "kg": to_float(it.get("kg", 0)), "品名": pname, "仕込No": b.get("仕込No", "")})
         return pd.DataFrame(events)
 
-    t_prod, t_konjac, t_supply = st.tabs(["🏭 生産分析", "🌾 粉の消費量分析", "🧻 資材 消費分析"])
+    _av = st.radio("表示", ["🏭 生産分析", "💴 使用量と金額", "🌾 粉の消費量分析", "🧻 資材 消費分析"], horizontal=True, key="ana_view", label_visibility="collapsed")
 
     # ---------------------------------------------------------------
     # 🏭 生産分析（従来の製造量分析）
     # ---------------------------------------------------------------
-    with t_prod:
+    if _av == "🏭 生産分析":
         df_brw_global = pd.DataFrame(brewing)
         if df_brw_global.empty: st.info("データがありません。")
         else:
@@ -3341,13 +3624,16 @@ elif page == "📈 分析":
     # ---------------------------------------------------------------
     # 🌾 粉の消費分析（総量／原料／メーカー／グレード／製品／ロット など多角的）
     # ---------------------------------------------------------------
-    with t_konjac:
+    if _av == "🌾 粉の消費量分析":
         render_flour_analysis()
 
     # ---------------------------------------------------------------
     # 🧻 資材 消費分析
     # ---------------------------------------------------------------
-    with t_supply:
+    if _av == "💴 使用量と金額":
+        render_cost_analysis()
+
+    if _av == "🧻 資材 消費分析":
         if not supply_logs:
             st.info("資材の入出庫ログがまだありません。")
         else:
